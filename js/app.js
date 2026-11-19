@@ -86,13 +86,13 @@ function Home({ highlight } = {}) {
     </nav>
     <h1>${fmtHomeTitle()}</h1>
     <div class="home-row1">
-      <button class="record-card" data-act="record">
+      <div class="rc-wrap"><button class="record-card" data-act="record">
         <span class="rc-lines" aria-hidden="true"><i style="top:97px"></i><i style="top:128px"></i><i style="top:159px;left:117px"></i><i style="top:190px"></i><b></b></span>
         <span class="rc-flap" aria-hidden="true"></span>
         <h2>오늘 설교 기록하기</h2>
         <p>말씀 본문을 고르고 바로 필기를 시작해요</p>
         <span class="rc-btn">본문 고르기 →</span>
-      </button>
+      </button></div>
       <button class="continue-card" data-oos>
         <h2>이어서 읽기 <small>창세기 8장 1절<i class="dot3"></i>어제</small></h2>${icon.chevRight}
         <p class="gen81">…</p>
