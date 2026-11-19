@@ -1,0 +1,16 @@
+{
+  "name": "lumenib 루메닙",
+  "short_name": "lumenib",
+  "description": "성경 본문 위에 손글씨로 설교 노트를 쓰는 앱",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
