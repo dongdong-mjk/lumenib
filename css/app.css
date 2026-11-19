@@ -411,7 +411,7 @@ svg { display: block; }
 .legend { display: flex; gap: 16px; font-size: 12px; line-height: 18px; color: var(--text-secondary); }
 .legend i { display: inline-block; width: 4px; height: 4px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
 .more-link { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; line-height: 22px; color: var(--text-primary); }
-.reading { display: flex; justify-content: space-between; height: 169px; }
+.reading { display: flex; height: 169px; }
 .hero { display: flex; gap: 20px; padding: 20.5px 0 0 24px; height: 128px; box-sizing: content-box; }
 .donut { position: relative; width: 128px; height: 128px; flex: none; }
 .donut b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-num); font-size: 28px; font-weight: 700; letter-spacing: 0; }
@@ -420,10 +420,11 @@ svg { display: block; }
 .read-num .big { height: 64px; padding-top: 8px; font-family: var(--font-num); font-size: 56px; line-height: 56px; font-weight: 700; letter-spacing: 0; display: flex; align-items: baseline; }
 .read-num .big span { font-size: 20px; line-height: 20px; font-weight: 400; color: var(--text-secondary); margin-left: 6px; }
 .read-num a { height: 40px; font-size: 15px; line-height: 24px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
-.matrix { display: flex; flex-direction: column; gap: 12px; width: 718px; margin-right: 12px; }
+/* 화면이 넓어지면 왼쪽 숫자와 멀어지지 않게: 점 지도는 시안 위치(숫자 끝에서 96)에서 시작하고, 남는 폭은 점 사이 간격으로 나눠요 */
+.matrix { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 718px; margin: 0 12px 0 96px; }
 .matrix-row { display: flex; gap: 12px; }
-.matrix-row > span { font-size: 12px; line-height: 18px; color: var(--text-secondary); width: 23px; flex: none; }
-.dots { display: grid; grid-template-columns: repeat(76, 8px); grid-auto-rows: 8px; gap: 1px; padding-top: 3px; }
+.matrix-row > span { font-size: 13px; line-height: 18px; letter-spacing: -0.325px; color: var(--text-tertiary); width: 23px; flex: none; white-space: nowrap; }
+.dots { flex: 1; display: grid; grid-template-columns: repeat(76, 8px); grid-auto-rows: 8px; gap: 1px; justify-content: space-between; padding-top: 3px; }
 .dots i { display: grid; place-items: center; }
 .dots i::after { content: ""; width: 3px; height: 3px; border-radius: 50%; background: var(--chart-dot-empty); }
 .dots i.r::after { width: 4px; height: 4px; background: var(--accent-mid); }
