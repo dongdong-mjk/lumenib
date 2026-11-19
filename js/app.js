@@ -185,7 +185,7 @@ function openSettings() {
     <h3>설정</h3>
     <div class="toggle-row">화면 모드 <div class="seg2"><button data-th="dark" class="${S.settings.theme === 'dark' ? 'on' : ''}">다크</button><button data-th="light" class="${S.settings.theme === 'light' ? 'on' : ''}">라이트</button></div></div>
     <button class="toggle-row" data-act="finger"><span>손가락으로도 필기하기<small class="toggle-sub">애플펜슬이 없을 때 켜요. 켜면 두 손가락으로 스크롤해요.</small></span> <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>
-    <button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기 (다음 테스터용)</button>
+    <button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기</button>
     <div class="about"><div class="logo"></div>1차 사용성 테스트 버전 · 성경 본문: 개역한글 (대한성서공회)<br>사용 기록(Clarity): ${isTracking() ? '켜짐' : '꺼짐'}</div>
     <div class="modal-actions"><button class="btn btn-primary" data-act="close">닫기</button></div>
   </div>`, (d, close) => {
