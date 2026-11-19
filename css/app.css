@@ -422,11 +422,11 @@ svg { display: block; }
 .read-num .big { height: 64px; padding-top: 8px; font-family: var(--font-num); font-size: 56px; line-height: 56px; font-weight: 700; letter-spacing: 0; display: flex; align-items: baseline; }
 .read-num .big span { font-size: 20px; line-height: 20px; font-weight: 400; color: var(--text-secondary); margin-left: 6px; }
 .read-num a { height: 40px; font-size: 15px; line-height: 24px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
-/* 점 지도는 시안 위치(숫자 끝에서 96)에서 시작해 오른쪽 끝(범례 끝)까지 채워요. 화면이 넓으면 칸이 가로세로 같은 비율로 커져요(1194에서 8px). */
-.matrix { display: flex; flex-direction: column; gap: 12px; flex: 1; min-width: 718px; margin: 0 6px 0 96px; }
-.matrix-row { display: flex; gap: 12px; container-type: inline-size; }
+/* 점 지도는 시안 크기(8px 칸) 그대로 오른쪽 끝(범례 끝)에 붙여요. 넓은 화면 배치는 시안 나오면 바꿔요. */
+.matrix { display: flex; flex-direction: column; gap: 12px; width: 718px; flex: none; margin: 0 6px 0 auto; }
+.matrix-row { display: flex; gap: 12px; }
 .matrix-row > span { font-size: 13px; line-height: 18px; letter-spacing: -0.325px; color: var(--text-tertiary); width: 23px; flex: none; white-space: nowrap; }
-.dots { --cell: calc((100cqw - 35px - 75px) / 76); flex: 1; display: grid; grid-template-columns: repeat(76, var(--cell)); grid-auto-rows: var(--cell); gap: 1px; padding-top: 3px; }
+.dots { display: grid; grid-template-columns: repeat(76, 8px); grid-auto-rows: 8px; gap: 1px; padding-top: 3px; }
 .dots i { display: grid; place-items: center; }
 .dots i::after { content: ""; width: 3px; height: 3px; border-radius: 50%; background: var(--chart-dot-empty); }
 .dots i.r::after { width: 4px; height: 4px; background: var(--accent-mid); }
