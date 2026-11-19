@@ -5,7 +5,7 @@ import * as B from './bible.js';
 import * as S from './store.js';
 import { Paper, tool, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
-import { screen as trackScreen, track } from './analytics.js';
+import { screen as trackScreen, track, isTracking } from './analytics.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay-root');
@@ -186,7 +186,7 @@ function openSettings() {
     <div class="toggle-row">화면 모드 <div class="seg2"><button data-th="dark" class="${S.settings.theme === 'dark' ? 'on' : ''}">다크</button><button data-th="light" class="${S.settings.theme === 'light' ? 'on' : ''}">라이트</button></div></div>
     <button class="toggle-row" data-act="finger"><span>손가락으로도 필기하기<small class="toggle-sub">애플펜슬이 없을 때 켜요. 켜면 두 손가락으로 스크롤해요.</small></span> <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>
     <button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기 (다음 테스터용)</button>
-    <div class="about"><div class="logo"></div>1차 사용성 테스트 버전 · 성경 본문: 개역한글 (대한성서공회)</div>
+    <div class="about"><div class="logo"></div>1차 사용성 테스트 버전 · 성경 본문: 개역한글 (대한성서공회)<br>사용 기록(Clarity): ${isTracking() ? '켜짐' : '꺼짐'}</div>
     <div class="modal-actions"><button class="btn btn-primary" data-act="close">닫기</button></div>
   </div>`, (d, close) => {
     d.querySelectorAll('[data-th]').forEach((b) => b.addEventListener('click', () => {
@@ -723,6 +723,7 @@ async function main() {
   await B.loadIndex();
   reading = S.readingSeed(B.books().map((b) => b.verses.length));
   go('home');
+  if (window.__trackMsg) setTimeout(() => toast(window.__trackMsg), 600);
   const wait = Math.max(0, 900 - (Date.now() - t0));
   setTimeout(() => document.getElementById('splash').classList.add('hide'), wait);
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
