@@ -3,7 +3,7 @@
 import { icon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
-import { Paper, tool, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES } from './ink.js';
+import { Paper, tool, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
 
 const app = document.getElementById('app');
@@ -358,7 +358,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         + '<span class="tb-sep"></span>'
         + sizes.map((_, i) => `<button class="size-dot ${i === si ? 'on' : ''}" data-size="${i}"><i style="width:${[4, 6, 9][i]}px;height:${[4, 6, 9][i]}px"></i></button>`).join('');
     } else if (t === 'eraser') {
-      opts = '<span class="tb-hint">닿은 획을 지워요</span><span class="tb-sep"></span>' + ERASER_SIZES.map((_, i) => `<button class="size-dot ${i === tool.eraserSize ? 'on' : ''}" data-size="${i}"><i style="width:${[5, 8, 12][i]}px;height:${[5, 8, 12][i]}px;background:none;border:1.5px solid #111"></i></button>`).join('');
+      opts = `<div class="mode2"><button data-em="stroke" class="${tool.eraserMode === 'stroke' ? 'on' : ''}">획 전체</button><button data-em="partial" class="${tool.eraserMode === 'partial' ? 'on' : ''}">부분</button></div><span class="tb-sep"></span>` + ERASER_SIZES.map((_, i) => `<button class="size-dot ${i === tool.eraserSize ? 'on' : ''}" data-size="${i}"><i style="width:${[5, 8, 12][i]}px;height:${[5, 8, 12][i]}px;background:none;border:1.5px solid #111"></i></button>`).join('');
     } else opts = '<span class="tb-hint">옮기거나 지울 글씨를 둘러 그려요</span>';
     const p = ns.paper;
     slot.innerHTML = `<div class="toolbar">
@@ -369,11 +369,34 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
     slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => { tool.type = b.dataset.tool; ns.paper?.clearSelection(); renderToolbar(); }));
-    slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => { tool[t === 'pen' ? 'penColor' : 'hlColor'] = +b.dataset.color; renderToolbar(); }));
+    slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => {
+      const key = t === 'pen' ? 'penColor' : 'hlColor';
+      const i = +b.dataset.color;
+      if (tool[key] === i) return openPalette(i); // 고른 색을 한 번 더 누르면 색 바꾸기
+      tool[key] = i; renderToolbar();
+    }));
+    slot.querySelectorAll('[data-em]').forEach((b) => b.addEventListener('click', () => { tool.eraserMode = b.dataset.em; renderToolbar(); }));
     slot.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { tool[t === 'pen' ? 'penSize' : t === 'hl' ? 'hlSize' : 'eraserSize'] = +b.dataset.size; renderToolbar(); }));
     slot.querySelector('[data-act="undo"]').addEventListener('click', () => ns.paper.undo());
     slot.querySelector('[data-act="redo"]').addEventListener('click', () => ns.paper.redo());
     slot.querySelector('[data-act="more"]').addEventListener('click', toggleMore);
+  }
+
+  // 펜 색 팔레트: 피그마 pen 12색 + 직접 고르기. 고른 색이 툴바의 그 칸에 들어가요.
+  function openPalette(slotIdx) {
+    toolbarEl.querySelector('.tb-menu')?.remove();
+    const isPen = tool.type === 'pen';
+    const arr = isPen ? PEN_COLORS : HL_COLORS;
+    const pal = isPen ? PEN_PALETTE : HL_PALETTE;
+    const m = document.createElement('div');
+    m.className = 'tb-menu palette';
+    m.innerHTML = `<h6>${isPen ? '펜' : '형광펜'} 색 바꾸기</h6>
+      <div class="pal-grid">${pal.map((c) => `<button class="pal ${c.toLowerCase() === arr[slotIdx].toLowerCase() ? 'on' : ''}" data-c="${c}"><i style="background:${c}"></i></button>`).join('')}</div>
+      <label class="pal-custom"><span class="pal-rainbow"></span>직접 고르기<input type="color" value="${arr[slotIdx]}"></label>`;
+    toolbarEl.appendChild(m);
+    const set = (c) => { arr[slotIdx] = c; S.saveSettings(); m.remove(); renderToolbar(); };
+    m.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => set(b.dataset.c)));
+    m.querySelector('input').addEventListener('change', (e) => set(e.target.value));
   }
 
   function toggleMore() {

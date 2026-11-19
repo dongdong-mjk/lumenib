@@ -2,18 +2,26 @@
 // 좌표는 종이 기준 논리 단위(폭 726)로 저장하고, 화면 크기에 맞춰 늘리고 줄여요.
 import { esc } from './util.js';
 import { refText } from './bible.js';
+import { settings } from './store.js';
 
 export const PAGE_W = 726;
 export const PAGE_H = 1027; // A4 비율
-const LINE = 36;
+const LINE = 33.68; // 피그마 A4 줄 종이 간격
+const MARGIN = 18.7;
 
-export const PEN_COLORS = ['#111111', '#004ce5', '#dc3333'];
-export const HL_COLORS = ['#ffd84d', '#ff8fa3', '#8cbfff'];
+// 피그마 Primitive pen/* 12색
+export const PEN_PALETTE = ['#111111', '#5c5c5c', '#a3a3a3', '#004ce5', '#3e8ef7', '#1c9c6b', '#dc3333', '#f07a1a', '#e8b517', '#8b4fd9', '#d94f9a', '#7a5230'];
+export const HL_PALETTE = ['#ffd84d', '#ff8fa3', '#8cbfff', '#9be3b0', '#ffb36b', '#c9a6ff'];
+// 툴바의 색 3칸 (고른 색을 바꿔 끼울 수 있어요)
+if (!settings.penColors) settings.penColors = ['#111111', '#004ce5', '#dc3333'];
+if (!settings.hlColors) settings.hlColors = ['#ffd84d', '#ff8fa3', '#8cbfff'];
+export const PEN_COLORS = settings.penColors;
+export const HL_COLORS = settings.hlColors;
 export const PEN_SIZES = [1.6, 2.6, 4];
 export const HL_SIZES = [12, 18, 26];
 export const ERASER_SIZES = [8, 18, 32];
 
-export const tool = { type: 'pen', penColor: 0, penSize: 1, hlColor: 0, hlSize: 1, eraserSize: 1 };
+export const tool = { type: 'pen', penColor: 0, penSize: 1, hlColor: 0, hlSize: 1, eraserSize: 1, eraserMode: 'stroke' };
 
 export class Paper {
   constructor(scrollEl, note, opts = {}) {
@@ -31,7 +39,7 @@ export class Paper {
     scrollEl.innerHTML = '';
     scrollEl.appendChild(this.pagesEl);
     scrollEl.className = 'paper-scroll' + (this.fingerDraw && !this.readonly ? ' finger' : '');
-    this._ro = new ResizeObserver(() => this.layout());
+    this._ro = new ResizeObserver(() => { cancelAnimationFrame(this._raf); this._raf = requestAnimationFrame(() => this.layout()); });
     this._ro.observe(scrollEl);
     // Apple Pencil로 쓸 때 화면이 같이 스크롤되지 않게 (손가락 스크롤은 그대로)
     this._touchBlock = (e) => {
@@ -80,17 +88,21 @@ export class Paper {
     const inner = document.createElement('div');
     inner.className = 'page-inner';
     inner.style.height = PAGE_H + 'px';
-    const lines = document.createElement('div');
-    lines.className = 'page-lines';
-    inner.appendChild(lines);
+    const bg = document.createElement('canvas');
+    bg.className = 'bg';
+    pageEl.appendChild(bg);
     pageEl.appendChild(inner);
+    const ui = document.createElement('div');
+    ui.className = 'page-ui';
+    ui.style.height = PAGE_H + 'px';
     const base = document.createElement('canvas');
     const live = document.createElement('canvas');
     live.className = 'live';
     pageEl.appendChild(base);
     pageEl.appendChild(live);
+    pageEl.appendChild(ui);
     this.pagesEl.appendChild(pageEl);
-    const page = { i, el: pageEl, inner, lines, base, live, linesTop: 40 };
+    const page = { i, el: pageEl, inner, ui, bg, base, live, linesTop: 10 };
     this.pages[i] = page;
     if (i === 0) this.renderPassage(page);
     this.renderCitations(page);
@@ -113,19 +125,57 @@ export class Paper {
     }
     page.inner.appendChild(box);
     const h = box.offsetHeight || 120;
-    const top = Math.ceil((20 + h + 28) / LINE) * LINE;
-    page.linesTop = top;
-    page.inner.style.setProperty('--lines-top', top + 'px');
+    page.linesTop = Math.max(140.3, 20 + h + 16);
   }
 
   renderCitations(page) {
     page.inner.querySelectorAll('.cite-block').forEach((e) => e.remove());
+    page.ui.querySelectorAll('.cite-ui').forEach((e) => e.remove());
     this.note.citations.filter((c) => c.page === page.i).forEach((c) => {
       const el = document.createElement('div');
       el.className = 'cite-block';
       el.style.top = c.y + 'px';
       el.innerHTML = `<h5>${esc(refText(c))}</h5>${(c.text || []).map((v) => `<div class="row"><span class="vn">${v.n}</span><span>${esc(v.t)}</span></div>`).join('')}`;
       page.inner.appendChild(el);
+      if (!this.readonly) this.addCiteHandle(page, c, el);
+    });
+  }
+
+  // 인용 블록: 오른쪽 위 손잡이로 위아래 옮기기, ×로 빼기
+  addCiteHandle(page, c, el) {
+    const u = document.createElement('div');
+    u.className = 'cite-ui';
+    u.style.top = c.y + 'px';
+    u.innerHTML = `<button class="cite-grip" aria-label="옮기기"><svg width="18" height="18" viewBox="0 0 24 24" fill="#555"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button><button class="cite-x" aria-label="빼기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
+    page.ui.appendChild(u);
+    const grip = u.querySelector('.cite-grip');
+    let d = null;
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      grip.setPointerCapture(e.pointerId);
+      d = { y0: e.clientY, cy: c.y, snap: this.snapshot(), moved: false };
+      el.classList.add('moving');
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!d) return;
+      const ny = Math.max(10, Math.min(PAGE_H - el.offsetHeight - 10, d.cy + (e.clientY - d.y0) / this.scale));
+      if (Math.abs(ny - d.cy) > 1) d.moved = true;
+      c.y = Math.round(ny);
+      el.style.top = u.style.top = c.y + 'px';
+    });
+    const up = () => {
+      if (!d) return;
+      el.classList.remove('moving');
+      if (d.moved) { this.undoStack.push(d.snap); this.redoStack = []; this.onChange({}); this.onHistory(); }
+      d = null;
+    };
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
+    u.querySelector('.cite-x').addEventListener('click', () => {
+      this.pushHistory();
+      this.note.citations = this.note.citations.filter((x) => x !== c);
+      this.renderCitations(page);
+      this.onChange({}); this.onHistory();
     });
   }
 
@@ -134,8 +184,8 @@ export class Paper {
     for (const [row, html] of this.note.ink) {
       const el = document.createElement('div');
       el.className = 'hand';
-      el.style.top = page.linesTop + row * LINE - 6 + 'px';
-      el.style.fontSize = '27px';
+      el.style.top = page.linesTop + (row + 1) * LINE - LINE + 2 + 'px';
+      el.style.fontSize = '25px';
       el.style.lineHeight = LINE + 'px';
       el.innerHTML = html;
       page.inner.appendChild(el);
@@ -154,14 +204,15 @@ export class Paper {
       const h = Math.round(PAGE_H * this.scale);
       p.el.style.width = w + 'px';
       p.el.style.height = h + 'px';
-      p.inner.style.transform = `scale(${this.scale})`;
-      for (const c of [p.base, p.live]) {
+      p.inner.style.transform = p.ui.style.transform = `scale(${this.scale})`;
+      for (const c of [p.bg, p.base, p.live]) {
         c.width = Math.round(w * dpr);
         c.height = Math.round(h * dpr);
         c.style.width = w + 'px';
         c.style.height = h + 'px';
       }
       p.dpr = dpr;
+      this.drawBackground(p);
       this.drawPage(p);
     }
     this.positionLassoMenu();
@@ -172,6 +223,30 @@ export class Paper {
     const ctx = canvas.getContext('2d');
     ctx.setTransform(page.dpr * this.scale, 0, 0, page.dpr * this.scale, 0, 0);
     return ctx;
+  }
+
+  // 종이 줄 · 모눈 · 점: 화면 픽셀에 딱 맞춰 그려서 간격이 고르게
+  drawBackground(page) {
+    const c = page.bg, ctx = c.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
+    const k = page.dpr * this.scale;
+    const type = this.note.paper || 'lined';
+    const px = (v) => Math.round(v * k);
+    if (type === 'lined') {
+      ctx.fillStyle = '#e4e4e4';
+      const lw = Math.max(1, Math.round(page.dpr * 0.9));
+      for (let y = page.linesTop + LINE; y < PAGE_H - 12; y += LINE) ctx.fillRect(px(MARGIN), px(y), px(PAGE_W - MARGIN) - px(MARGIN), lw);
+    } else if (type === 'grid') {
+      ctx.fillStyle = '#e8e8e8';
+      const lw = Math.max(1, Math.round(page.dpr * 0.8));
+      for (let y = 24; y < PAGE_H; y += 24) ctx.fillRect(0, px(y), c.width, lw);
+      for (let x = 24; x < PAGE_W; x += 24) ctx.fillRect(px(x), 0, lw, c.height);
+    } else if (type === 'dot') {
+      ctx.fillStyle = '#c4c4c4';
+      const r = Math.max(1, 1.1 * k);
+      for (let y = 24; y < PAGE_H; y += 24) for (let x = 24; x < PAGE_W; x += 24) { ctx.beginPath(); ctx.arc(px(x), px(y), r, 0, 7); ctx.fill(); }
+    }
   }
 
   drawPage(page) {
@@ -259,6 +334,7 @@ export class Paper {
       cur = null;
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
+        k.s.pts = densify(k.s.pts);
         this.pushHistory();
         this.note.pages[page.i].strokes.push(k.s);
         this.drawPage(page);
@@ -290,15 +366,29 @@ export class Paper {
 
   eraseAt(page, x, y, cur) {
     const r = ERASER_SIZES[tool.eraserSize];
-    const strokes = this.note.pages[page.i].strokes;
+    const pg = this.note.pages[page.i];
+    const strokes = pg.strokes;
     let hit = false;
+    const partial = tool.eraserMode === 'partial';
     for (let i = strokes.length - 1; i >= 0; i--) {
       const s = strokes[i];
-      const rr = r + s.w / 2;
+      const rr = partial ? r : r + s.w / 2;
+      const inside = (j) => { const dx = s.pts[j] - x, dy = s.pts[j + 1] - y; return dx * dx + dy * dy <= rr * rr; };
+      let any = false;
+      for (let j = 0; j < s.pts.length; j += 3) if (inside(j)) { any = true; break; }
+      if (!any) continue;
+      hit = true;
+      cur.removed.push(s);
+      if (!partial) { strokes.splice(i, 1); continue; }
+      // 부분 지우기: 지우개에 닿은 점만 빼고 나머지를 조각으로 남겨요
+      const pieces = [];
+      let run = [];
       for (let j = 0; j < s.pts.length; j += 3) {
-        const dx = s.pts[j] - x, dy = s.pts[j + 1] - y;
-        if (dx * dx + dy * dy <= rr * rr) { cur.removed.push(s); strokes.splice(i, 1); hit = true; break; }
+        if (inside(j)) { if (run.length >= 6) pieces.push(run); run = []; }
+        else run.push(s.pts[j], s.pts[j + 1], s.pts[j + 2]);
       }
+      if (run.length >= 6) pieces.push(run);
+      strokes.splice(i, 1, ...pieces.map((pts) => ({ ...s, pts })));
     }
     if (hit) this.drawPage(page);
     const ctx = this.clearLive(page);
@@ -421,6 +511,7 @@ export class Paper {
     const page = this.pages[0];
     const before = page.linesTop;
     this.renderPassage(page);
+    this.drawBackground(page);
     const d = page.linesTop - before;
     // 본문 블록 높이가 바뀌면 그 아래 글씨도 같이 내려요
     if (d) {
@@ -490,17 +581,34 @@ function drawStroke(ctx, s) {
     ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[p.length - 3], p[p.length - 2]); ctx.stroke();
     return;
   }
+  // 굵기가 비슷한 구간끼리 한 번에 그려서 이음매 없이 매끈하게
+  const wOf = (pr) => Math.round(s.w * (0.55 + 0.9 * pr) * 4) / 4;
   let mx = p[0], my = p[1];
+  let curW = wOf(p[5]);
+  ctx.lineWidth = curW;
+  ctx.beginPath(); ctx.moveTo(mx, my);
   for (let i = 1; i < n - 1; i++) {
-    const x = p[i * 3], y = p[i * 3 + 1], pr = p[i * 3 + 2];
+    const x = p[i * 3], y = p[i * 3 + 1], w = wOf(p[i * 3 + 2]);
     const nx = (x + p[i * 3 + 3]) / 2, ny = (y + p[i * 3 + 4]) / 2;
-    ctx.lineWidth = s.w * (0.55 + 0.9 * pr);
-    ctx.beginPath(); ctx.moveTo(mx, my); ctx.quadraticCurveTo(x, y, nx, ny); ctx.stroke();
+    if (w !== curW) { ctx.stroke(); ctx.lineWidth = curW = w; ctx.beginPath(); ctx.moveTo(mx, my); }
+    ctx.quadraticCurveTo(x, y, nx, ny);
     mx = nx; my = ny;
   }
-  ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(p[p.length - 3], p[p.length - 2]); ctx.stroke();
+  ctx.lineTo(p[p.length - 3], p[p.length - 2]);
+  ctx.stroke();
 }
 const round = (v) => Math.round(v * 10) / 10;
+// 점 사이가 멀면 사이 점을 채워 넣어요 (부분 지우개가 정확하게 닿도록)
+function densify(p) {
+  const out = [p[0], p[1], p[2]];
+  for (let i = 3; i < p.length; i += 3) {
+    const x0 = out[out.length - 3], y0 = out[out.length - 2], p0 = out[out.length - 1];
+    const d = Math.hypot(p[i] - x0, p[i + 1] - y0), n = Math.floor(d / 2.5);
+    for (let k = 1; k < n; k++) { const t = k / n; out.push(round(x0 + (p[i] - x0) * t), round(y0 + (p[i + 1] - y0) * t), Math.round((p0 + (p[i + 2] - p0) * t) * 100) / 100); }
+    out.push(p[i], p[i + 1], p[i + 2]);
+  }
+  return out;
+}
 function pip(poly, x, y) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
