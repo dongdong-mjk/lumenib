@@ -139,6 +139,7 @@ function Home({ highlight } = {}) {
 
 // 홈은 스크롤 없이 한 화면에 맞춰요.
 // 요소 크기는 시안(1194×834) 그대로 두고, 화면이 더 길면 간격을 넓히고, 짧으면 간격부터 줄인 뒤 그래도 모자라면 전체를 살짝 줄여요.
+const HOME_MIN_W = 1122; // 왼쪽 숫자 320 + 간격 24 + 점 지도 730 + 좌우 여백 48
 const GAP_NAT = { S: 32, B: 4, C: 24, D: 36, E: 36, F: 24 };
 const GAP_MIN = { S: 8, B: 0, C: 16, D: 24, E: 24, F: 16 };
 const GAP_GROW = { S: 0, B: 0, C: 1, D: 1.5, E: 1.5, F: 1 };
@@ -153,7 +154,11 @@ function fitHome() {
   const nat = { ...GAP_NAT, S: Math.max(GAP_NAT.S, st), F: Math.max(GAP_NAT.F, sb + 12) };
   const min = { ...GAP_MIN, S: Math.max(GAP_MIN.S, st), F: Math.max(GAP_MIN.F, sb + 8) };
   const fixed = [...inner.children].reduce((a, el) => a + el.offsetHeight, 0);
-  const H = home.clientHeight, W = home.clientWidth;
+  const W = home.clientWidth;
+  // 너비가 시안보다 좁으면(아이패드 미니 등) 먼저 전체를 그 폭에 맞게 줄여요
+  const portrait = matchMedia('(orientation: portrait)').matches;
+  const zW = portrait ? 1 : Math.min(1, W / HOME_MIN_W);
+  const H = home.clientHeight / zW;
   const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
   let g = {}, z = 1;
   if (H >= fixed + sum(nat)) {
@@ -166,6 +171,7 @@ function fitHome() {
     g = min;
     z = Math.max(0.6, H / (fixed + sum(min)));
   }
+  z *= zW;
   for (const k in g) inner.style.setProperty('--g' + k, g[k].toFixed(2) + 'px');
   inner.style.width = z === 1 ? '' : W / z + 'px';
   inner.style.transform = z === 1 ? '' : `scale(${z})`;
@@ -389,6 +395,14 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   }
 
   let toolbarEl = null;
+  // 노트 영역이 툴바보다 좁으면(아이패드 미니 등) 툴바를 그 폭에 맞게 살짝 줄여요
+  function fitToolbar() {
+    if (!toolbarEl) return;
+    const z = Math.min(1, (right.clientWidth - 24) / toolbarEl.offsetWidth);
+    right.style.setProperty('--tb-z', z.toFixed(3));
+  }
+  const tbRO = new ResizeObserver(() => fitToolbar());
+  tbRO.observe(right);
   function renderToolbar() {
     const slot = right.querySelector('.tb-slot');
     if (isReadonly()) { slot.innerHTML = ''; return; }
@@ -412,6 +426,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <button class="tb-btn" data-act="redo" ${p?.redoStack.length ? '' : 'disabled'} aria-label="다시 하기">${icon.redo}</button>
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
+    fitToolbar();
     slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => { tool.type = b.dataset.tool; ns.paper?.clearSelection(); renderToolbar(); }));
     slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => {
       const key = t === 'pen' ? 'penColor' : 'hlColor';
@@ -677,7 +692,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     });
   }
 
-  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); };
+  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); };
 
   renderTabs();
   renderInfo();
