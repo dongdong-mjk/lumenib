@@ -42,18 +42,32 @@ export class Paper {
     this._ro = new ResizeObserver(() => { cancelAnimationFrame(this._raf); this._raf = requestAnimationFrame(() => this.layout()); });
     this._ro.observe(scrollEl);
     // Apple Pencil로 쓸 때 화면이 같이 스크롤되지 않게 (손가락 스크롤은 그대로)
+    // 손가락 필기를 켜면: 한 손가락 = 쓰기, 두 손가락 = 스크롤
+    this._cancels = [];
     this._touchBlock = (e) => {
       if (this.readonly) return;
       for (const t of e.touches) if (t.touchType === 'stylus') { e.preventDefault(); return; }
+      if (!this.fingerDraw) return;
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        if (!this._pan) { this._pan = { y }; this._cancels.forEach((f) => f()); }
+        else { scrollEl.scrollTop -= y - this._pan.y; this._pan.y = y; }
+      }
     };
+    this._touchEnd = (e) => { if (e.touches.length === 0) this._pan = null; };
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchmove', this._touchBlock, { passive: false });
+    scrollEl.addEventListener('touchend', this._touchEnd);
+    scrollEl.addEventListener('touchcancel', this._touchEnd);
   }
 
   destroy() {
     this._ro.disconnect();
     this.scrollEl.removeEventListener('touchstart', this._touchBlock);
     this.scrollEl.removeEventListener('touchmove', this._touchBlock);
+    this.scrollEl.removeEventListener('touchend', this._touchEnd);
+    this.scrollEl.removeEventListener('touchcancel', this._touchEnd);
   }
 
   setFingerDraw(on) {
@@ -70,6 +84,7 @@ export class Paper {
     this.scrollEl.classList.add('paper-' + (n.paper || 'lined'));
     // 마지막 장은 항상 빈 장으로 하나 더
     if (!n.readonlySeed && !this.readonly) this.ensureTrailingPage();
+    this._cancels = [];
     n.pages.forEach((pg, i) => this.buildPage(i));
     this.layout();
   }
@@ -125,7 +140,7 @@ export class Paper {
     }
     page.inner.appendChild(box);
     const h = box.offsetHeight || 120;
-    page.linesTop = Math.max(140.3, 20 + h + 16);
+    page.linesTop = Math.max(140.3, 11.2 + h + 9);
   }
 
   renderCitations(page) {
@@ -275,7 +290,9 @@ export class Paper {
   bindPointer(page) {
     const c = page.base;
     let cur = null; // 진행 중인 동작
-    const accept = (e) => e.pointerType !== 'touch' || this.fingerDraw;
+    const accept = (e) => e.pointerType !== 'touch' || (this.fingerDraw && !this._pan);
+    // 두 손가락 스크롤이 시작되면 손가락으로 쓰던 획은 버려요
+    this._cancels.push(() => { if (cur && cur.touch && cur.kind !== 'erase') { cur = null; this.clearLive(page); } });
 
     c.addEventListener('pointerdown', (e) => {
       if (!accept(e) || e.button > 0) return;
@@ -290,6 +307,7 @@ export class Paper {
         return;
       }
       if (this.selection) this.clearSelection();
+      if (cur && e.pointerType === 'touch') return;
       if (t === 'pen' || t === 'hl') {
         const s = t === 'pen'
           ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], pts: [x, y, pr] }
@@ -302,6 +320,7 @@ export class Paper {
       } else if (t === 'lasso') {
         cur = { kind: 'lasso', pts: [x, y] };
       }
+      if (cur) cur.touch = e.pointerType === 'touch';
     });
 
     c.addEventListener('pointermove', (e) => {

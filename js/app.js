@@ -69,9 +69,10 @@ function Home({ highlight } = {}) {
   })();
   const oldN = B.books().filter((b) => b.testament === 'old').reduce((a, b) => a + b.verses.length, 0);
   const dots = (arr) => arr.map((r) => `<i class="${r ? 'r' : ''}"></i>`).join('');
-  const C = 2 * Math.PI * 56;
+  const R = 57.6, C = 2 * Math.PI * R;
+  const chev = (n) => icon.chevRight.replace('width="24" height="24"', `width="${n}" height="${n}"`);
 
-  app.innerHTML = `<div class="home">
+  app.innerHTML = `<div class="home"><div class="home-inner">
     <nav class="home-nav">
       <div class="home-tabs">
         <button class="home-tab on">${icon.home}홈</button>
@@ -84,36 +85,45 @@ function Home({ highlight } = {}) {
     <h1>${fmtHomeTitle()}</h1>
     <div class="home-row1">
       <button class="record-card" data-act="record">
+        <span class="rc-lines" aria-hidden="true"><i style="top:97px"></i><i style="top:128px"></i><i style="top:159px;left:117px"></i><i style="top:190px"></i><b></b></span>
+        <span class="rc-flap" aria-hidden="true"></span>
         <h2>오늘 설교 기록하기</h2>
         <p>말씀 본문을 고르고 바로 필기를 시작해요</p>
-        <span class="btn">본문 고르기 →</span>
+        <span class="rc-btn">본문 고르기 →</span>
       </button>
       <button class="continue-card" data-oos>
-        <h2>이어서 읽기 <small>창세기 8장 1절 · 어제</small></h2>${icon.chevRight}
+        <h2>이어서 읽기 <small>창세기 8장 1절<i class="dot3"></i>어제</small></h2>${icon.chevRight}
         <p class="gen81">…</p>
         <div class="bm-row">북마크 <span class="chip">롬 8:28</span><span class="chip">시 23:1</span><span class="chip">사 41:10</span></div>
       </button>
     </div>
-    <div class="sec-head"><h3>성경 읽기 현황</h3><div class="legend"><span><i style="background:var(--accent-mid)"></i>읽은 장</span><span><i style="background:var(--chart-dot-empty)"></i>안 읽은 장</span></div></div>
-    <div class="reading">
-      <div class="donut-wrap">
-        <div class="donut"><svg width="130" height="130" viewBox="0 0 130 130"><circle cx="65" cy="65" r="56" fill="none" stroke="var(--chart-track)" stroke-width="14"/><circle cx="65" cy="65" r="56" fill="none" stroke="var(--accent-mid)" stroke-width="14" stroke-dasharray="${(C * read) / total} ${C}" transform="rotate(-90 65 65)" stroke-linecap="butt"/></svg><b>${pct}%</b></div>
-        <div class="read-num"><small>읽은 장</small><div class="big">${read}<span>/${total.toLocaleString()}</span></div><a data-oos>66권 중 ${fullBooks}권 다 읽음 ${icon.chevRight.replace('width="24" height="24"', 'width="16" height="16"')}</a></div>
+    <section class="home-sec read-sec">
+      <div class="sec-head"><h3>성경 읽기 현황</h3><div class="legend"><span><i style="background:var(--accent-mid)"></i>읽은 장</span><span><i style="background:var(--chart-dot-empty)"></i>안 읽은 장</span></div></div>
+      <div class="reading">
+        <div class="hero">
+          <div class="donut"><svg width="128" height="128" viewBox="0 0 128 128"><circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--chart-track)" stroke-width="12.8"/><circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--accent-mid)" stroke-width="12.8" stroke-dasharray="${(C * read) / total} ${C}" transform="rotate(-90 64 64)" stroke-linecap="round"/></svg><b>${pct}%</b></div>
+          <div class="read-num"><small>읽은 장</small><div class="big">${read}<span>/${total.toLocaleString()}</span></div><a data-oos>66권 중 ${fullBooks}권 다 읽음 ${chev(12)}</a></div>
+        </div>
+        <div class="matrix">
+          <div class="matrix-row"><span>구약</span><div class="dots">${dots(reading.slice(0, oldN))}</div></div>
+          <div class="matrix-row"><span>신약</span><div class="dots">${dots(reading.slice(oldN))}</div></div>
+        </div>
       </div>
-      <div class="matrix">
-        <div class="matrix-row"><span>구약</span><div class="dots">${dots(reading.slice(0, oldN))}</div></div>
-        <div class="matrix-row"><span>신약</span><div class="dots">${dots(reading.slice(oldN))}</div></div>
-      </div>
-    </div>
-    <div class="sec-head"><h3>최근 노트</h3><button class="btn-text" data-oos style="font-size:15px;display:flex;align-items:center;gap:2px">전체보기 ${icon.chevRight.replace('width="24" height="24"', 'width="18" height="18"')}</button></div>
-    <div class="recent-grid">${recent.map((n) => {
-      const same = otherNotesFor(n.passages, n.id).length;
-      return `<button class="recent-card ${n.id === highlight ? 'new' : ''}" data-note="${n.id}">
-        <span class="ref">${esc(refList(n))}</span>
-        <span class="ttl">${esc(n.title || '제목 없음')}</span>
-        <span class="meta num">${mixedYears ? fmtShort(n.date) : fmtMD(n.date)}${same ? ` <em>· 같은 본문 ${same}</em>` : ''}</span></button>`;
-    }).join('')}</div>
-  </div>`;
+    </section>
+    <section class="home-sec recent-sec">
+      <div class="sec-head tall"><h3>최근 노트</h3><button class="more-link" data-oos>전체보기 ${chev(12)}</button></div>
+      <div class="recent-grid">${recent.map((n) => {
+        const same = otherNotesFor(n.passages, n.id).length;
+        return `<button class="recent-card ${n.id === highlight ? 'new' : ''}" data-note="${n.id}">
+          <span class="ref">${esc(refList(n))}</span>
+          <span class="ttl">${esc(n.title || '제목 없음')}</span>
+          <span class="meta num">${mixedYears ? fmtShort(n.date) : fmtMD(n.date)}${same ? `<i class="dot4"></i><em>같은 본문 ${same}</em>` : ''}</span></button>`;
+      }).join('')}</div>
+    </section>
+  </div></div>`;
+  fitHome();
+  window.addEventListener('resize', fitHome);
+  const offResize = () => window.removeEventListener('resize', fitHome);
 
   B.getVerses(1, 8, 1, 1).then(([v]) => { const el = app.querySelector('.gen81'); if (el) el.textContent = v.t; });
   app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => toast(OUT_OF_SCOPE)));
@@ -123,15 +133,49 @@ function Home({ highlight } = {}) {
   if (highlight) {
     toast('노트가 저장됐어요');
     const t = setTimeout(() => app.querySelector('.recent-card.new')?.classList.remove('new'), 4000);
-    cleanup = () => clearTimeout(t);
+    cleanup = () => { clearTimeout(t); offResize(); };
+  } else cleanup = offResize;
+}
+
+// 홈은 스크롤 없이 한 화면에 맞춰요.
+// 요소 크기는 시안(1194×834) 그대로 두고, 화면이 더 길면 간격을 넓히고, 짧으면 간격부터 줄인 뒤 그래도 모자라면 전체를 살짝 줄여요.
+const GAP_NAT = { S: 32, B: 4, C: 24, D: 36, E: 36, F: 24 };
+const GAP_MIN = { S: 8, B: 0, C: 16, D: 24, E: 24, F: 16 };
+const GAP_GROW = { S: 0, B: 0, C: 1, D: 1.5, E: 1.5, F: 1 };
+function fitHome() {
+  const home = app.querySelector('.home'), inner = home?.querySelector('.home-inner');
+  if (!inner) return;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;height:env(safe-area-inset-top,0px);width:env(safe-area-inset-bottom,0px)';
+  document.body.appendChild(probe);
+  const st = probe.offsetHeight, sb = probe.offsetWidth;
+  probe.remove();
+  const nat = { ...GAP_NAT, S: Math.max(GAP_NAT.S, st), F: Math.max(GAP_NAT.F, sb + 12) };
+  const min = { ...GAP_MIN, S: Math.max(GAP_MIN.S, st), F: Math.max(GAP_MIN.F, sb + 8) };
+  const fixed = [...inner.children].reduce((a, el) => a + el.offsetHeight, 0);
+  const H = home.clientHeight, W = home.clientWidth;
+  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+  let g = {}, z = 1;
+  if (H >= fixed + sum(nat)) {
+    const extra = H - fixed - sum(nat), w = sum(GAP_GROW);
+    for (const k in nat) g[k] = nat[k] + (extra * GAP_GROW[k]) / w;
+  } else if (H >= fixed + sum(min)) {
+    const t = (H - fixed - sum(min)) / (sum(nat) - sum(min));
+    for (const k in nat) g[k] = min[k] + t * (nat[k] - min[k]);
+  } else {
+    g = min;
+    z = Math.max(0.6, H / (fixed + sum(min)));
   }
+  for (const k in g) inner.style.setProperty('--g' + k, g[k].toFixed(2) + 'px');
+  inner.style.width = z === 1 ? '' : W / z + 'px';
+  inner.style.transform = z === 1 ? '' : `scale(${z})`;
 }
 
 function openSettings() {
   modal(`<div class="modal sheet">
     <h3>설정</h3>
     <div class="toggle-row">화면 모드 <div class="seg2"><button data-th="dark" class="${S.settings.theme === 'dark' ? 'on' : ''}">다크</button><button data-th="light" class="${S.settings.theme === 'light' ? 'on' : ''}">라이트</button></div></div>
-    <button class="toggle-row" data-act="finger">손가락으로도 필기하기 <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>
+    <button class="toggle-row" data-act="finger"><span>손가락으로도 필기하기<small class="toggle-sub">애플펜슬이 없을 때 켜요. 켜면 두 손가락으로 스크롤해요.</small></span> <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>
     <button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기 (다음 테스터용)</button>
     <div class="about"><div class="logo"></div>1차 사용성 테스트 버전 · 성경 본문: 개역한글 (대한성서공회)</div>
     <div class="modal-actions"><button class="btn btn-primary" data-act="close">닫기</button></div>
@@ -376,27 +420,100 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       tool[key] = i; renderToolbar();
     }));
     slot.querySelectorAll('[data-em]').forEach((b) => b.addEventListener('click', () => { tool.eraserMode = b.dataset.em; renderToolbar(); }));
-    slot.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { tool[t === 'pen' ? 'penSize' : t === 'hl' ? 'hlSize' : 'eraserSize'] = +b.dataset.size; renderToolbar(); }));
+    slot.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { tool[t === 'pen' ? 'penSize' : t === 'hl' ? 'hlSize' : 'eraserSize'] = +b.dataset.size; renderToolbar(); showSizePreview(t); }));
     slot.querySelector('[data-act="undo"]').addEventListener('click', () => ns.paper.undo());
     slot.querySelector('[data-act="redo"]').addEventListener('click', () => ns.paper.redo());
     slot.querySelector('[data-act="more"]').addEventListener('click', toggleMore);
   }
 
-  // 펜 색 팔레트: 피그마 pen 12색 + 직접 고르기. 고른 색이 툴바의 그 칸에 들어가요.
+  // 굵기를 고르면 종이 위 실제 크기를 잠깐 보여 줘요
+  let prevT;
+  function showSizePreview(t) {
+    const host = ns.paper?.scrollEl?.parentElement;
+    if (!host) return;
+    let el = host.querySelector('.size-preview');
+    if (!el) { el = document.createElement('div'); el.className = 'size-preview'; el.innerHTML = '<i></i><span></span>'; host.appendChild(el); }
+    const k = ns.paper.scale || 1;
+    const d = t === 'eraser' ? ERASER_SIZES[tool.eraserSize] * 2 * k : t === 'hl' ? HL_SIZES[tool.hlSize] * k : PEN_SIZES[tool.penSize] * 2.2 * k;
+    const i = el.querySelector('i');
+    i.className = t;
+    i.style.width = t === 'hl' ? '72px' : Math.max(3, d) + 'px';
+    i.style.height = Math.max(3, d) + 'px';
+    i.style.background = t === 'eraser' ? '' : t === 'hl' ? HL_COLORS[tool.hlColor] : PEN_COLORS[tool.penColor];
+    el.querySelector('span').textContent = t === 'eraser' ? '지우개 크기' : t === 'hl' ? '형광펜 굵기' : '펜 굵기';
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(prevT);
+    prevT = setTimeout(() => el.classList.remove('show'), 1100);
+  }
+
+  // 펜 색 팔레트: 기본 색(피그마 pen 12색) + 내 색(직접 만든 색, 최대 6개). 고른 색이 툴바의 그 칸에 들어가요.
   function openPalette(slotIdx) {
     toolbarEl.querySelector('.tb-menu')?.remove();
+    ns.paper?.scrollEl?.parentElement?.querySelector('.size-preview')?.classList.remove('show');
     const isPen = tool.type === 'pen';
     const arr = isPen ? PEN_COLORS : HL_COLORS;
-    const pal = isPen ? PEN_PALETTE : HL_PALETTE;
+    const base = isPen ? PEN_PALETTE : HL_PALETTE;
+    const myKey = isPen ? 'myPen' : 'myHl';
+    if (!S.settings[myKey]) S.settings[myKey] = [];
+    const mine = S.settings[myKey];
     const m = document.createElement('div');
     m.className = 'tb-menu palette';
-    m.innerHTML = `<h6>${isPen ? '펜' : '형광펜'} 색 바꾸기</h6>
-      <div class="pal-grid">${pal.map((c) => `<button class="pal ${c.toLowerCase() === arr[slotIdx].toLowerCase() ? 'on' : ''}" data-c="${c}"><i style="background:${c}"></i></button>`).join('')}</div>
-      <label class="pal-custom"><span class="pal-rainbow"></span>직접 고르기<input type="color" value="${arr[slotIdx]}"></label>`;
     toolbarEl.appendChild(m);
+    const cur = () => arr[slotIdx].toLowerCase();
+    const sw = (c, extra = '') => `<button class="pal ${c.toLowerCase() === cur() ? 'on' : ''}" data-c="${c}" aria-label="${c}" ${extra}><i style="background:${c}"></i></button>`;
     const set = (c) => { arr[slotIdx] = c; S.saveSettings(); m.remove(); renderToolbar(); };
-    m.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => set(b.dataset.c)));
-    m.querySelector('input').addEventListener('change', (e) => set(e.target.value));
+
+    const showList = () => {
+      m.innerHTML = `<div class="pal-head"><b>${isPen ? '펜' : '형광펜'} 색</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>
+        <h6>기본 색</h6><div class="pal-grid">${base.map((c) => sw(c)).join('')}</div>
+        <h6>내 색</h6><div class="pal-grid">${mine.map((c) => sw(c, 'data-mine')).join('')}${mine.length < 6 ? `<button class="pal pal-add" data-act="add" aria-label="색 만들기"><i>${icon.plus}</i></button>` : ''}</div>
+        ${mine.length ? '<p class="pal-tip">내 색을 길게 누르면 지울 수 있어요</p>' : ''}`;
+      m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
+      m.querySelectorAll('[data-c]').forEach((b) => {
+        let lp;
+        b.addEventListener('click', () => { if (b.dataset.lp) return; set(b.dataset.c); });
+        if (b.hasAttribute('data-mine')) {
+          b.addEventListener('pointerdown', () => { lp = setTimeout(() => { b.dataset.lp = 1; mine.splice(mine.indexOf(b.dataset.c), 1); S.saveSettings(); showList(); }, 550); });
+          ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, () => clearTimeout(lp)));
+        }
+      });
+      m.querySelector('[data-act="add"]')?.addEventListener('click', showPicker);
+    };
+
+    // 직접 만들기: 채도·밝기 판 + 색상 막대
+    const showPicker = () => {
+      let [h, sat, val] = hexToHsv(arr[slotIdx]);
+      m.innerHTML = `<div class="pal-head"><button class="pal-x" data-act="back" aria-label="뒤로">${icon.arrowLeft}</button><b>색 만들기</b><span style="width:32px"></span></div>
+        <div class="pk-sv"><div class="pk-knob"></div></div>
+        <div class="pk-hue"><div class="pk-knob"></div></div>
+        <div class="pk-foot"><span class="pk-prev"></span><span class="pk-hex"></span><button class="btn btn-primary pk-ok" data-act="ok">추가하고 쓰기</button></div>`;
+      const svEl = m.querySelector('.pk-sv'), hueEl = m.querySelector('.pk-hue');
+      const upd = () => {
+        const hex = hsvToHex(h, sat, val);
+        svEl.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${h} 100% 50%))`;
+        svEl.firstChild.style.cssText = `left:${sat * 100}%;top:${(1 - val) * 100}%;background:${hex}`;
+        hueEl.firstChild.style.cssText = `left:${h / 360 * 100}%;background:hsl(${h} 100% 50%)`;
+        m.querySelector('.pk-prev').style.background = hex;
+        m.querySelector('.pk-hex').textContent = hex.toUpperCase();
+      };
+      const drag = (el, fn) => el.addEventListener('pointerdown', (e) => {
+        el.setPointerCapture(e.pointerId);
+        const mv = (ev) => { const r = el.getBoundingClientRect(); fn(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height))); upd(); };
+        mv(e);
+        el.onpointermove = mv;
+        el.onpointerup = el.onpointercancel = () => { el.onpointermove = null; };
+      });
+      drag(svEl, (x, y) => { sat = x; val = 1 - y; });
+      drag(hueEl, (x) => { h = Math.round(x * 360); });
+      m.querySelector('[data-act="back"]').addEventListener('click', showList);
+      m.querySelector('[data-act="ok"]').addEventListener('click', () => {
+        const hex = hsvToHex(h, sat, val);
+        if (!mine.includes(hex)) { mine.push(hex); if (mine.length > 6) mine.shift(); }
+        set(hex);
+      });
+      upd();
+    };
+    showList();
   }
 
   function toggleMore() {
@@ -404,15 +521,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (ex) { ex.remove(); return; }
     const m = document.createElement('div');
     m.className = 'tb-menu';
-    m.innerHTML = `<h6>종이 종류</h6><div class="row">${PAPERS.map(([k, l]) => `<button class="paper-opt ${k === main.paper ? 'on' : ''}" data-p="${k}"><span class="paper-thumb ${k}"></span>${l.replace(' 종이', '')}</button>`).join('')}</div>
-      <button class="toggle-row" data-act="finger">손가락으로도 쓰기 <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>`;
+    m.innerHTML = `<h6>종이 종류</h6><div class="row">${PAPERS.map(([k, l]) => `<button class="paper-opt ${k === main.paper ? 'on' : ''}" data-p="${k}"><span class="paper-thumb ${k}"></span>${l.replace(' 종이', '')}</button>`).join('')}</div>`;
     toolbarEl.appendChild(m);
     m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.touch(main); ns.paper.render(); m.remove(); }));
-    m.querySelector('[data-act="finger"]').addEventListener('click', (e) => {
-      S.settings.fingerDraw = !S.settings.fingerDraw; S.saveSettings();
-      ns.paper.setFingerDraw(S.settings.fingerDraw);
-      e.currentTarget.querySelector('.switch').classList.toggle('on', S.settings.fingerDraw);
-    });
   }
 
   let savedT;
@@ -588,3 +699,15 @@ async function main() {
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 main();
+
+function hexToHsv(hex) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [Math.round((h * 60 + 360) % 360), mx ? d / mx : 0, mx];
+}
+function hsvToHex(h, s, v) {
+  const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return '#' + [f(5), f(3), f(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+}
