@@ -260,10 +260,10 @@ svg { display: block; }
 .link-more { position: absolute; right: 28px; bottom: 28px; font-size: 15px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
 
 /* ---------- 노트 (종이) ---------- */
-.tabs { flex: none; display: flex; gap: 4px; padding: 8px 8px 0; }
-.tab { height: 40px; padding: 0 14px; border-radius: 10px 10px 0 0; display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
-.tab.on { background: var(--bg-panel); color: var(--text-primary); font-weight: 600; }
-.tab .tx { width: 20px; height: 20px; display: grid; place-items: center; margin-right: -6px; }
+.tabs { flex: none; display: flex; align-items: flex-end; gap: 4px; padding: 8px 8px 0; background: var(--bg-panel); }
+.tab { height: 40px; padding: 0 20px; border-radius: 10px 10px 0 0; display: inline-flex; align-items: center; gap: 16px; font-size: 13px; line-height: 18px; letter-spacing: -0.325px; color: var(--text-primary); white-space: pre; }
+.tab.on { background: var(--bg-canvas); font-weight: 600; }
+.tab .tx { font-size: 17px; line-height: 26px; font-weight: 400; width: 24px; height: 40px; margin: 0 -8px 0 -4px; display: grid; place-items: center; }
 .tabs + .info { margin-top: 0; border-top-left-radius: 0; }
 .paper-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: 16px 20px 140px; position: relative; }
 .paper-scroll.finger { touch-action: none; }

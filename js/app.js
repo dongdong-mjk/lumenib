@@ -225,6 +225,11 @@ function Pick() {
     start: null,
     marks: () => ({
       today: [...st.passages],
+      noteVerses: (() => {
+        const set = new Set();
+        S.allNotes().forEach((n) => n.passages.forEach((p) => { if (p.book === bp.book && p.ch === bp.ch) for (let v = p.from; v <= p.to; v++) set.add(v); }));
+        return set;
+      })(),
       chapterHasNotes: (b, c) => S.allNotes().some((n) => n.passages.some((p) => p.book === b && p.ch === c)),
     }),
     onChange: () => { lastLocation = { book: bp.book, ch: bp.ch }; renderRight(); },
@@ -378,8 +383,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (ns.tabs.length < 2) { slot.innerHTML = ''; return; }
     slot.innerHTML = `<div class="tabs">${ns.tabs.map((id) => {
       const n = S.getNote(id);
-      const label = `${fmtShort(n.date)} ${refList(n)}`;
-      return `<button class="tab ${id === ns.active ? 'on' : ''}" data-tab="${id}"><span class="num">${esc(label)}</span>${id !== main.id ? `<span class="tx" data-close="${id}">${icon.x.replace('width="24" height="24"', 'width="14" height="14"')}</span>` : ''}</button>`;
+      const label = `${fmtShort(n.date)}  ${refList(n)}`;
+      return `<button class="tab ${id === ns.active ? 'on' : ''}" data-tab="${id}"><span class="tl">${esc(label)}</span>${id !== main.id ? `<span class="tx" data-close="${id}" aria-label="탭 닫기">×</span>` : ''}</button>`;
     }).join('')}</div>`;
     slot.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', (e) => {
       const c = e.target.closest('[data-close]');
