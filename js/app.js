@@ -505,6 +505,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     i.style.width = t === 'hl' ? '72px' : Math.max(3, d) + 'px';
     i.style.height = Math.max(3, d) + 'px';
     i.style.background = t === 'eraser' ? '' : t === 'hl' ? HL_COLORS[tool.hlColor] : PEN_COLORS[tool.penColor];
+    i.style.opacity = t === 'hl' ? S.settings.hlAlpha : '';
     el.querySelector('span').textContent = t === 'eraser' ? '지우개 크기' : t === 'hl' ? '형광펜 굵기' : '펜 굵기';
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     clearTimeout(prevT);
@@ -532,7 +533,17 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       m.innerHTML = `<div class="pal-head"><b>${isPen ? '펜' : '형광펜'} 색</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>
         <h6>기본 색</h6><div class="pal-grid">${base.map((c) => sw(c)).join('')}</div>
         <h6>내 색</h6><div class="pal-grid">${mine.map((c) => sw(c, 'data-mine')).join('')}${mine.length < 6 ? `<button class="pal pal-add" data-act="add" aria-label="색 만들기"><i>${icon.plus}</i></button>` : ''}</div>
-        ${mine.length ? '<p class="pal-tip">내 색을 길게 누르면 지울 수 있어요</p>' : ''}`;
+        ${mine.length ? '<p class="pal-tip">내 색을 길게 누르면 지울 수 있어요</p>' : ''}
+        ${isPen ? '' : `<h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
+          <input type="range" min="20" max="80" step="5" value="${Math.round(S.settings.hlAlpha * 100)}" aria-label="형광펜 투명도"></div>
+          <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>`}`;
+      const ar = m.querySelector('.pal-alpha input');
+      if (ar) {
+        const paint = () => { const i = m.querySelector('.pa-sample i'); i.style.background = cur(); i.style.opacity = ar.value / 100; };
+        ar.addEventListener('input', () => { S.settings.hlAlpha = ar.value / 100; paint(); });
+        ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); });
+        paint();
+      }
       m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
       m.querySelectorAll('[data-c]').forEach((b) => {
         let lp;

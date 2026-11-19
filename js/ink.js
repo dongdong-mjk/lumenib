@@ -20,6 +20,9 @@ export const HL_COLORS = settings.hlColors;
 export const PEN_SIZES = [1.6, 2.6, 4];
 export const HL_SIZES = [12, 18, 26];
 export const ERASER_SIZES = [8, 18, 32];
+// 형광펜 진하기 (0.2 연하게 ~ 0.8 진하게). 새로 긋는 획부터 적용돼요.
+export const HL_ALPHA_DEFAULT = 0.42;
+if (typeof settings.hlAlpha !== 'number') settings.hlAlpha = HL_ALPHA_DEFAULT;
 
 export const tool = { type: 'pen', penColor: 0, penSize: 1, hlColor: 0, hlSize: 1, eraserSize: 1, eraserMode: 'stroke' };
 
@@ -311,7 +314,7 @@ export class Paper {
       if (t === 'pen' || t === 'hl') {
         const s = t === 'pen'
           ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], pts: [x, y, pr] }
-          : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], pts: [x, y, 0.5] };
+          : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x, y, 0.5] };
         cur = { kind: 'draw', s };
         this.drawLive(page, s);
       } else if (t === 'eraser') {
@@ -583,7 +586,7 @@ function drawStroke(ctx, s) {
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (s.tool === 'hl') {
     ctx.save();
-    ctx.globalAlpha = 0.42;
+    ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT;
     ctx.globalCompositeOperation = 'multiply';
     ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'butt';
     ctx.beginPath(); ctx.moveTo(p[0], p[1]);
