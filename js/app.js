@@ -5,6 +5,7 @@ import * as B from './bible.js';
 import * as S from './store.js';
 import { Paper, tool, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
+import { screen as trackScreen, track } from './analytics.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay-root');
@@ -49,6 +50,7 @@ function go(screen, arg) {
   cleanup = () => {};
   overlay.innerHTML = '';
   document.body.classList.toggle('noting', screen === 'note');
+  trackScreen(screen === 'note' && arg?.noteId ? 'note_view' : screen);
   ({ home: Home, pick: Pick, note: NoteScreen })[screen](arg);
 }
 
@@ -126,7 +128,7 @@ function Home({ highlight } = {}) {
   const offResize = () => window.removeEventListener('resize', fitHome);
 
   B.getVerses(1, 8, 1, 1).then(([v]) => { const el = app.querySelector('.gen81'); if (el) el.textContent = v.t; });
-  app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => toast(OUT_OF_SCOPE)));
+  app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
   app.querySelector('[data-act="record"]').addEventListener('click', () => go('pick'));
   app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
   app.querySelectorAll('[data-note]').forEach((b) => b.addEventListener('click', () => go('note', { noteId: b.dataset.note, from: 'home' })));
@@ -269,6 +271,7 @@ function Pick() {
   }
 
   async function start(passages, openOld) {
+    track(passages.length ? 'task1_start_with_passage' : 'task5_start_without_passage');
     const withTexts = await Promise.all(passages.map(withText));
     const note = S.newNote({ ...st.info, passages: withTexts, paper: st.paper });
     const loc = passages[0] ? { book: passages[0].book, ch: passages[0].ch, verse: passages[0].from } : lastLocation || { book: bp.book, ch: bp.ch };
@@ -433,7 +436,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
     fitToolbar();
-    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => { tool.type = b.dataset.tool; ns.paper?.clearSelection(); renderToolbar(); }));
+    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => { tool.type = b.dataset.tool; track('task2_tool_' + b.dataset.tool); ns.paper?.clearSelection(); renderToolbar(); }));
     slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => {
       const key = t === 'pen' ? 'penColor' : 'hlColor';
       const i = +b.dataset.color;
@@ -576,6 +579,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   function openTab(id) {
     if (id === main.id) return switchTab(id);
     if (!ns.tabs.includes(id)) ns.tabs.push(id);
+    track('task4_open_old_note_tab');
     switchTab(id);
   }
   function closeTab(id) {
@@ -595,6 +599,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     await ensureMainTab();
     const p = await withText(sel);
     ns.paper.setPassage(p);
+    track('passage_set_in_note');
     bp.sel = null; bp.render({ keepScroll: true });
     if (!silent) toast(`${B.refText(p, true)}을 오늘 본문으로 넣었어요`);
   }
@@ -602,6 +607,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     await ensureMainTab();
     const c = await withText(sel);
     ns.paper.insertCitation({ book: c.book, ch: c.ch, from: c.from, to: c.to, text: c.text }, at);
+    track(at ? 'task3_cite_drag' : 'task3_cite_button');
     bp.sel = null; bp.render({ keepScroll: true });
   }
 
@@ -652,6 +658,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   });
 
   function finish() {
+    track('task_done_note_saved');
     main.done = true;
     S.touch(main);
     S.saveNotes(true);
@@ -660,6 +667,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
 
   // 본문 없이 완료하려 할 때: 본문 후보 제안
   async function askPassage() {
+    track('task5_ask_passage_on_done');
     const cands = [];
     const top = Object.entries(ns.viewLog).sort((a, b) => b[1] - a[1])[0];
     if (top) {

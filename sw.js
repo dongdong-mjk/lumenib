@@ -8,6 +8,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (url.hostname.includes('clarity.ms') || url.hostname.includes('bing.com')) return; // 사용 기록 수집은 건드리지 않아요
   const cacheFirst = url.pathname.includes('/data/') || url.pathname.includes('/fonts/') || url.hostname.includes('gstatic') || url.pathname.includes('/icons/');
   if (cacheFirst) {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
