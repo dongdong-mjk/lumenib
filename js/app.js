@@ -274,17 +274,17 @@ function Pick({ restore } = {}) {
     right.querySelectorAll('[data-old]').forEach((b) => b.addEventListener('click', () => {
       track('task4_open_old_note_from_pick');
       const back = { st: JSON.parse(JSON.stringify(st)), view: bp.view, book: bp.book, ch: bp.ch, sel: bp.sel ? { ...bp.sel } : null };
-      go('note', { noteId: b.dataset.old, viewOnly: true, back });
+      start(current(), b.dataset.old, back);
     }));
     right.querySelector('[data-act="paper"]')?.addEventListener('click', (e) => paperMenu(e.currentTarget, st.paper, (v) => { st.paper = v; renderRight(); }));
   }
 
-  async function start(passages, openOld) {
-    track(passages.length ? 'task1_start_with_passage' : 'task5_start_without_passage');
+  async function start(passages, openOld, back) {
+    if (!back) track(passages.length ? 'task1_start_with_passage' : 'task5_start_without_passage');
     const withTexts = await Promise.all(passages.map(withText));
     const note = S.newNote({ ...st.info, passages: withTexts, paper: st.paper });
     const loc = passages[0] ? { book: passages[0].book, ch: passages[0].ch, verse: passages[0].from } : lastLocation || { book: bp.book, ch: bp.ch };
-    go('note', { noteId: note.id, start: loc, openOld, from: 'pick' });
+    go('note', { noteId: note.id, start: loc, openOld, from: 'pick', back });
   }
   renderRight();
 }
@@ -322,9 +322,11 @@ function bindInfo(root, info, onEdit, onToggle) {
 // =========================================================
 // T4 노트 쓰기 (+ T5 인용 · T6 이 장 노트 · T7 예전 노트 탭)
 // =========================================================
-async function NoteScreen({ noteId, start, openOld, from, viewOnly, back }) {
+async function NoteScreen({ noteId, start, openOld, from, back }) {
   const main = S.getNote(noteId);
-  const mainReadonly = !!main.seed || !!viewOnly;
+  const mainReadonly = !!main.seed;
+  // 본문 고르기에서 예전 노트 탭을 열고 왔을 때: 아무것도 안 쓰고 그 탭을 닫으면 고르던 화면으로 돌아가요
+  const untouchedAt = back ? main.updatedAt : null;
   const ns = {
     tabs: [main.id], active: main.id, leftOpen: true, infoOpen: false,
     paper: null, viewLog: {}, lastSel: {}, undo: {},
@@ -592,6 +594,10 @@ async function NoteScreen({ noteId, start, openOld, from, viewOnly, back }) {
     switchTab(id);
   }
   function closeTab(id) {
+    if (back && id === openOld && main.updatedAt === untouchedAt) {
+      S.deleteNote(main.id);
+      return go('pick', { restore: back });
+    }
     ns.tabs = ns.tabs.filter((t) => t !== id);
     if (ns.active === id) switchTab(main.id); else renderTabs();
   }
@@ -661,7 +667,7 @@ async function NoteScreen({ noteId, start, openOld, from, viewOnly, back }) {
     leftEl.classList.toggle('closed', !ns.leftOpen);
   });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
-    if (mainReadonly) return back ? go('pick', { restore: back }) : go('home');
+    if (mainReadonly) return go('home');
     if (!main.passages.length) return askPassage();
     finish();
   });
