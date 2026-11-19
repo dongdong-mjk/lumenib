@@ -399,7 +399,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   function renderInfo() {
     const slot = right.querySelector('.info-slot');
     const n = activeNote();
-    slot.innerHTML = infoHTML(n, ns.infoOpen, isReadonly());
+    slot.innerHTML = infoHTML(n, ns.infoOpen, isReadonly()) + (isReadonly() ? '<div class="ro-summary">🔒 읽기 모드 · 수정은 노트 목록에서 가능해요</div>' : '');
     bindInfo(slot, n, () => { S.touch(n); flashSaved(); }, (open) => { ns.infoOpen = open; renderInfo(); });
   }
 

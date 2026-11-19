@@ -41,7 +41,9 @@ export class BiblePanel {
     const prevScroll = this.el.querySelector('.bp-body')?.scrollTop || 0;
     if (this.view === 'books') this.renderBooks();
     else if (this.view === 'chapters') this.renderChapters();
-    else this.renderVerses(scrollTo, keepScroll ? prevScroll : null);
+    else return this.renderVerses(scrollTo, keepScroll ? prevScroll : null);
+    // 권 · 장 목록도 다시 그릴 때 보던 위치를 그대로 둬요
+    if (keepScroll) { const body = this.el.querySelector('.bp-body'); if (body) body.scrollTop = prevScroll; }
   }
 
   head(extra = '') {
