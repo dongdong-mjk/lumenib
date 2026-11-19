@@ -437,6 +437,17 @@ svg { display: block; }
 .recent-card .meta { margin-top: auto; font-size: 13px; line-height: 18px; color: var(--text-primary); display: flex; align-items: center; }
 .recent-card .meta em { font-style: normal; color: var(--text-secondary); }
 .recent-card.new { box-shadow: 0 0 0 2px var(--text-primary); }
+/* 큰 화면 (아이패드 프로 13인치 시안 1376×1032) */
+.home.lg .record-card, .home.lg .continue-card { height: 220px; }
+.home.lg .rc-btn, .home.lg .bm-row { top: 164px; }
+.home.lg .read-sec { padding: 46.4px 0; }
+.home.lg .reading { height: 227.2px; }
+.home.lg .hero { padding-top: 49.6px; }
+.home.lg .matrix { width: 845px; margin-right: 12px; }
+.home.lg .dots { grid-template-columns: repeat(70, 9.6px); grid-auto-rows: 9.6px; gap: 2px; padding-top: 4px; }
+.home.lg .dots i::after { width: 3.6px; height: 3.6px; }
+.home.lg .dots i.r::after { width: 4.8px; height: 4.8px; }
+.home.lg .recent-card { height: 156px; }
 .empty-notes { color: var(--text-tertiary); font-size: 14px; padding: 12px 8px; }
 
 /* ---------- 토스트 · 모달 · 시트 ---------- */
@@ -490,3 +501,4 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .size-preview i.eraser { border: 1.5px solid #111; background: rgba(0,0,0,.04); }
 .size-preview i.hl { border-radius: 2px; }
 .size-preview span { font-size: 12px; color: #555; }
+.home.lg .rc-lines b { height: 202px; }

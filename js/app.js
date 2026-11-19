@@ -149,6 +149,8 @@ const GAP_GROW = { S: 0, B: 0, C: 1, D: 1.5, E: 1.5, F: 1 };
 function fitHome() {
   const home = app.querySelector('.home'), inner = home?.querySelector('.home-inner');
   if (!inner) return;
+  // 13인치(가로 1300 이상)는 큰 화면 시안(1376×1032)으로: 카드 · 점 지도가 더 커요
+  home.classList.toggle('lg', home.clientWidth >= 1300);
   const probe = document.createElement('div');
   probe.style.cssText = 'position:fixed;visibility:hidden;height:env(safe-area-inset-top,0px);width:env(safe-area-inset-bottom,0px)';
   document.body.appendChild(probe);
