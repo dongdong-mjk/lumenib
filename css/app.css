@@ -335,7 +335,7 @@ svg { display: block; }
 .readonly-badge { position: absolute; right: 28px; top: 12px; z-index: 2; }
 
 .lasso-menu { position: absolute; z-index: 4; display: flex; background: #111; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
-.lasso-menu button { color: #fff; font-size: 13px; font-weight: 600; padding: 9px 14px; }
+.lasso-menu button { white-space: nowrap; color: #fff; font-size: 13px; font-weight: 600; padding: 9px 14px; }
 .lasso-menu button + button { border-left: 1px solid #333; }
 
 /* ---------- 펜 툴바 (모드와 상관없이 라이트) ---------- */

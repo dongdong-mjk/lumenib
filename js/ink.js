@@ -487,7 +487,11 @@ export class Paper {
   positionLassoMenu() {
     if (!this.lassoMenu || !this.selection) return;
     const b = this.selection.box;
-    this.lassoMenu.style.left = Math.max(4, b[0] * this.scale) + 'px';
+    // 종이 오른쪽 끝에 닿으면 선택 영역의 오른쪽 끝에 맞춰요
+    const pageW = this.lassoMenu.parentElement.clientWidth, mw = this.lassoMenu.offsetWidth;
+    let left = b[0] * this.scale;
+    if (left + mw > pageW - 4) left = b[2] * this.scale - mw;
+    this.lassoMenu.style.left = Math.max(4, Math.min(left, pageW - mw - 4)) + 'px';
     this.lassoMenu.style.top = Math.max(4, b[1] * this.scale - 46) + 'px';
   }
   hideLassoMenu() { this.lassoMenu?.remove(); this.lassoMenu = null; }
