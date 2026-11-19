@@ -190,7 +190,7 @@ svg { display: block; }
 .search-row span { color: var(--text-secondary); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty-hint { color: var(--text-tertiary); font-size: 14px; padding: 24px 16px; text-align: center; }
 
-.verses { padding: 12px 8px 120px; }
+.verses { padding: 12px 8px 64px; } /* 아래 떠 있는 버튼(본문으로 넣기 · 오늘 본문) 높이만큼만 */
 .verse {
   display: flex; gap: 8px; padding: 4px 8px; position: relative; border-radius: 0;
   font-family: var(--font-serif); font-size: var(--verse-size, 16px); line-height: calc(var(--verse-size, 16px) * 1.6875); letter-spacing: -0.02em; color: var(--text-body);
