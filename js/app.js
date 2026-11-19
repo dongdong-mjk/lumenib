@@ -214,8 +214,9 @@ function openSettings() {
 // =========================================================
 // T2 · T3 본문 고르기
 // =========================================================
-function Pick() {
-  const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: [], paper: 'lined' };
+function Pick({ restore } = {}) {
+  // restore: 예전 노트를 보고 돌아왔을 때 고르던 상태 그대로 (노트는 아직 만들지 않아요)
+  const st = restore?.st || { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: [], paper: 'lined' };
   app.innerHTML = `<div class="screen">
     <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${icon.arrowLeft.replace('width="24" height="24"', 'width="18" height="18"')} 홈</button></div>
       <div class="title">오늘 설교 기록하기</div><div class="right"></div></header>
@@ -226,7 +227,7 @@ function Pick() {
   const right = app.querySelector('.right-panel');
   const bp = new BiblePanel(app.querySelector('.bible-panel'), {
     mode: 'pick',
-    start: null,
+    start: restore?.view === 'verses' ? { book: restore.book, ch: restore.ch, verse: restore.sel?.from } : null,
     marks: () => ({
       today: [...st.passages],
       noteVerses: (() => {
@@ -238,6 +239,8 @@ function Pick() {
     }),
     onChange: () => { lastLocation = { book: bp.book, ch: bp.ch }; renderRight(); },
   });
+  if (restore && restore.view !== 'verses') { bp.book = restore.book; bp.ch = restore.ch; bp.view = restore.view; bp.render(); }
+  if (restore?.sel) { bp.sel = { ...restore.sel }; bp.render({ scrollTo: restore.sel.from }); }
   app.querySelector('[data-act="home"]').addEventListener('click', () => go('home'));
 
   const current = () => [...st.passages, ...(bp.selection ? [bp.selection] : [])];
@@ -268,7 +271,11 @@ function Pick() {
       if (i < st.passages.length) { st.passages.splice(i, 1); renderRight(); bp.render({ keepScroll: true }); } else bp.clearSel();
     }));
     right.querySelector('[data-act="start"]')?.addEventListener('click', () => start(current()));
-    right.querySelectorAll('[data-old]').forEach((b) => b.addEventListener('click', () => start(current(), b.dataset.old)));
+    right.querySelectorAll('[data-old]').forEach((b) => b.addEventListener('click', () => {
+      track('task4_open_old_note_from_pick');
+      const back = { st: JSON.parse(JSON.stringify(st)), view: bp.view, book: bp.book, ch: bp.ch, sel: bp.sel ? { ...bp.sel } : null };
+      go('note', { noteId: b.dataset.old, viewOnly: true, back });
+    }));
     right.querySelector('[data-act="paper"]')?.addEventListener('click', (e) => paperMenu(e.currentTarget, st.paper, (v) => { st.paper = v; renderRight(); }));
   }
 
@@ -315,9 +322,9 @@ function bindInfo(root, info, onEdit, onToggle) {
 // =========================================================
 // T4 노트 쓰기 (+ T5 인용 · T6 이 장 노트 · T7 예전 노트 탭)
 // =========================================================
-async function NoteScreen({ noteId, start, openOld, from }) {
+async function NoteScreen({ noteId, start, openOld, from, viewOnly, back }) {
   const main = S.getNote(noteId);
-  const mainReadonly = !!main.seed;
+  const mainReadonly = !!main.seed || !!viewOnly;
   const ns = {
     tabs: [main.id], active: main.id, leftOpen: true, infoOpen: false,
     paper: null, viewLog: {}, lastSel: {}, undo: {},
@@ -654,7 +661,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     leftEl.classList.toggle('closed', !ns.leftOpen);
   });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
-    if (mainReadonly) return go('home');
+    if (mainReadonly) return back ? go('pick', { restore: back }) : go('home');
     if (!main.passages.length) return askPassage();
     finish();
   });
