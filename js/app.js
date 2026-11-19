@@ -214,9 +214,8 @@ function openSettings() {
 // =========================================================
 // T2 · T3 본문 고르기
 // =========================================================
-function Pick({ restore } = {}) {
-  // restore: 예전 노트를 보고 돌아왔을 때 고르던 상태 그대로 (노트는 아직 만들지 않아요)
-  const st = restore?.st || { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: [], paper: 'lined' };
+function Pick() {
+  const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: [], paper: 'lined' };
   app.innerHTML = `<div class="screen">
     <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${icon.arrowLeft.replace('width="24" height="24"', 'width="18" height="18"')} 홈</button></div>
       <div class="title">오늘 설교 기록하기</div><div class="right"></div></header>
@@ -227,7 +226,7 @@ function Pick({ restore } = {}) {
   const right = app.querySelector('.right-panel');
   const bp = new BiblePanel(app.querySelector('.bible-panel'), {
     mode: 'pick',
-    start: restore?.view === 'verses' ? { book: restore.book, ch: restore.ch, verse: restore.sel?.from } : null,
+    start: null,
     marks: () => ({
       today: [...st.passages],
       noteVerses: (() => {
@@ -239,17 +238,53 @@ function Pick({ restore } = {}) {
     }),
     onChange: () => { lastLocation = { book: bp.book, ch: bp.ch }; renderRight(); },
   });
-  if (restore && restore.view !== 'verses') { bp.book = restore.book; bp.ch = restore.ch; bp.view = restore.view; bp.render(); }
-  if (restore?.sel) { bp.sel = { ...restore.sel }; bp.render({ scrollTo: restore.sel.from }); }
   app.querySelector('[data-act="home"]').addEventListener('click', () => go('home'));
 
   const current = () => [...st.passages, ...(bp.selection ? [bp.selection] : [])];
 
+  // 예전 노트 탭 (T7): 첫 탭은 고르던 화면 그대로, 노트는 '노트 쓰기'를 눌러야 만들어져요
+  const pt = { tabs: [], active: null, paper: null, infoOpen: false };
+  function tabsHTML() {
+    if (!pt.tabs.length) return '';
+    const ps = current();
+    const mine = `${fmtShort(st.info.date)}  ${ps.length ? ps.map((p) => B.refText(p, true)).join(', ') : '새 노트'}`;
+    return `<div class="tabs"><button class="tab ${pt.active ? '' : 'on'}" data-tab=""><span class="tl">${esc(mine)}</span></button>${pt.tabs.map((id) => {
+      const n = S.getNote(id);
+      return `<button class="tab ${id === pt.active ? 'on' : ''}" data-tab="${id}"><span class="tl">${esc(`${fmtShort(n.date)}  ${refList(n)}`)}</span><span class="tx" data-close="${id}" aria-label="탭 닫기">×</span></button>`;
+    }).join('')}</div>`;
+  }
+  function bindTabs() {
+    right.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', (e) => {
+      const c = e.target.closest('[data-close]');
+      if (c) { pt.tabs = pt.tabs.filter((t) => t !== c.dataset.close); if (pt.active === c.dataset.close) pt.active = null; renderRight(); return; }
+      pt.active = b.dataset.tab || null; pt.infoOpen = false; renderRight();
+    }));
+  }
+  function openOldTab(id) {
+    if (!pt.tabs.includes(id)) pt.tabs.push(id);
+    track('task4_open_old_note_tab');
+    pt.active = id; pt.infoOpen = false; renderRight();
+  }
+  async function renderOld() {
+    const n = S.getNote(pt.active);
+    await fillTexts(n);
+    if (pt.paper) { pt.paper.destroy(); pt.paper = null; }
+    right.className = 'panel right-panel note';
+    right.innerHTML = `${tabsHTML()}<div class="info-slot">${infoHTML(n, pt.infoOpen, true)}<div class="ro-summary">🔒 읽기 모드 · 수정은 노트 목록에서 가능해요</div></div><div class="paper-scroll"></div>`;
+    bindTabs();
+    bindInfo(right.querySelector('.info-slot'), n, () => {}, (open) => { pt.infoOpen = open; renderOld(); });
+    pt.paper = new Paper(right.querySelector('.paper-scroll'), n, { readonly: true, fingerDraw: S.settings.fingerDraw, onChange: () => {}, onHistory: () => {} });
+    await pt.paper.render();
+  }
+
   async function renderRight() {
+    if (pt.active) return renderOld();
+    if (pt.paper) { pt.paper.destroy(); pt.paper = null; }
+    right.className = 'panel right-panel dashed';
     const ps = current();
     const others = ps.length ? otherNotesFor(ps) : [];
     const texts = await Promise.all(ps.map(withText));
-    right.innerHTML = `${infoHTML(st.info, st.infoOpen)}
+    right.innerHTML = `${tabsHTML()}${infoHTML(st.info, st.infoOpen)}
       ${!ps.length ? `<div class="pick-empty">← 왼쪽에서 오늘 본문을 골라주세요</div>
         <button class="link-more" data-act="nopassage">본문 없이 먼저 쓰기 ${icon.arrowRight.replace('width="24" height="24"', 'width="18" height="18"')}</button>` : `
       <div class="pick-body">
@@ -263,7 +298,8 @@ function Pick({ restore } = {}) {
         <button class="paper-select" data-act="paper"><span class="paper-thumb ${st.paper}"></span>${PAPERS.find((p) => p[0] === st.paper)[1]} <svg width="12" height="16" viewBox="0 0 12 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 6 3-3 3 3M3 10l3 3 3-3"/></svg></button>
         <button class="btn btn-primary btn-l" data-act="start">이 본문으로 노트 쓰기</button>
       </div>`}`;
-    bindInfo(right, st.info, () => {}, (open) => { st.infoOpen = open; renderRight(); });
+    bindTabs();
+    bindInfo(right, st.info, () => { if (pt.tabs.length) { const t = right.querySelector('.tab.on .tl'); if (t) t.textContent = `${fmtShort(st.info.date)}  ${ps.length ? ps.map((p) => B.refText(p, true)).join(', ') : '새 노트'}`; } }, (open) => { st.infoOpen = open; renderRight(); });
     right.querySelector('[data-act="nopassage"]')?.addEventListener('click', () => start([]));
     right.querySelector('[data-act="addmore"]')?.addEventListener('click', () => { st.passages.push(bp.selection); bp.clearSel(); toast('왼쪽에서 다음 본문을 골라주세요'); });
     right.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => {
@@ -271,20 +307,16 @@ function Pick({ restore } = {}) {
       if (i < st.passages.length) { st.passages.splice(i, 1); renderRight(); bp.render({ keepScroll: true }); } else bp.clearSel();
     }));
     right.querySelector('[data-act="start"]')?.addEventListener('click', () => start(current()));
-    right.querySelectorAll('[data-old]').forEach((b) => b.addEventListener('click', () => {
-      track('task4_open_old_note_from_pick');
-      const back = { st: JSON.parse(JSON.stringify(st)), view: bp.view, book: bp.book, ch: bp.ch, sel: bp.sel ? { ...bp.sel } : null };
-      start(current(), b.dataset.old, back);
-    }));
+    right.querySelectorAll('[data-old]').forEach((b) => b.addEventListener('click', () => openOldTab(b.dataset.old)));
     right.querySelector('[data-act="paper"]')?.addEventListener('click', (e) => paperMenu(e.currentTarget, st.paper, (v) => { st.paper = v; renderRight(); }));
   }
 
-  async function start(passages, openOld, back) {
-    if (!back) track(passages.length ? 'task1_start_with_passage' : 'task5_start_without_passage');
+  async function start(passages) {
+    track(passages.length ? 'task1_start_with_passage' : 'task5_start_without_passage');
     const withTexts = await Promise.all(passages.map(withText));
     const note = S.newNote({ ...st.info, passages: withTexts, paper: st.paper });
     const loc = passages[0] ? { book: passages[0].book, ch: passages[0].ch, verse: passages[0].from } : lastLocation || { book: bp.book, ch: bp.ch };
-    go('note', { noteId: note.id, start: loc, openOld, from: 'pick', back });
+    go('note', { noteId: note.id, start: loc, from: 'pick' });
   }
   renderRight();
 }
@@ -322,11 +354,9 @@ function bindInfo(root, info, onEdit, onToggle) {
 // =========================================================
 // T4 노트 쓰기 (+ T5 인용 · T6 이 장 노트 · T7 예전 노트 탭)
 // =========================================================
-async function NoteScreen({ noteId, start, openOld, from, back }) {
+async function NoteScreen({ noteId, start, openOld, from }) {
   const main = S.getNote(noteId);
   const mainReadonly = !!main.seed;
-  // 본문 고르기에서 예전 노트 탭을 열고 왔을 때: 아무것도 안 쓰고 그 탭을 닫으면 고르던 화면으로 돌아가요
-  const untouchedAt = back ? main.updatedAt : null;
   const ns = {
     tabs: [main.id], active: main.id, leftOpen: true, infoOpen: false,
     paper: null, viewLog: {}, lastSel: {}, undo: {},
@@ -594,10 +624,6 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
     switchTab(id);
   }
   function closeTab(id) {
-    if (back && id === openOld && main.updatedAt === untouchedAt) {
-      S.deleteNote(main.id);
-      return go('pick', { restore: back });
-    }
     ns.tabs = ns.tabs.filter((t) => t !== id);
     if (ns.active === id) switchTab(main.id); else renderTabs();
   }
