@@ -272,6 +272,7 @@ svg { display: block; }
 .page-inner { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; color: var(--paper-text); }
 .page canvas { position: absolute; left: 0; top: 0; touch-action: inherit; }
 .page canvas.bg { pointer-events: none; }
+.page canvas:not(.bg) { mix-blend-mode: multiply; } /* 형광펜이 본문 글자 위가 아니라 밑에 깔린 것처럼 보이게 */
 .page-inner { z-index: 0; }
 .page canvas.bg { z-index: -1; }
 .page-ui { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; pointer-events: none; z-index: 3; }
