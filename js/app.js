@@ -140,8 +140,9 @@ function Home({ highlight } = {}) {
 // 홈은 스크롤 없이 한 화면에 맞춰요.
 // 요소 크기는 시안(1194×834) 그대로 두고, 화면이 더 길면 간격을 넓히고, 짧으면 간격부터 줄인 뒤 그래도 모자라면 전체를 살짝 줄여요.
 const HOME_MIN_W = 1122; // 왼쪽 숫자 320 + 간격 24 + 점 지도 730 + 좌우 여백 48
-const GAP_NAT = { S: 32, B: 4, C: 24, D: 36, E: 36, F: 24 };
-const GAP_MIN = { S: 8, B: 0, C: 16, D: 24, E: 24, F: 16 };
+// S = 맨 위 여백. 시안의 32는 아이패드 상태바라서, 실제 상태바 높이(safe-area)만 비워요.
+const GAP_NAT = { S: 0, B: 4, C: 24, D: 36, E: 36, F: 24 };
+const GAP_MIN = { S: 0, B: 0, C: 16, D: 24, E: 24, F: 16 };
 const GAP_GROW = { S: 0, B: 0, C: 1, D: 1.5, E: 1.5, F: 1 };
 function fitHome() {
   const home = app.querySelector('.home'), inner = home?.querySelector('.home-inner');

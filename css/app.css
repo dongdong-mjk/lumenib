@@ -374,7 +374,7 @@ svg { display: block; }
 /* ---------- 홈 ---------- */
 .home { height: 100%; overflow: hidden; }
 .home-inner { padding: 0 24px var(--gF, 24px); transform-origin: 0 0; }
-.home-nav { position: relative; display: flex; justify-content: center; align-items: center; height: 54px; margin-top: var(--gS, 32px); }
+.home-nav { position: relative; display: flex; justify-content: center; align-items: center; height: 54px; margin-top: var(--gS, 0px); }
 .home-tabs { display: flex; gap: 4px; }
 .home-tab { height: 36px; padding: 0 16px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 15px; color: var(--text-secondary); }
 .home-tab svg { width: 18px; height: 18px; }
