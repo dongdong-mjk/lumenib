@@ -25,6 +25,10 @@ create table if not exists public.consents (
   agreed_at  timestamptz not null default now()
 );
 
+-- 로그인한 사용자만 API로 쓸 수 있게 (프로젝트의 '자동 권한' 설정과 상관없이 같게 맞춰요)
+revoke all on public.notes, public.consents from anon;
+grant select, insert, update, delete on public.notes, public.consents to authenticated;
+
 -- 3) 자기 것만 읽고 쓰기 (Row Level Security)
 alter table public.notes    enable row level security;
 alter table public.consents enable row level security;
@@ -87,3 +91,4 @@ create or replace view public.tester_usage with (security_invoker = true) as
   select user_id, count(*) filter (where not deleted) as notes,
          round(sum(file_bytes) / 1024.0 / 1024.0, 2) as mb, max(created_at) as last_note
   from public.notes group by user_id;
+revoke all on public.tester_usage from anon;
