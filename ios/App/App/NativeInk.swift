@@ -115,7 +115,7 @@ final class NativeInkViewController: UIViewController, UIPencilInteractionDelega
             toolStack.addArrangedSubview(b)
         }
 
-        // 펜슬 더블탭·스퀴즈 → 되돌리기
+        // 펜슬 더블탭·스퀴즈 → iPad 설정의 동작
         let pencil = UIPencilInteraction()
         pencil.delegate = self
         view.addInteraction(pencil)
@@ -202,7 +202,7 @@ final class NativeInkViewController: UIViewController, UIPencilInteractionDelega
         }
     }
 
-    @objc private func toolTapped(_ b: UIButton) { tool = Tool(rawValue: b.tag) ?? .pen; applyTool() }
+    @objc private func toolTapped(_ b: UIButton) { setTool(Tool(rawValue: b.tag) ?? .pen) }
     @objc private func colorTapped(_ b: UIButton) { penColor = penColors[b.tag]; applyTool() }
     @objc private func widthTapped(_ b: UIButton) { penWidth = penWidths[b.tag]; applyTool() }
 
@@ -215,20 +215,31 @@ final class NativeInkViewController: UIViewController, UIPencilInteractionDelega
         redoButton.isEnabled = canvas.undoManager?.canRedo ?? false
     }
 
-    private func pencilUndo() {
-        guard canvas.undoManager?.canUndo == true else { return }
-        undoTapped()
+    // iPad 설정 > Apple Pencil 에서 고른 동작을 따라가요 (지우개 전환 · 이전 도구). 그 밖의 동작은 이 시험 화면에 없어요.
+    private var previousTool: Tool = .eraser
+    private func setTool(_ t: Tool) {
+        guard t != tool else { return }
+        previousTool = tool
+        tool = t
+        applyTool()
+    }
+    private func perform(_ action: String) {
+        switch action {
+        case "switchEraser": setTool(tool == .eraser ? (previousTool == .eraser ? .pen : previousTool) : .eraser)
+        case "switchPrevious": setTool(previousTool)
+        default: break
+        }
     }
     func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
-        if UIPencilInteraction.preferredTapAction != .ignore { pencilUndo() }
+        perform(PencilAction.name(UIPencilInteraction.preferredTapAction))
     }
     @available(iOS 17.5, *)
     func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
-        if UIPencilInteraction.preferredTapAction != .ignore { pencilUndo() }
+        perform(PencilAction.name(UIPencilInteraction.preferredTapAction))
     }
     @available(iOS 17.5, *)
     func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
-        if squeeze.phase == .ended, UIPencilInteraction.preferredSqueezeAction != .ignore { pencilUndo() }
+        if squeeze.phase == .ended { perform(PencilAction.name(UIPencilInteraction.preferredSqueezeAction)) }
     }
 
     // MARK: 저장 · 닫기

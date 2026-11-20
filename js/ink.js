@@ -391,6 +391,9 @@ export class Paper {
           : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x, y, 0.5] };
         cur = { kind: 'draw', s };
         this.drawLive(page, s);
+        // 그리고 멈춰서 잠깐 기다리면 반듯한 도형으로 (굿노트·메모 앱의 '그리고 멈추기')
+        const k = cur;
+        k.hold = { x, y, t: setTimeout(() => this.trySnap(page, k), HOLD_MS) };
       } else if (t === 'eraser') {
         cur = { kind: 'erase', removed: [], before: this.note.pages[page.i].strokes.slice() };
         this.eraseAt(page, x, y, cur);
@@ -410,7 +413,13 @@ export class Paper {
           const p = cur.s.pts;
           const lx = p[p.length - 3], ly = p[p.length - 2];
           if ((x - lx) ** 2 + (y - ly) ** 2 < 0.6) continue;
+          if (cur.snapped) continue; // 도형이 된 뒤에는 펜을 떼기 전까지 그대로
           p.push(round(x), round(y), Math.round(pr * 100) / 100);
+          if (cur.hold && Math.hypot(x - cur.hold.x, y - cur.hold.y) > HOLD_SLOP) {
+            clearTimeout(cur.hold.t);
+            const k = cur;
+            cur.hold = { x, y, t: setTimeout(() => this.trySnap(page, k), HOLD_MS) };
+          }
         } else if (cur.kind === 'erase') {
           this.eraseAt(page, x, y, cur);
         } else if (cur.kind === 'lasso') {
@@ -434,6 +443,7 @@ export class Paper {
       if (!cur) return;
       const k = cur;
       cur = null;
+      if (k.hold) clearTimeout(k.hold.t);
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
         this.pagePush(page.i);
@@ -475,6 +485,15 @@ export class Paper {
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
+  }
+
+  trySnap(page, k) {
+    if (k.snapped || k.kind !== 'draw') return;
+    const pts = snapShape(k.s.pts);
+    if (!pts) return;
+    k.snapped = true;
+    k.s.pts = pts;
+    this.drawLive(page, k.s);
   }
 
   drawLive(page, s) {
@@ -780,6 +799,91 @@ function drawStroke(ctx, s, live = false) {
   ctx.fill();
 }
 const round = (v) => Math.round(v * 10) / 10;
+
+// ---------- 그리고 멈추면 도형으로 ----------
+const HOLD_MS = 500, HOLD_SLOP = 3;
+// 손으로 그린 점들을 직선 · 원(타원) · 삼각형 · 사각형 중 맞는 것으로 바꿔요. 맞는 게 없으면 null.
+function snapShape(raw) {
+  const P = [];
+  let prSum = 0;
+  for (let i = 0; i < raw.length; i += 3) { P.push([raw[i], raw[i + 1]]); prSum += raw[i + 2]; }
+  if (P.length < 4) return null;
+  const pr = Math.round((prSum / P.length) * 100) / 100;
+  let len = 0;
+  for (let i = 1; i < P.length; i++) len += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+  if (len < 20) return null;
+  const xs = P.map((q) => q[0]), ys = P.map((q) => q[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const size = Math.max(x1 - x0, y1 - y0);
+  const a = P[0], b = P[P.length - 1];
+  const out = (list) => { const o = []; for (const [x, y] of list) o.push(round(x), round(y), pr); return o; };
+  // 직선: 처음과 끝을 이은 선에서 크게 벗어나지 않음
+  const ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (ab > 0.85 * len) {
+    const dev = Math.max(...P.map((q) => Math.abs((b[0] - a[0]) * (a[1] - q[1]) - (a[0] - q[0]) * (b[1] - a[1])) / ab));
+    if (dev < Math.max(3, ab * 0.06)) return out(sampleSeg(a, b));
+    return null;
+  }
+  // 닫힌 도형만: 끝이 시작 근처로 돌아옴
+  if (ab > Math.max(14, size * 0.3)) return null;
+  // 꼭짓점 찾기 (시작점에서 가장 먼 점으로 둘로 나눠 각각 단순화)
+  let far = 0;
+  P.forEach((q, i) => { if (Math.hypot(q[0] - a[0], q[1] - a[1]) > Math.hypot(P[far][0] - a[0], P[far][1] - a[1])) far = i; });
+  const eps = size * 0.09;
+  const corners = [...rdp(P.slice(0, far + 1), eps).slice(0, -1), ...rdp(P.slice(far), eps).slice(0, -1)];
+  // 시작·끝이 한 꼭짓점 근처에서 겹치면 하나로
+  const poly = corners.filter((q, i) => i === 0 || Math.hypot(q[0] - corners[i - 1][0], q[1] - corners[i - 1][1]) > eps);
+  if (poly.length > 1 && Math.hypot(poly[0][0] - poly[poly.length - 1][0], poly[0][1] - poly[poly.length - 1][1]) < eps) poly.pop();
+  if (poly.length === 3 || poly.length === 4) {
+    // 모든 점이 다각형 둘레에 가까운지 확인
+    const segs = poly.map((q, i) => [q, poly[(i + 1) % poly.length]]);
+    const fit = P.every((q) => Math.min(...segs.map(([u, v]) => segDist(q, u, v))) < size * 0.12);
+    if (fit) {
+      let vs = poly;
+      // 사각형이 거의 반듯하면 가로세로로 맞춰요
+      if (poly.length === 4 && segs.every(([u, v]) => { const ang = Math.abs(Math.atan2(v[1] - u[1], v[0] - u[0])) % (Math.PI / 2); return ang < 0.2 || ang > Math.PI / 2 - 0.2; })) {
+        vs = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      }
+      const o = [];
+      vs.forEach((q, i) => o.push(...sampleSeg(q, vs[(i + 1) % vs.length]).slice(i ? 1 : 0)));
+      return out(o);
+    }
+  }
+  // 원 · 타원: 상자 가운데에서 거리가 고르게 반지름 근처
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  let rx = (x1 - x0) / 2, ry = (y1 - y0) / 2;
+  if (rx < 4 || ry < 4) return null;
+  const err = P.reduce((s, q) => s + Math.abs(Math.hypot((q[0] - cx) / rx, (q[1] - cy) / ry) - 1), 0) / P.length;
+  if (err > 0.2) return null;
+  if (Math.abs(rx - ry) / Math.max(rx, ry) < 0.15) rx = ry = (rx + ry) / 2; // 거의 동그라면 정원
+  const start = Math.atan2(a[1] - cy, a[0] - cx), n = Math.max(48, Math.round((rx + ry) / 1.5));
+  // 그린 방향 그대로 한 바퀴
+  const cross = (P[1][0] - cx) * (P[Math.min(5, P.length - 1)][1] - cy) - (P[1][1] - cy) * (P[Math.min(5, P.length - 1)][0] - cx);
+  const dir = cross >= 0 ? 1 : -1;
+  const o = [];
+  for (let i = 0; i <= n; i++) { const t = start + dir * (i / n) * Math.PI * 2; o.push([cx + rx * Math.cos(t), cy + ry * Math.sin(t)]); }
+  return out(o);
+}
+function sampleSeg(a, b, step = 4) {
+  const n = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+  const o = [];
+  for (let i = 0; i <= n; i++) o.push([a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n]);
+  return o;
+}
+function segDist(q, u, v) {
+  const dx = v[0] - u[0], dy = v[1] - u[1], l2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((q[0] - u[0]) * dx + (q[1] - u[1]) * dy) / l2));
+  return Math.hypot(q[0] - u[0] - t * dx, q[1] - u[1] - t * dy);
+}
+function rdp(pts, eps) {
+  if (pts.length < 3) return pts.slice();
+  const a = pts[0], b = pts[pts.length - 1];
+  let idx = 0, max = 0;
+  for (let i = 1; i < pts.length - 1; i++) { const d = segDist(pts[i], a, b); if (d > max) { max = d; idx = i; } }
+  if (max <= eps) return [a, b];
+  return [...rdp(pts.slice(0, idx + 1), eps).slice(0, -1), ...rdp(pts.slice(idx), eps)];
+}
+export { snapShape as _snapShapeForTest };
 // 예전 획: np(필압 끔) → 볼펜, 표시 없음 → 만년필(그때 기본이 필압 켜짐)
 const penStyleOf = (s) => s.ps || (s.np ? 'ball' : 'fountain');
 const STYLE_OPTS = {

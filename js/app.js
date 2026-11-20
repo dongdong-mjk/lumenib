@@ -477,7 +477,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
     fitToolbar();
-    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { if (b.dataset.tool === 'pen' && tool.type === 'pen') return openPenStyles(); tool.type = b.dataset.tool; track('task2_tool_' + b.dataset.tool); ns.paper?.clearSelection(); renderToolbar(); }));
+    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { if (b.dataset.tool === 'pen' && tool.type === 'pen') return openPenStyles(); setTool(b.dataset.tool); track('task2_tool_' + b.dataset.tool); }));
     slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('pointerdown', () => {
       const key = t === 'pen' ? 'penColor' : 'hlColor';
       const i = +b.dataset.color;
@@ -649,12 +649,35 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     renderToolbar();
   }
 
-  // 아이패드 앱(Capacitor)에서 애플펜슬 더블탭·스퀴즈가 오면 되돌리기 (ios/App/App/SceneDelegate.swift)
-  window.lumenibPencil = (kind) => {
+  // 도구 바꾸기 (펜슬 더블탭 '이전 도구로'를 위해 바로 전 도구를 기억해요)
+  let prevTool = tool.type === 'pen' ? 'eraser' : 'pen';
+  function setTool(t) {
+    if (t !== tool.type) { prevTool = tool.type; tool.type = t; }
+    ns.paper?.clearSelection();
+    toolbarEl?.querySelector('.tb-menu')?.remove();
+    renderToolbar();
+  }
+
+  // 아이패드 앱(Capacitor)에서 애플펜슬 더블탭·스퀴즈가 오면, iPad 설정 > Apple Pencil 에서 고른 동작을 따라가요
+  // (ios/App/App/SceneDelegate.swift 가 action 을 넘겨줘요. action 없이 오면 예전 앱이라 되돌리기)
+  const TOOL_NAME = { pen: '펜', hl: '형광펜', eraser: '지우개', lasso: '올가미' };
+  window.lumenibPencil = (kind, action = 'undo') => {
     const p = ns.paper;
     if (!p || p.readonly || !p.scrollEl?.isConnected) return false;
-    track('pencil_' + kind + '_undo');
-    if (p.undoStack.length) { p.undo(); toast('되돌렸어요'); } else toast('되돌릴 게 없어요');
+    track('pencil_' + kind + '_' + action);
+    if (action === 'switchEraser') {
+      setTool(tool.type === 'eraser' ? (prevTool !== 'eraser' ? prevTool : 'pen') : 'eraser');
+      toast(TOOL_NAME[tool.type], 900);
+    } else if (action === 'switchPrevious') {
+      setTool(prevTool);
+      toast(TOOL_NAME[tool.type], 900);
+    } else if (action === 'showColorPalette') {
+      if (tool.type === 'pen' || tool.type === 'hl') openPalette(tool.type === 'pen' ? tool.penColor : tool.hlColor);
+    } else if (action === 'showInkAttributes' || action === 'showContextualPalette') {
+      if (tool.type === 'pen') openPenStyles();
+    } else if (action === 'undo') {
+      if (p.undoStack.length) { p.undo(); toast('되돌렸어요'); } else toast('되돌릴 게 없어요');
+    }
     return true;
   };
 

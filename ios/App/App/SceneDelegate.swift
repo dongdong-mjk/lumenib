@@ -24,9 +24,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 }
 
-/// 웹앱 화면 + 애플펜슬 더블탭(2세대)·스퀴즈(Pencil Pro)를 받아 웹앱의 되돌리기를 부른다.
-/// 웹 쪽 함수는 js/app.js 의 window.lumenibPencil.
-/// 그 함수가 아직 없는 옛 웹 버전이면 툴바의 되돌리기 버튼을 대신 누른다.
+/// 웹앱 화면 + 애플펜슬 더블탭(2세대·Pro)·스퀴즈(Pro).
+/// iPad 설정 > Apple Pencil 에서 고른 동작(지우개로 전환, 이전 도구, 색상 팔레트 등)을 웹앱에 넘겨 그대로 따라 한다.
+/// 웹 쪽 함수는 js/app.js 의 window.lumenibPencil(kind, action).
 class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDelegate, WKScriptMessageHandler {
 
     override func viewDidLoad() {
@@ -50,35 +50,53 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         present(vc, animated: true)
     }
 
-    private func sendToWeb(_ kind: String) {
+    private func sendToWeb(_ kind: String, _ action: String) {
+        guard action != "ignore" else { return }
         let js = """
-        (function (k) {
-          if (window.lumenibPencil) return window.lumenibPencil(k);
+        (function (k, a) {
+          if (window.lumenibPencil) return window.lumenibPencil(k, a);
+          if (a !== 'undo') return;
           var b = document.querySelector('[data-act="undo"]');
           if (b && !b.disabled) b.click();
-        })('\(kind)');
+        })('\(kind)', '\(action)');
         """
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }
 
-    // 설정 > Apple Pencil 에서 더블탭을 '끔'으로 해 둔 사람은 건드리지 않는다.
-    private var tapIgnored: Bool { UIPencilInteraction.preferredTapAction == .ignore }
-
     // iOS 17.4 이하
     func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
-        if !tapIgnored { sendToWeb("doubleTap") }
+        sendToWeb("doubleTap", PencilAction.name(UIPencilInteraction.preferredTapAction))
     }
 
     // iOS 17.5 이상: 더블탭
     @available(iOS 17.5, *)
     func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveTap tap: UIPencilInteraction.Tap) {
-        if !tapIgnored { sendToWeb("doubleTap") }
+        sendToWeb("doubleTap", PencilAction.name(UIPencilInteraction.preferredTapAction))
     }
 
     // iOS 17.5 이상: Pencil Pro 스퀴즈 (꽉 쥐었다 놓을 때 한 번)
     @available(iOS 17.5, *)
     func pencilInteraction(_ interaction: UIPencilInteraction, didReceiveSqueeze squeeze: UIPencilInteraction.Squeeze) {
-        guard squeeze.phase == .ended, UIPencilInteraction.preferredSqueezeAction != .ignore else { return }
-        sendToWeb("squeeze")
+        guard squeeze.phase == .ended else { return }
+        sendToWeb("squeeze", PencilAction.name(UIPencilInteraction.preferredSqueezeAction))
+    }
+}
+
+/// iPad 설정의 펜슬 동작을 웹으로 넘길 이름으로
+enum PencilAction {
+    static func name(_ a: UIPencilPreferredAction) -> String {
+        switch a {
+        case .ignore: return "ignore"
+        case .switchEraser: return "switchEraser"
+        case .switchPrevious: return "switchPrevious"
+        case .showColorPalette: return "showColorPalette"
+        default: break
+        }
+        if #available(iOS 16.0, *), a == .showInkAttributes { return "showInkAttributes" }
+        if #available(iOS 17.5, *) {
+            if a == .showContextualPalette { return "showContextualPalette" }
+            if a == .runSystemShortcut { return "ignore" } // 단축어는 iPad가 직접 실행
+        }
+        return "ignore"
     }
 }

@@ -57,7 +57,7 @@ python3 -m http.server 8000
 ## 아이패드 앱으로 설치하기 (Capacitor, `capacitor-ios` 브랜치)
 
 웹앱을 그대로 감싼 iPad 앱이에요. 앱은 GitHub Pages 주소를 열기 때문에 웹을 고치면 앱에도 바로 반영돼요.
-앱에서만 되는 것: **애플펜슬 더블탭(2세대·Pro)과 스퀴즈(Pro)로 되돌리기**. 설정 > Apple Pencil에서 더블탭을 '끔'으로 하면 동작하지 않아요.
+앱에서만 되는 것: **애플펜슬 더블탭(2세대·Pro)과 스퀴즈(Pro)**. iPad 설정 > Apple Pencil에서 고른 동작(지우개로 전환 · 이전 도구 · 색상 팔레트 · 잉크 속성 · 끔)을 그대로 따라가요. 노트 쓰기 화면의 "네이티브 필기" 버튼으로 PencilKit 필기감 비교 화면도 열 수 있어요.
 
 1. App Store에서 Xcode 설치 → 한 번 실행해서 추가 구성요소 설치
 2. 터미널에서 `./scripts/prepare-ios.sh` (Node 없이 준비)
