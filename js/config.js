@@ -6,6 +6,8 @@ export const SUPABASE_KEY = '';      // Publishable key (sb_publishable_…) 또
 
 // 로그인 버튼: Supabase에서 켠 것만 true
 export const LOGIN = { google: true, kakao: true, email: true };
+// 이메일 로그인 방식: 'link' = 메일 속 링크 누르기 (기본 메일 템플릿), 'code' = 메일 속 숫자 넣기 (SMTP 연결 후 템플릿에 {{ .Token }} 넣었을 때)
+export const EMAIL_MODE = 'link';
 
 // 첫 로그인 때 보여 주는 보관 안내 (바꾸면 VERSION도 올려요 → 다음 로그인 때 다시 동의 받아요)
 export const CONSENT = {

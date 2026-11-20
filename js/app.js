@@ -316,6 +316,9 @@ function openLogin() {
   const L = C.loginOptions;
   const native = C.isNativeApp();
   const google = L.google && !native; // 구글은 앱 안 화면(WebView)에서 로그인을 막아요
+  const linkMode = C.emailMode !== 'code';
+  // 링크 방식은 메일 링크가 Safari로 열려서, 아이패드 앱·홈 화면 앱 안에서는 로그인이 이어지지 않아요
+  const email = L.email && !(linkMode && (native || C.isStandalone()));
   modal(`<div class="modal login">
     <h3>내 노트를 보관할까요?</h3>
     ${consentHTML(S.unownedCount())}
@@ -323,14 +326,15 @@ function openLogin() {
     <div class="login-btns">
       ${google ? `<button class="btn btn-l btn-outline" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>` : ''}
       ${L.kakao ? `<button class="btn btn-l btn-outline" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>` : ''}
-      ${L.email ? `<button class="btn btn-l btn-outline" data-a="email" disabled>이메일로 코드 받기</button>
+      ${email ? `<button class="btn btn-l btn-outline" data-a="email" disabled>${linkMode ? '이메일로 로그인 링크 받기' : '이메일로 코드 받기'}</button>
       <div class="email-box" hidden>
         <div class="field"><label>이메일</label><input type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" data-f="email"></div>
         <div class="field" hidden><label>메일로 받은 숫자</label><input inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6자리 숫자" data-f="code"></div>
-        <button class="btn btn-l btn-primary" data-a="send">코드 보내기</button>
+        <p class="login-note" data-f="sent" hidden></p>
+        <button class="btn btn-l btn-primary" data-a="send">${linkMode ? '링크 보내기' : '코드 보내기'}</button>
       </div>` : ''}
     </div>
-    ${native && L.google ? '<p class="login-note">구글 로그인은 Safari에서 열었을 때만 돼요.</p>' : ''}
+    ${(L.google && !google) || (L.email && !email) ? `<p class="login-note">${[L.google && !google ? '구글' : '', L.email && !email ? '이메일' : ''].filter(Boolean).join('·')} 로그인은 Safari에서 주소를 열었을 때만 돼요.</p>` : ''}
     <div class="modal-actions"><button class="btn btn-outline" data-a="close">나중에</button></div>
   </div>`, (d, close) => {
     const off = C.on((w) => { if (w === 'user' && C.currentUser()) { off(); close(); go('home'); } });
@@ -356,6 +360,13 @@ function openLogin() {
           if (!/^\S+@\S+\.\S+$/.test(email)) { toast('이메일 주소를 확인해 주세요'); return; }
           await C.sendEmailCode(email);
           sentTo = email;
+          if (linkMode) {
+            const note = box.querySelector('[data-f="sent"]');
+            note.hidden = false;
+            note.textContent = `${email}로 메일을 보냈어요. 이 기기의 메일 앱에서 "Sign in" 링크를 누르면 로그인돼요. 메일이 안 보이면 스팸함도 확인해 주세요.`;
+            btn.hidden = true;
+            return;
+          }
           codeF.parentElement.hidden = false; codeF.focus();
           btn.textContent = '로그인';
           toast('메일로 숫자를 보냈어요. 메일함을 확인해 주세요', 3000);

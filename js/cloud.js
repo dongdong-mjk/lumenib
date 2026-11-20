@@ -2,11 +2,12 @@
 // - 노트 목록(제목·날짜·본문 등)은 DB 표 notes 에, 손글씨는 노트마다 압축 파일 하나로 저장소 'ink' 에 올려요.
 // - 기기에 먼저 저장하고(오프라인에서도 써짐), 고친 지 3초 뒤에 서버로 올려요. 두 기기에서 같은 노트를 고치면 나중에 고친 쪽이 남아요.
 // - config.js 에 주소·키가 없으면 아무것도 하지 않아요.
-import { SUPABASE_URL, SUPABASE_KEY, LOGIN, CONSENT } from './config.js';
+import { SUPABASE_URL, SUPABASE_KEY, LOGIN, CONSENT, EMAIL_MODE } from './config.js';
 import * as S from './store.js';
 
 export const enabled = !!(SUPABASE_URL && SUPABASE_KEY);
 export const loginOptions = LOGIN;
+export const emailMode = EMAIL_MODE;
 export const consentInfo = CONSENT;
 const PENDING_CONSENT = 'lumenib.consentPending';
 const BUCKET = 'ink';

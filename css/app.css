@@ -572,3 +572,4 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .email-box[hidden], .email-box .field[hidden] { display: none; }
 .login-note { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); }
 .modal.login .modal-actions { margin-top: 12px; }
+.login-btns [hidden] { display: none; }

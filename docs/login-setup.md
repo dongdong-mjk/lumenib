@@ -23,13 +23,7 @@
 4. 왼쪽 **Authentication → URL Configuration**
    - Site URL: `https://dongdong-mjk.github.io/lumenib/`
    - Redirect URLs에 **Add URL**: `https://dongdong-mjk.github.io/lumenib/` (그리고 내 컴퓨터에서 시험할 거면 `http://localhost:8000/`)
-5. 왼쪽 **Authentication → Emails → Magic Link** 템플릿 내용을 아래로 바꾸고 저장 (앱이 링크 대신 **숫자 코드**를 받게 하려고요. 아이패드 앱 안에서도 되게)
-   ```html
-   <h2>lumenib 로그인 코드</h2>
-   <p>앱에 아래 숫자를 넣어 주세요. 1시간 동안 쓸 수 있어요.</p>
-   <p style="font-size:28px;font-weight:700;letter-spacing:4px">{{ .Token }}</p>
-   ```
-   - 제목(Subject)은 `lumenib 로그인 코드`
+5. ~~Magic Link 템플릿 바꾸기~~ → **건너뛰기.** Supabase 기본 메일로는 템플릿을 고칠 수 없어요(SMTP 연결 필요). 앱은 메일 속 "Sign in" 링크를 누르는 방식으로 맞춰 뒀어요. 나중에 메일 서비스를 연결하면 숫자 코드 방식으로 바꿀 수 있어요(`js/config.js`의 `EMAIL_MODE`).
 6. 왼쪽 아래 **Project Settings → API Keys** (또는 **Data API**)에서 두 값을 복사해 Claude에게 보내기
    - **Project URL** (`https://abcd….supabase.co`)
    - **Publishable key** (`sb_publishable_…`). 없으면 Legacy 탭의 `anon` `public` 키
@@ -82,8 +76,8 @@ Claude에게 **Project URL + Publishable key** 두 개를 보내 주세요. `js/
 ## 알아 둘 것
 
 - **이메일 로그인은 예비용이에요.** Supabase 기본 메일은 **프로젝트 전체에서 1시간에 2통**만 보내요. 테스터 여러 명이 이메일로 들어오려면 무료 메일 서비스(Resend, Brevo 등)를 연결해야 해요. 필요해지면 말해 주세요.
-- **아이패드 앱(Capacitor) 안에서는 구글 로그인이 안 돼요.** 구글이 앱 안 화면의 로그인을 막아요. 앱에서는 카카오와 이메일 버튼만 보이고, 카카오 로그인이 앱 안에서 되려면 맥에서 앱을 한 번 다시 빌드해야 해요(`capacitor.config.json` 바뀜). Safari로 연 웹에서는 셋 다 돼요.
-- **홈 화면에 추가한 웹앱**에서 구글·카카오 로그인 뒤 앱으로 잘 돌아오는지는 실제 아이패드로 확인이 필요해요 (iOS가 로그인 창을 따로 열어서 로그인 정보가 앱에 안 넘어갈 수 있어요. 추정). 안 되면 Safari에서 로그인하거나 이메일 코드를 써요.
+- **아이패드 앱(Capacitor) 안에서는 구글·이메일 로그인이 안 돼요.** 구글은 앱 안 화면의 로그인을 막고, 이메일 링크는 Safari로 열리기 때문이에요. 앱에서는 카카오 버튼만 보이고, 카카오 로그인이 앱 안에서 되려면 맥에서 앱을 한 번 다시 빌드해야 해요(`capacitor.config.json` 바뀜). Safari로 연 웹에서는 셋 다 돼요.
+- **홈 화면에 추가한 웹앱**에서 구글·카카오 로그인 뒤 앱으로 잘 돌아오는지는 실제 아이패드로 확인이 필요해요 (iOS가 로그인 창을 따로 열어서 로그인 정보가 앱에 안 넘어갈 수 있어요. 추정). 안 되면 Safari에서 로그인해요. 이메일 링크 로그인은 홈 화면 앱에서는 숨겨요.
 - **무료 요금제는 1주일 동안 아무도 안 쓰면 멈춰요.** 데이터는 지워지지 않고, Supabase 대시보드에서 **Restore**를 누르면 다시 켜져요. 테스트 기간엔 거의 매일 누군가 쓰니 괜찮을 거예요. 무료는 자동 백업도 없어요.
 - 테스터별 노트 수와 용량은 Supabase **Table Editor → tester_usage** 에서 볼 수 있어요. 노트 내용(손글씨 파일)은 열어 보지 않기로 안내문에 적었어요.
 - 두 기기에서 같은 노트를 동시에 고치면 **나중에 고친 쪽**이 남아요.
