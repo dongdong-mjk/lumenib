@@ -562,14 +562,20 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .modal .sub { margin: 4px 0 0; font-size: 15px; color: var(--text-secondary); }
 .agree { display: flex; align-items: center; gap: 12px; margin: 12px 0 0; font-size: 16px; font-weight: 600; min-height: 44px; cursor: pointer; }
 /* 체크박스 (피그마 Design System > Checkbox 520:8362): 20×20 r6, 테두리 1.5 icon/secondary, 체크하면 action/primary + 흰 체크, 누르는 동안 36 원 */
-.cbx { appearance: none; -webkit-appearance: none; margin: 0; width: 20px; height: 20px; flex: none; position: relative; border-radius: 6px; border: 1.5px solid var(--icon-secondary); background: transparent; cursor: pointer; }
-.cbx::before { content: ""; position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: var(--text-primary); opacity: 0; transition: opacity .12s; }
-.cbx:hover::before { opacity: .08; }
-.cbx:active::before { opacity: .16; }
-.cbx:checked { background: var(--action-primary); border-color: var(--action-primary); }
-.cbx:checked::after { content: ""; position: absolute; left: 50%; top: 50%; width: 9px; height: 5px; margin: -4px 0 0 -5px; border-left: 2px solid var(--text-on-primary); border-bottom: 2px solid var(--text-on-primary); transform: rotate(-45deg); }
+.cbx { appearance: none; -webkit-appearance: none; margin: 0; padding: 0; border: 0; width: 20px; height: 20px; flex: none; position: relative; border-radius: 6px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--icon-secondary); cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
+/* 상태 원: 가운데에서 커지며 나타나요 (구글 폼처럼) */
+.cbx::before { content: ""; position: absolute; left: -8px; top: -8px; width: 36px; height: 36px; border-radius: 50%; background: var(--text-primary); opacity: 0; transform: scale(0); transition: transform .22s cubic-bezier(.2, 0, 0, 1), opacity .22s; pointer-events: none; }
+@media (hover: hover) { .cbx:hover::before, .agree:hover .cbx::before { opacity: .08; transform: scale(1); } }
+.cbx:focus-visible::before { opacity: .12; transform: scale(1); }
+.cbx:active::before { opacity: .16; transform: scale(1); }
+.cbx:checked { background: var(--action-primary); box-shadow: none; }
+/* 체크 표시: 피그마 벡터 그대로 (M5.5 10.5 L8.5 13.5 L14.5 7, 굵기 2, 둥근 끝) */
+.cbx::after { content: ""; position: absolute; inset: 0; background: var(--text-on-primary); opacity: 0;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5 8.5 13.5 14.5 7' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px 20px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5 8.5 13.5 14.5 7' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px 20px no-repeat; }
+.cbx:checked::after { opacity: 1; }
 .cbx:disabled { opacity: .4; }
-.cbx:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .cbx::before { transition: none; } }
 .modal-col { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
 .modal-col .btn, .login .later { width: 100%; border-radius: 12px; }
 .login .later { margin-top: 8px; }
