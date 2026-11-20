@@ -197,7 +197,7 @@ function fitHome() {
 }
 
 function accountHTML() {
-  if (!C.enabled) return '';
+  if (!C.enabled || !Object.values(C.loginOptions).some(Boolean)) return '';
   const u = C.currentUser();
   if (!u) {
     return `<button class="toggle-row" data-act="login"><span>로그인하고 노트 보관하기<small class="toggle-sub">기기를 바꾸거나 테스트가 끝나도 내가 쓴 노트가 남아요</small></span>${icon.chevRight}</button>`;
@@ -321,25 +321,23 @@ function openLogin() {
   // 링크 방식은 메일 링크가 Safari로 열려서, 아이패드 앱·홈 화면 앱 안에서는 로그인이 이어지지 않아요
   const email = L.email && !(linkMode && (native || C.isStandalone()));
   modal(`<div class="modal login">
-    <button class="icon-btn modal-x" data-a="close" aria-label="닫기">${icon.x}</button>
     <h3>내 노트를 보관할까요?</h3>
     <p class="sub">로그인하면 기기를 바꾸거나 테스트가 끝나도 노트가 남아요</p>
     ${consentHTML(S.unownedCount())}
     <label class="agree"><input type="checkbox" class="cbx" data-a="agree"><span>위 내용을 확인했고 동의해요</span></label>
     <div class="login-btns">
-      <div class="login-row">
-        ${google ? `<button class="btn btn-l btn-outline" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글 로그인</button>` : ''}
-        ${L.kakao ? `<button class="btn btn-l btn-outline" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오 로그인</button>` : ''}
-      </div>
-      ${email ? `<button class="link email-link" data-a="email" disabled>${linkMode ? '이메일로 로그인 링크 받기' : '이메일로 코드 받기'}</button>
+      ${google ? `<button class="btn btn-l btn-outline" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>` : ''}
+      ${L.kakao ? `<button class="btn btn-l btn-outline" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>` : ''}
+      ${email ? `<button class="btn btn-l btn-outline" data-a="email" disabled>${linkMode ? '이메일로 로그인 링크 받기' : '이메일로 코드 받기'}</button>
       <div class="email-box" hidden>
         <div class="field"><label>이메일</label><input type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" data-f="email"></div>
         <div class="field" hidden><label>메일로 받은 숫자</label><input inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6자리 숫자" data-f="code"></div>
         <p class="login-note" data-f="sent" hidden></p>
         <button class="btn btn-l btn-primary" data-a="send">${linkMode ? '링크 보내기' : '코드 보내기'}</button>
       </div>` : ''}
+      <button class="btn btn-l btn-text" data-a="close">나중에</button>
     </div>
-    ${(L.google && !google) || (L.email && !email) ? `<p class="login-note">${[L.google && !google ? '구글' : '', L.email && !email ? '이메일' : ''].filter(Boolean).join('·')} 로그인은 Safari에서 주소를 열었을 때만 돼요.</p>` : ''}
+    ${L.google && !google ? '<p class="login-note">구글 로그인은 Safari에서 주소를 열었을 때만 돼요.</p>' : ''}
   </div>`, (d, close) => {
     const off = C.on((w) => { if (w === 'user' && C.currentUser()) { off(); close(); go('home'); } });
     const agree = d.querySelector('[data-a="agree"]');

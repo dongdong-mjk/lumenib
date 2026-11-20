@@ -584,8 +584,6 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .email-box[hidden], .email-box .field[hidden] { display: none; }
 .login-note { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); }
 .login-btns [hidden] { display: none; }
-.login .modal-x { position: absolute; top: 12px; right: 12px; }
-.login h3 { padding-right: 40px; }
 .login-row { display: flex; gap: 8px; }
 .login-row .btn { flex: 1; min-width: 0; }
 .login-row:empty { display: none; }
