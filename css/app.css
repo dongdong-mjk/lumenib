@@ -270,6 +270,8 @@ svg { display: block; }
 .tab .tx { font-size: 17px; line-height: 26px; font-weight: 400; width: 24px; height: 40px; margin: 0 -8px 0 -4px; display: grid; place-items: center; }
 .tabs + .info { margin-top: 0; border-top-left-radius: 0; }
 .paper-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: 16px 20px 140px; position: relative; }
+/* 두 번 탭 확대 제스처를 꺼서, 도구를 누르자마자 바로 그어도 화면이 움직이지 않게 (확대는 앱이 직접 처리) */
+.paper-scroll { touch-action: pan-x pan-y; }
 .paper-scroll.finger { touch-action: none; }
 .paper-scroll.zoomed { overflow-x: auto; }
 .pages { will-change: transform; }

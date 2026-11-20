@@ -3,6 +3,7 @@
 import { esc } from './util.js';
 import { refText } from './bible.js';
 import { settings } from './store.js';
+import { getStroke } from './vendor/perfect-freehand.js';
 
 export const PAGE_W = 726;
 export const PAGE_H = 1027; // A4 비율
@@ -449,7 +450,7 @@ export class Paper {
 
   drawLive(page, s) {
     const ctx = this.clearLive(page);
-    drawStroke(ctx, s);
+    drawStroke(ctx, s, true);
   }
 
   eraseAt(page, x, y, cur) {
@@ -661,7 +662,7 @@ export class Paper {
 }
 
 // ---------- 그리기 도우미 ----------
-function drawStroke(ctx, s) {
+function drawStroke(ctx, s, live = false) {
   const p = s.pts;
   ctx.setLineDash([]);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -677,26 +678,24 @@ function drawStroke(ctx, s) {
     ctx.restore();
     return;
   }
-  ctx.strokeStyle = s.color;
-  const n = p.length / 3;
-  if (n < 3) {
-    ctx.lineWidth = s.w * (0.6 + 0.8 * p[2]);
-    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[p.length - 3], p[p.length - 2]); ctx.stroke();
-    return;
+  // 펜: 필압을 부드럽게 다듬은 외곽선을 만들어 면으로 채워요 (선 가장자리가 매끈하게)
+  const pts = [];
+  for (let i = 0; i < p.length; i += 3) pts.push([p[i], p[i + 1], p[i + 2]]);
+  const outline = getStroke(pts, {
+    size: s.w * 1.25, thinning: 0.45, smoothing: 0.6, streamline: live ? 0.35 : 0.5,
+    simulatePressure: false, last: !live,
+    easing: (t) => Math.sin((t * Math.PI) / 2),
+  });
+  if (!outline.length) return;
+  ctx.fillStyle = s.color;
+  ctx.beginPath();
+  ctx.moveTo(outline[0][0], outline[0][1]);
+  for (let i = 1; i < outline.length; i++) {
+    const [x0, y0] = outline[i], [x1, y1] = outline[(i + 1) % outline.length];
+    ctx.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
   }
-  // 점마다 굵기를 부드럽게 바꾸며 곡선 조각을 이어 그려요 (굵기 계단 없이 매끈하게)
-  const wOf = (pr) => s.w * (0.55 + 0.9 * pr);
-  let mx = p[0], my = p[1], pw = wOf(p[2]);
-  for (let i = 1; i < n - 1; i++) {
-    const x = p[i * 3], y = p[i * 3 + 1];
-    const nx = (x + p[i * 3 + 3]) / 2, ny = (y + p[i * 3 + 4]) / 2;
-    const w = wOf(p[i * 3 + 2]);
-    ctx.lineWidth = (pw + w) / 2; pw = w;
-    ctx.beginPath(); ctx.moveTo(mx, my); ctx.quadraticCurveTo(x, y, nx, ny); ctx.stroke();
-    mx = nx; my = ny;
-  }
-  ctx.lineWidth = pw;
-  ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(p[p.length - 3], p[p.length - 2]); ctx.stroke();
+  ctx.closePath();
+  ctx.fill();
 }
 const round = (v) => Math.round(v * 10) / 10;
 // 점 사이가 멀면 사이 점을 채워 넣어요 (부분 지우개가 정확하게 닿도록)
