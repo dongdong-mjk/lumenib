@@ -8,6 +8,7 @@
   --bg-panel: #1e1e1e;
   --bg-panel-inset: #2c2c2c;
   --bg-canvas: #111111;
+  --bg-default: #111111; /* 피그마 bg/default */
   --bg-card: #2c2c2c;
   --bg-input: #111111;
   --bg-tab-active: #111111;
@@ -40,7 +41,8 @@
   --bg-app: #f7f7f7;
   --bg-panel: #ffffff;
   --bg-panel-inset: #f5f5f5;
-  --bg-canvas: #f0f0f0;
+  --bg-canvas: #f5f5f5; /* 피그마 bg/canvas */
+  --bg-default: #ffffff;
   --bg-card: #ffffff;
   --bg-input: #f5f5f5;
   --bg-tab-active: #ffffff;
@@ -154,7 +156,7 @@ svg { display: block; }
 .workspace > * { --bp-w: calc((100cqw - 12px) * 376 / 1158); }
 @media (orientation: landscape) { .bible-panel > * { width: calc(var(--bp-w) - 2px); min-width: calc(var(--bp-w) - 2px); } .bible-panel > .bp-head, .bible-panel > .ch-notes, .bible-panel > .bp-search, .bible-panel > .seg { width: calc(var(--bp-w) - 18px); min-width: calc(var(--bp-w) - 18px); } }
 .right-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-.right-panel.dashed { background: var(--bg-canvas); border: 1.5px dashed var(--border-default); }
+.right-panel.dashed { background: var(--bg-default); border: 1px dashed var(--border-default); } /* 피그마 T3 '노트': bg/default + border/default 점선 */
 .right-panel.note { background: var(--bg-canvas); }
 
 /* ---------- 성경 패널 ---------- */
@@ -260,7 +262,7 @@ svg { display: block; }
 .note-card .ttl { font-size: 15px; font-weight: 600; margin-top: 6px; }
 .pick-foot { position: absolute; right: 20px; bottom: 20px; display: flex; gap: 12px; align-items: center; }
 .pick-foot .btn-l.btn-primary { min-width: 172px; }
-.paper-select { height: 48px; border: 1px solid var(--border-default); border-radius: 12px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; background: var(--bg-canvas); }
+.paper-select { height: 48px; border: 1px solid var(--border-default); border-radius: 12px; padding: 0 12px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; background: transparent; } /* 피그마 paper type chip: 채움 없음 */
 .paper-thumb { width: 20px; height: 24px; background: #fafafa; border-radius: 2px; }
 .paper-thumb.lined { background: repeating-linear-gradient(#fafafa 0 4px, #999 4px 5px); }
 .paper-thumb.grid { background: linear-gradient(#999 1px, transparent 1px) 0 0/5px 5px, linear-gradient(90deg, #999 1px, #fafafa 1px) 0 0/5px 5px; }
@@ -270,7 +272,7 @@ svg { display: block; }
 /* ---------- 노트 (종이) ---------- */
 .tabs { flex: none; display: flex; align-items: flex-end; gap: 4px; padding: 8px 8px 0; background: var(--bg-panel); }
 .tab { height: 40px; padding: 0 20px; border-radius: 10px 10px 0 0; display: inline-flex; align-items: center; gap: 16px; font-size: 13px; line-height: 18px; letter-spacing: -0.325px; color: var(--text-primary); white-space: pre; }
-.tab.on { background: var(--bg-canvas); font-weight: 600; }
+.tab.on { background: var(--bg-tab-active); font-weight: 600; }
 .tab .tx { font-size: 17px; line-height: 26px; font-weight: 400; width: 24px; height: 40px; margin: 0 -8px 0 -4px; display: grid; place-items: center; }
 .tabs + .info { margin-top: 0; border-top-left-radius: 0; }
 .paper-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: 16px 20px 140px; position: relative; }
