@@ -534,7 +534,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         <h6>기본 색</h6><div class="pal-grid">${base.map((c) => sw(c)).join('')}</div>
         <h6>내 색</h6><div class="pal-grid">${mine.map((c) => sw(c, 'data-mine')).join('')}${mine.length < 6 ? `<button class="pal pal-add" data-act="add" aria-label="색 만들기"><i>${icon.plus}</i></button>` : ''}</div>
         ${mine.length ? '<p class="pal-tip">내 색을 길게 누르면 지울 수 있어요</p>' : ''}
-        ${isPen ? '' : `<h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
+        ${isPen ? `<h6>필압</h6><div class="mode2 pal-pr"><button data-pr="1" class="${S.settings.penPressure !== false ? 'on' : ''}">켜기</button><button data-pr="0" class="${S.settings.penPressure === false ? 'on' : ''}">끄기</button></div>
+          <p class="pal-tip">${S.settings.penPressure === false ? '누르는 힘과 상관없이 같은 굵기로 써져요' : '세게 누르면 굵게, 살살 쓰면 가늘게 써져요'}</p>` : `<h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
           <input type="range" min="20" max="80" step="5" value="${Math.round(S.settings.hlAlpha * 100)}" aria-label="형광펜 투명도"></div>
           <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>`}`;
       const ar = m.querySelector('.pal-alpha input');
@@ -544,6 +545,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); });
         paint();
       }
+      m.querySelectorAll('[data-pr]').forEach((b) => b.addEventListener('click', () => {
+        S.settings.penPressure = b.dataset.pr === '1'; S.saveSettings(); track('pen_pressure_' + (S.settings.penPressure ? 'on' : 'off')); showList();
+      }));
       m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
       m.querySelectorAll('[data-c]').forEach((b) => {
         let lp;

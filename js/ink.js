@@ -378,7 +378,7 @@ export class Paper {
       if (cur && e.pointerType === 'touch') return;
       if (t === 'pen' || t === 'hl') {
         const s = t === 'pen'
-          ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], pts: [x, y, pr] }
+          ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ...(settings.penPressure === false ? { np: 1 } : {}), pts: [x, y, pr] }
           : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x, y, 0.5] };
         cur = { kind: 'draw', s };
         this.drawLive(page, s);
@@ -680,6 +680,7 @@ export class Paper {
 }
 
 // ---------- 그리기 도우미 ----------
+const REF_SIZE = 2.6 * 1.25;
 function drawStroke(ctx, s, live = false) {
   const p = s.pts;
   ctx.setLineDash([]);
@@ -697,13 +698,16 @@ function drawStroke(ctx, s, live = false) {
     return;
   }
   // 펜: 필압을 부드럽게 다듬은 외곽선을 만들어 면으로 채워요 (선 가장자리가 매끈하게)
+  // 굵기마다 다듬는 정도가 달라지지 않게, 가운데 굵기 기준으로 좌표를 키웠다 줄여서 계산해요
+  const size = s.w * 1.25, k = REF_SIZE / size;
   const pts = [];
-  for (let i = 0; i < p.length; i += 3) pts.push([p[i], p[i + 1], p[i + 2]]);
-  const outline = getStroke(pts, {
-    size: s.w * 1.25, thinning: 0.45, smoothing: 0.6, streamline: live ? 0.35 : 0.5,
+  for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, s.np ? 0.5 : p[i + 2]]);
+  const raw = getStroke(pts, {
+    size: REF_SIZE, thinning: s.np ? 0 : 0.45, smoothing: 0.6, streamline: live ? 0.35 : 0.5,
     simulatePressure: false, last: !live,
     easing: (t) => Math.sin((t * Math.PI) / 2),
   });
+  const outline = raw.map(([x, y]) => [x / k, y / k]);
   if (!outline.length) return;
   ctx.fillStyle = s.color;
   ctx.beginPath();
