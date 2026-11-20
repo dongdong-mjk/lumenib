@@ -9,6 +9,7 @@
   --bg-panel-inset: #2c2c2c;
   --bg-canvas: #111111;
   --bg-default: #111111; /* 피그마 bg/default */
+  --bg-tab-strip: #1e1e1e;
   --bg-card: #2c2c2c;
   --bg-input: #111111;
   --bg-tab-active: #111111;
@@ -20,7 +21,8 @@
   --text-primary: #fafafa;
   --text-body: #f5f5f5;
   --text-secondary: #b5b5b5;
-  --text-tertiary: #6b6b6b;
+  --text-tertiary: #9a9a9a; /* 피그마 text/tertiary 다크 */
+  --text-disabled: #555555;
   --icon-primary: #fafafa;
   --icon-secondary: #b5b5b5;
   --action-primary: #ffffff;
@@ -30,7 +32,7 @@
   --chart-dot-empty: #555555;
   --chart-track: #2c2c2c;
   --shadow-panel: none;
-  --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-floating: 0 4px 16px rgba(0, 0, 0, 0.12); /* 피그마 shadow/floating */
   --shadow-paper: 0 8px 24px rgba(0, 0, 0, 0.5);
   --toast-bg: #ffffff;
   --toast-text: #111111;
@@ -43,6 +45,7 @@
   --bg-panel-inset: #f5f5f5;
   --bg-canvas: #f5f5f5; /* 피그마 bg/canvas */
   --bg-default: #ffffff;
+  --bg-tab-strip: #f5f5f5;
   --bg-card: #ffffff;
   --bg-input: #f5f5f5;
   --bg-tab-active: #ffffff;
@@ -55,6 +58,7 @@
   --text-body: #222222;
   --text-secondary: #555555;
   --text-tertiary: #6b6b6b;
+  --text-disabled: #b5b5b5;
   --icon-primary: #111111;
   --icon-secondary: #555555;
   --action-primary: #111111;
@@ -157,7 +161,7 @@ svg { display: block; }
 @media (orientation: landscape) { .bible-panel > * { width: calc(var(--bp-w) - 2px); min-width: calc(var(--bp-w) - 2px); } .bible-panel > .bp-head, .bible-panel > .ch-notes, .bible-panel > .bp-search, .bible-panel > .seg { width: calc(var(--bp-w) - 18px); min-width: calc(var(--bp-w) - 18px); } }
 .right-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .right-panel.dashed { background: var(--bg-default); border: 1px dashed var(--border-default); } /* 피그마 T3 '노트': bg/default + border/default 점선 */
-.right-panel.note { background: var(--bg-canvas); }
+.right-panel.note { background: var(--bg-panel); } /* 피그마 T4 '노트': bg/panel */
 
 /* ---------- 성경 패널 ---------- */
 .bp-head { flex: none; height: 48px; display: flex; align-items: center; gap: 4px; padding: 8px 8px 0; box-sizing: content-box; }
@@ -270,7 +274,7 @@ svg { display: block; }
 .link-more { position: absolute; right: 28px; bottom: 28px; font-size: 15px; font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
 
 /* ---------- 노트 (종이) ---------- */
-.tabs { flex: none; display: flex; align-items: flex-end; gap: 4px; padding: 8px 8px 0; background: var(--bg-panel); }
+.tabs { flex: none; display: flex; align-items: flex-end; gap: 4px; padding: 8px 8px 0; background: var(--bg-tab-strip); } /* 피그마 bg/tab-strip */
 .tab { height: 40px; padding: 0 20px; border-radius: 10px 10px 0 0; display: inline-flex; align-items: center; gap: 16px; font-size: 13px; line-height: 18px; letter-spacing: -0.325px; color: var(--text-primary); white-space: pre; }
 .tab.on { background: var(--bg-tab-active); font-weight: 600; }
 .tab .tx { font-size: 17px; line-height: 26px; font-weight: 400; width: 24px; height: 40px; margin: 0 -8px 0 -4px; display: grid; place-items: center; }

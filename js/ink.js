@@ -12,10 +12,12 @@ const MARGIN = 18.7;
 
 // 피그마 Primitive pen/* 12색
 export const PEN_PALETTE = ['#111111', '#5c5c5c', '#a3a3a3', '#004ce5', '#3e8ef7', '#1c9c6b', '#dc3333', '#f07a1a', '#e8b517', '#8b4fd9', '#d94f9a', '#7a5230'];
-export const HL_PALETTE = ['#ffd84d', '#ff8fa3', '#8cbfff', '#9be3b0', '#ffb36b', '#c9a6ff'];
+// 피그마 pen/highlighter-1~3 이 툴바 기본 3색
+export const HL_PALETTE = ['#e8b517', '#1c9c6b', '#d94f9a', '#ffd84d', '#ff8fa3', '#8cbfff'];
 // 툴바의 색 3칸 (고른 색을 바꿔 끼울 수 있어요)
 if (!settings.penColors) settings.penColors = ['#111111', '#004ce5', '#dc3333'];
-if (!settings.hlColors) settings.hlColors = ['#ffd84d', '#ff8fa3', '#8cbfff'];
+// 예전 기본 3색을 그대로 쓰던 사람은 피그마 색으로 바꿔요 (직접 고른 색은 그대로)
+if (!settings.hlColors || settings.hlColors.join() === '#ffd84d,#ff8fa3,#8cbfff') settings.hlColors = ['#e8b517', '#1c9c6b', '#d94f9a'];
 export const PEN_COLORS = settings.penColors;
 export const HL_COLORS = settings.hlColors;
 export const PEN_SIZES = [1.6, 2.6, 4];
