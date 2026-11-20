@@ -340,11 +340,12 @@ export class Paper {
       const [x, y] = this.toLocal(page, e);
       const pr = e.pointerType === 'pen' ? e.pressure : 0.5;
       const t = tool.type;
-      // 선택 상자 오른쪽 아래 손잡이: 크기 조절
+      // 선택 상자 손잡이 8개: 모서리 = 비율 유지, 변 가운데 = 그 방향으로만 늘리기
       if (this.selection && t === 'lasso' && this.selection.page === page.i) {
-        const b = this.selection.box, hr = 22 / this.scale;
-        if (Math.hypot(x - b[2], y - b[3]) <= hr) {
-          cur = { kind: 'scale', k: 1 };
+        const hr = 22 / this.scale;
+        const h = selHandles(this.selection.box).find((q) => Math.hypot(x - q.x, y - q.y) <= hr);
+        if (h) {
+          cur = { kind: 'scale', h, kx: 1, ky: 1 };
           this.hideLassoMenu();
           return;
         }
@@ -389,14 +390,16 @@ export class Paper {
         } else if (cur.kind === 'move') {
           cur.dx = x - cur.x0; cur.dy = y - cur.y0;
         } else if (cur.kind === 'scale') {
-          const b = this.selection.box, w = b[2] - b[0], h = b[3] - b[1];
-          cur.k = Math.max(0.2, Math.min(5, Math.max((x - b[0]) / w, (y - b[1]) / h)));
+          const h = cur.h, clamp = (v) => Math.max(0.2, Math.min(5, v));
+          const fx = h.dx ? clamp((x - h.ax) / (h.x - h.ax)) : 1;
+          const fy = h.dy ? clamp((y - h.ay) / (h.y - h.ay)) : 1;
+          if (h.dx && h.dy) { const k = Math.max(fx, fy); cur.kx = cur.ky = k; } else { cur.kx = fx; cur.ky = fy; }
         }
       }
       if (cur.kind === 'draw') this.drawLive(page, cur.s);
       else if (cur.kind === 'lasso') this.drawLasso(page, cur.pts);
       else if (cur.kind === 'move') this.drawSelection(page, cur.dx, cur.dy);
-      else if (cur.kind === 'scale') this.drawSelection(page, 0, 0, cur.k);
+      else if (cur.kind === 'scale') this.drawSelection(page, 0, 0, cur);
     });
 
     const end = (e) => {
@@ -424,13 +427,13 @@ export class Paper {
         this.drawSelection(page);
         this.showLassoMenu();
       } else if (k.kind === 'scale') {
-        if (Math.abs(k.k - 1) > 0.01) {
+        if (Math.abs(k.kx - 1) > 0.01 || Math.abs(k.ky - 1) > 0.01) {
           this.pushHistory();
-          const b = this.selection.box, ox = b[0] + 10, oy = b[1] + 10;
+          const ox = k.h.ax, oy = k.h.ay, wk = Math.sqrt(k.kx * k.ky);
           for (const s of this.selection.set) {
             _dense.delete(s);
-            s.w = Math.round(s.w * k.k * 100) / 100;
-            for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(ox + (s.pts[i] - ox) * k.k); s.pts[i + 1] = round(oy + (s.pts[i + 1] - oy) * k.k); }
+            s.w = Math.round(s.w * wk * 100) / 100;
+            for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(ox + (s.pts[i] - ox) * k.kx); s.pts[i + 1] = round(oy + (s.pts[i + 1] - oy) * k.ky); }
           }
           this.selection.box = bbox([...this.selection.set]);
           this.drawPage(page);
@@ -507,23 +510,23 @@ export class Paper {
     this.showLassoMenu();
   }
 
-  drawSelection(page, dx = 0, dy = 0, k = 1) {
+  drawSelection(page, dx = 0, dy = 0, sc = null) {
     const sel = this.selection;
     const ctx = this.clearLive(page);
-    const b = sel.box, ox = b[0] + 10, oy = b[1] + 10;
+    const b = sel.box;
+    const ox = sc ? sc.h.ax : 0, oy = sc ? sc.h.ay : 0, kx = sc ? sc.kx : 1, ky = sc ? sc.ky : 1;
     ctx.save(); ctx.translate(dx, dy);
-    ctx.save(); ctx.translate(ox, oy); ctx.scale(k, k); ctx.translate(-ox, -oy);
+    ctx.save(); ctx.translate(ox, oy); ctx.scale(kx, ky); ctx.translate(-ox, -oy);
     for (const s of sel.set) if (s.tool === 'hl') drawStroke(ctx, s);
     for (const s of sel.set) if (s.tool !== 'hl') drawStroke(ctx, s);
     ctx.restore();
     // 상자는 배율만큼 커지되, 선 굵기와 손잡이 크기는 화면 기준으로 일정하게
-    const bx0 = ox + (b[0] - ox) * k, by0 = oy + (b[1] - oy) * k, bx1 = ox + (b[2] - ox) * k, by1 = oy + (b[3] - oy) * k;
+    const nb = [ox + (b[0] - ox) * kx, oy + (b[1] - oy) * ky, ox + (b[2] - ox) * kx, oy + (b[3] - oy) * ky];
     const u = 1 / this.scale;
     ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u;
-    ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
-    ctx.setLineDash([]);
-    ctx.beginPath(); ctx.arc(bx1, by1, 7 * u, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2 * u; ctx.stroke();
+    ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]);
+    ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.lineWidth = 2 * u;
+    for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     ctx.restore();
   }
 
@@ -722,6 +725,16 @@ function bbox(strokes) {
     a = Math.min(a, s.pts[i]); b = Math.min(b, s.pts[i + 1]); c = Math.max(c, s.pts[i]); d = Math.max(d, s.pts[i + 1]);
   }
   return [a - 10, b - 10, c + 10, d + 10];
+}
+// 선택 상자 손잡이: 위치(x,y), 늘리는 방향(dx,dy), 고정되는 반대쪽 점(ax,ay)
+function selHandles(b) {
+  const mx = (b[0] + b[2]) / 2, my = (b[1] + b[3]) / 2, out = [];
+  for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]) {
+    const x = dx < 0 ? b[0] : dx > 0 ? b[2] : mx, y = dy < 0 ? b[1] : dy > 0 ? b[3] : my;
+    const ax = dx < 0 ? b[2] : dx > 0 ? b[0] : mx, ay = dy < 0 ? b[3] : dy > 0 ? b[1] : my;
+    out.push({ x, y, dx, dy, ax, ay });
+  }
+  return out;
 }
 const inBox = (b, x, y) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3];
 const moveBox = (b, dx, dy) => [b[0] + dx, b[1] + dy, b[2] + dx, b[3] + dy];
