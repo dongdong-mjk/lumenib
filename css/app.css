@@ -556,7 +556,7 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .sheet .acct .btn { height: 36px; flex: none; font-size: 14px; }
 .sheet [data-act="logout"] { flex-direction: column; align-items: flex-start; }
 .sheet [data-act="login"] .chev { flex: none; color: var(--icon-secondary, var(--text-secondary)); }
-.modal.login { width: 440px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.modal.login { position: relative; width: 440px; max-height: calc(100dvh - 32px); overflow-y: auto; }
 .consent { margin: 20px 0 0; padding: 0 0 0 18px; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
 .consent li + li { margin-top: 6px; }
 .modal .sub { margin: 4px 0 0; font-size: 15px; color: var(--text-secondary); }
@@ -584,3 +584,11 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .email-box[hidden], .email-box .field[hidden] { display: none; }
 .login-note { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); }
 .login-btns [hidden] { display: none; }
+.login .modal-x { position: absolute; top: 12px; right: 12px; }
+.login h3 { padding-right: 40px; }
+.login-row { display: flex; gap: 8px; }
+.login-row .btn { flex: 1; min-width: 0; }
+.login-row:empty { display: none; }
+.login .email-link { align-self: center; color: var(--text-secondary); font-weight: 600; font-size: 15px; min-height: 44px; }
+.login .email-link[disabled] { opacity: .4; }
+.login-row .lg { position: static; flex: none; }
