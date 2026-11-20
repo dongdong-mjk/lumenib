@@ -1,4 +1,5 @@
 import UIKit
+import WebKit
 import Capacitor
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -26,13 +27,27 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 /// 웹앱 화면 + 애플펜슬 더블탭(2세대)·스퀴즈(Pencil Pro)를 받아 웹앱의 되돌리기를 부른다.
 /// 웹 쪽 함수는 js/app.js 의 window.lumenibPencil.
 /// 그 함수가 아직 없는 옛 웹 버전이면 툴바의 되돌리기 버튼을 대신 누른다.
-class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDelegate {
+class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDelegate, WKScriptMessageHandler {
 
     override func viewDidLoad() {
         super.viewDidLoad()
         let pencil = UIPencilInteraction()
         pencil.delegate = self
         view.addInteraction(pencil)
+    }
+
+    // 웹에서 window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' }) 로 네이티브 화면을 열어요.
+    // 웹은 이 통로가 있을 때만(=앱 안에서만) "네이티브 필기" 버튼을 보여 줘요.
+    override func capacitorDidLoad() {
+        super.capacitorDidLoad()
+        webView?.configuration.userContentController.add(self, name: "lumenibNative")
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any], body["action"] as? String == "openInk", presentedViewController == nil else { return }
+        let vc = NativeInkViewController()
+        vc.modalPresentationStyle = .fullScreen
+        present(vc, animated: true)
     }
 
     private func sendToWeb(_ kind: String) {

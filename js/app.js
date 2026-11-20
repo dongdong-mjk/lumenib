@@ -368,7 +368,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     <header class="topbar">
       <div class="left"><button class="icon-btn" data-act="side" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
       <div class="title">${mainReadonly ? esc(main.title) : from === 'home' ? '노트' : '오늘 설교 기록하기'}</div>
-      <div class="right">${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
+      <div class="right">${!mainReadonly && window.webkit?.messageHandlers?.lumenibNative ? '<button class="btn btn-outline" data-act="native-ink">네이티브 필기</button>' : ''}${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
     </header>
     <div class="workspace">
       <section class="panel bible-panel"></section>
@@ -715,6 +715,10 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   app.querySelector('[data-act="side"]').addEventListener('click', () => {
     ns.leftOpen = !ns.leftOpen;
     leftEl.classList.toggle('closed', !ns.leftOpen);
+  });
+  app.querySelector('[data-act="native-ink"]')?.addEventListener('click', () => {
+    track('native_ink_open');
+    window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' });
   });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
     if (mainReadonly) return go('home');
