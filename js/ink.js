@@ -743,9 +743,10 @@ function drawStroke(ctx, s, live = false) {
     ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT;
     ctx.globalCompositeOperation = 'multiply';
     ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'butt';
-    ctx.beginPath(); ctx.moveTo(p[0], p[1]);
-    for (let i = 3; i < p.length - 3; i += 3) ctx.quadraticCurveTo(p[i], p[i + 1], (p[i] + p[i + 3]) / 2, (p[i + 1] + p[i + 4]) / 2);
-    ctx.lineTo(p[p.length - 3], p[p.length - 2]);
+    const q = hlPoints(p, s.w);
+    ctx.beginPath(); ctx.moveTo(q[0], q[1]);
+    for (let i = 2; i < q.length - 2; i += 2) ctx.quadraticCurveTo(q[i], q[i + 1], (q[i] + q[i + 2]) / 2, (q[i + 1] + q[i + 3]) / 2);
+    ctx.lineTo(q[q.length - 2], q[q.length - 1]);
     ctx.stroke();
     ctx.restore();
     return;
@@ -773,6 +774,23 @@ function drawStroke(ctx, s, live = false) {
   ctx.fill();
 }
 const round = (v) => Math.round(v * 10) / 10;
+// 형광펜은 끝이 납작해서(butt) 첫·마지막 짧은 구간의 방향이 끝 모양을 정해요.
+// 펜슬은 대고 뗄 때 펜촉이 아주 조금씩 흔들린 점을 많이 보내서, 그 방향대로 끝이 비뚤게 잘렸어요.
+// 시작점·끝점 근처(굵기의 절반 안쪽)의 흔들린 점과 너무 촘촘한 점을 빼고 그려요. 저장된 점은 그대로예요.
+function hlPoints(p, w) {
+  const n = p.length / 3;
+  if (n < 3) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
+  const near = w * 0.5, x0 = p[0], y0 = p[1], xn = p[p.length - 3], yn = p[p.length - 2];
+  const q = [x0, y0];
+  for (let i = 3; i < p.length - 3; i += 3) {
+    const x = p[i], y = p[i + 1];
+    if (Math.hypot(x - x0, y - y0) < near || Math.hypot(x - xn, y - yn) < near) continue;
+    if (Math.hypot(x - q[q.length - 2], y - q[q.length - 1]) < 1.5) continue;
+    q.push(x, y);
+  }
+  q.push(xn, yn);
+  return q;
+}
 // 점 사이가 멀면 사이 점을 채워 넣어요 (부분 지우개가 정확하게 닿도록)
 const _dense = new WeakMap();
 function denseOf(stroke) { let d = _dense.get(stroke); if (!d) { d = densify(stroke.pts); _dense.set(stroke, d); } return d; }
