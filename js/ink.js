@@ -239,7 +239,7 @@ export class Paper {
     const up = () => {
       if (!d) return;
       el.classList.remove('moving');
-      if (d.moved) { this.undoStack.push(d.snap); this.redoStack = []; this.onChange({}); this.onHistory(); }
+      if (d.moved) { this._push({ t: 'full', json: d.snap }); this.onChange({}); this.onHistory(); }
       d = null;
     };
     grip.addEventListener('pointerup', up);
@@ -383,7 +383,7 @@ export class Paper {
         cur = { kind: 'draw', s };
         this.drawLive(page, s);
       } else if (t === 'eraser') {
-        cur = { kind: 'erase', removed: [], snap: this.snapshot() };
+        cur = { kind: 'erase', removed: [], before: this.note.pages[page.i].strokes.slice() };
         this.eraseAt(page, x, y, cur);
       } else if (t === 'lasso') {
         cur = { kind: 'lasso', pts: [x, y] };
@@ -427,18 +427,19 @@ export class Paper {
       cur = null;
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
-        this.pushHistory();
+        this.pagePush(page.i);
         this.note.pages[page.i].strokes.push(k.s);
         this.drawPage(page);
         this.changed(page);
       } else if (k.kind === 'erase') {
         this.clearLive(page);
-        if (k.removed.length) { this.undoStack.push(k.snap); this.redoStack = []; this.changed(page); }
+        if (k.removed.length) { this._push({ t: 'page', i: page.i, strokes: k.before }); this.changed(page); }
       } else if (k.kind === 'lasso') {
         this.finishLasso(page, k.pts);
       } else if (k.kind === 'move') {
         if (Math.abs(k.dx) + Math.abs(k.dy) > 1) {
-          this.pushHistory();
+          this.pagePush(this.selection.page);
+          this.cloneSelection();
           for (const s of this.selection.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + k.dy); } }
           this.selection.box = moveBox(this.selection.box, k.dx, k.dy);
           this.changed(page, false);
@@ -447,7 +448,8 @@ export class Paper {
         this.showLassoMenu();
       } else if (k.kind === 'scale') {
         if (Math.abs(k.kx - 1) > 0.01 || Math.abs(k.ky - 1) > 0.01) {
-          this.pushHistory();
+          this.pagePush(this.selection.page);
+          this.cloneSelection();
           const ox = k.h.ax, oy = k.h.ay, wk = Math.sqrt(k.kx * k.ky);
           for (const s of this.selection.set) {
             _dense.delete(s);
@@ -568,7 +570,7 @@ export class Paper {
       const a = e.target.closest('button')?.dataset.a;
       if (a === 'del') {
         const sel = this.selection;
-        this.pushHistory();
+        this.pagePush(sel.page);
         const arr = this.note.pages[sel.page].strokes;
         this.note.pages[sel.page].strokes = arr.filter((s) => !sel.set.has(s));
         this.selection = null; this.hideLassoMenu();
@@ -596,10 +598,55 @@ export class Paper {
   snapshot() {
     return JSON.stringify({ pages: this.note.pages, citations: this.note.citations, passages: this.note.passages });
   }
-  pushHistory() {
-    this.undoStack.push(this.snapshot());
+  // 되돌리기 기록은 두 가지예요.
+  // 'page': 획만 바뀐 동작(쓰기·지우기·올가미). 그 장의 획 목록만 기억하고 되돌릴 때도 그 장만 다시 그려요 → 빠름
+  // 'full': 본문·인용처럼 노트 구조가 바뀐 동작. 노트 전체를 저장하고 전체를 다시 그려요
+  // 획 객체는 한 번 만들면 고치지 않아요(고칠 땐 새로 만들어 바꿔 끼우기). 그래야 기록끼리 서로 안 섞여요.
+  pushHistory() { this._push({ t: 'full', json: this.snapshot() }); }
+  pagePush(i) { this._push({ t: 'page', i, strokes: this.note.pages[i].strokes.slice() }); }
+  _push(e) {
+    this.undoStack.push(e);
     if (this.undoStack.length > 60) this.undoStack.shift();
     this.redoStack = [];
+  }
+  _now(e) {
+    return e.t === 'page'
+      ? { t: 'page', i: e.i, strokes: (this.note.pages[e.i]?.strokes || []).slice() }
+      : { t: 'full', json: this.snapshot() };
+  }
+  _apply(e) {
+    if (e.t === 'full') return this.restore(e.json);
+    const pages = this.note.pages;
+    while (pages.length <= e.i) { pages.push({ strokes: [] }); this.buildPage(pages.length - 1); this.layout(); }
+    pages[e.i].strokes = e.strokes.slice();
+    if (this.selection) { this.selection = null; this.hideLassoMenu(); }
+    this.trimTrailing();
+    const page = this.pages[e.i];
+    if (!page) { this.onChange({}); this.onHistory(); return; } // 빈 장이라 정리돼 사라진 경우
+    this.drawPage(page);
+    this.changed(page);
+  }
+  // 되돌리면서 끝에 빈 장이 두 장 이상 남으면 한 장만 남겨요
+  trimTrailing() {
+    const p = this.note.pages;
+    const empty = (i) => !p[i].strokes.length && !this.note.citations.some((c) => c.page === i);
+    while (p.length >= 2 && empty(p.length - 1) && empty(p.length - 2)) {
+      p.pop();
+      this.pages.pop()?.el.remove();
+    }
+  }
+  // 올가미로 옮기거나 크기를 바꾸기 전에 고를 획을 새 객체로 바꿔 끼워요
+  cloneSelection() {
+    const sel = this.selection;
+    const pg = this.note.pages[sel.page];
+    const next = new Set();
+    pg.strokes = pg.strokes.map((s) => {
+      if (!sel.set.has(s)) return s;
+      const c = { ...s, pts: s.pts.slice() };
+      next.add(c);
+      return c;
+    });
+    sel.set = next;
   }
   restore(json) {
     const d = JSON.parse(json);
@@ -609,8 +656,8 @@ export class Paper {
     this.onChange({ structure: true });
     this.onHistory();
   }
-  undo() { if (!this.undoStack.length) return; this.redoStack.push(this.snapshot()); this.restore(this.undoStack.pop()); }
-  redo() { if (!this.redoStack.length) return; this.undoStack.push(this.snapshot()); this.restore(this.redoStack.pop()); }
+  undo() { if (!this.undoStack.length) return; const e = this.undoStack.pop(); this.redoStack.push(this._now(e)); this._apply(e); }
+  redo() { if (!this.redoStack.length) return; const e = this.redoStack.pop(); this.undoStack.push(this._now(e)); this._apply(e); }
 
   changed(page, maybeGrow = true) {
     if (maybeGrow && page.i === this.note.pages.length - 1 && this.ensureTrailingPage()) {
@@ -637,7 +684,13 @@ export class Paper {
     const d = page.linesTop - before;
     // 본문 블록 높이가 바뀌면 그 아래 글씨도 같이 내려요
     if (d) {
-      for (const s of this.note.pages[0].strokes) for (let i = 1; i < s.pts.length; i += 3) if (s.pts[i] > before - 30) s.pts[i] += d;
+      // 되돌리기 기록이 옛 획을 그대로 들고 있어서, 획은 고치지 않고 새로 만들어 바꿔 끼워요
+      this.note.pages[0].strokes = this.note.pages[0].strokes.map((s) => {
+        if (!s.pts.some((v, i) => i % 3 === 1 && v > before - 30)) return s;
+        const pts = s.pts.slice();
+        for (let i = 1; i < pts.length; i += 3) if (pts[i] > before - 30) pts[i] += d;
+        return { ...s, pts };
+      });
       for (const c of this.note.citations) if (c.page === 0 && c.y > before - 30) c.y += d;
       this.renderCitations(page);
     }
