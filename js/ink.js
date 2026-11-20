@@ -33,12 +33,12 @@ export const PEN_STYLES = [
   { id: 'brush', name: '붓펜', desc: '굵기 차이가 크고 끝이 붓처럼 가늘어져요' },
 ];
 if (!PEN_STYLES.some((p) => p.id === settings.penStyle)) settings.penStyle = 'ball';
-// 펜 종류마다 세부 설정 (굿노트 기본값처럼 50%). sharp = 끝 날카로움, pressure = 필압 민감도, stab = 손떨림 보정
-export const PEN_OPT_DEFAULT = { sharp: 50, pressure: 50, stab: 50 };
+// 펜 종류마다 세부 설정 (굿노트 기본값처럼 50%). sharp = 팁 선명도, pressure = 필압 민감도, flat = 평평함(만년필 펜촉이 납작해서 방향 따라 굵기가 바뀜, 기본 0), stab = 손떨림 보정
+export const PEN_OPT_DEFAULT = { sharp: 50, pressure: 50, flat: 0, stab: 50 };
 if (!settings.penOpts) settings.penOpts = {};
 for (const p of PEN_STYLES) settings.penOpts[p.id] = { ...PEN_OPT_DEFAULT, ...(settings.penOpts[p.id] || {}) };
 // 어떤 설정이 어떤 펜에 쓰이는지 (굿노트: 볼펜은 끝 모양·필압 없음, 필압 조절은 만년필만)
-export const PEN_OPT_FOR = { ball: ['stab'], fountain: ['sharp', 'pressure', 'stab'], brush: ['sharp', 'stab'] };
+export const PEN_OPT_FOR = { ball: ['stab'], fountain: ['sharp', 'pressure', 'flat', 'stab'], brush: ['sharp', 'stab'] };
 
 export const tool = { type: 'pen', penColor: 0, penSize: 1, hlColor: 0, hlSize: 1, eraserSize: 1, eraserMode: 'stroke' };
 
@@ -791,6 +791,7 @@ function drawStroke(ctx, s, live = false) {
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   const pts = [];
   for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
+  if (o.flat) applyFlatNib(pts, o.flat);
   const raw = getStroke(pts, strokeOpts(o, live));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
   if (!outline.length) return;
@@ -849,31 +850,13 @@ function snapShape(raw) {
   }
   // 원은 둥근 면이라 다각형으로 맞추면 오차가 커요. 다각형이 원보다 확실히 잘 맞을 때만 다각형.
   if (best && (best.err * 4 < ellErr || ellErr > 0.12)) {
-    let vs = best.vs;
-    const n = vs.length;
-    // 별: 꼭짓점 10개가 바깥·안쪽으로 번갈아 → 반듯한 별
-    if (n === 10) {
-      const c = [vs.reduce((s, q) => s + q[0], 0) / n, vs.reduce((s, q) => s + q[1], 0) / n];
-      const r = vs.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1]));
-      const odd = r.filter((_, i) => i % 2), even = r.filter((_, i) => i % 2 === 0);
-      const [ro, ri, off] = avg(even) > avg(odd) ? [avg(even), avg(odd), 0] : [avg(odd), avg(even), 1];
-      if (ri / ro < 0.75) {
-        const a0 = Math.atan2(vs[off][1] - c[1], vs[off][0] - c[0]);
-        const dir = turnDir(vs);
-        vs = Array.from({ length: 10 }, (_, i) => { const t = a0 + dir * (i * Math.PI) / 5, rr = (i % 2 ? ri : ro); return [c[0] + rr * Math.cos(t), c[1] + rr * Math.sin(t)]; });
-        // 그리기 시작한 꼭짓점부터
-        if (off) vs.unshift(vs.pop());
-        return polyOut(vs);
-      }
-    }
-    // 사각형이 거의 반듯하면 가로세로로
-    if (n === 4) {
-      const segs = vs.map((q, i) => [q, vs[(i + 1) % 4]]);
-      if (segs.every(([u, v]) => { const g = Math.abs(Math.atan2(v[1] - u[1], v[0] - u[0])) % (Math.PI / 2); return g < 0.22 || g > Math.PI / 2 - 0.22; })) {
-        vs = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-      }
-    }
-    return polyOut(vs);
+    const vs = regularShape(best.vs, [x0, y0, x1, y1]);
+    // 그리기 시작한 곳에서 가장 가까운 꼭짓점부터
+    let k = 0;
+    vs.forEach((q, i) => { if (Math.hypot(q[0] - a[0], q[1] - a[1]) < Math.hypot(vs[k][0] - a[0], vs[k][1] - a[1])) k = i; });
+    const ordered = [...vs.slice(k), ...vs.slice(0, k)];
+    if (turnDir(ordered) !== turnDir(P)) ordered.splice(1, ordered.length - 1, ...ordered.slice(1).reverse());
+    return polyOut(ordered);
   }
   if (ellErr > 0.2) return null;
   // 원 · 타원: 가로세로 차이가 30% 안이면 정원
@@ -886,6 +869,61 @@ function snapShape(raw) {
   return out(o);
 }
 const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+const DEG = Math.PI / 180;
+// 대충 그린 꼭짓점 → 반듯한 도형 (굿노트처럼 '정리된' 모양)
+//  삼각형: 밑변이 거의 수평이면 이등변(꼭대기가 한쪽 끝 근처면 직각), 아니면 정삼각형
+//  사각형: 직사각형(비율이 비슷하면 정사각형), 꼭짓점이 상자 변 가운데에 있으면 마름모. 거의 수평이면 가로세로로
+//  꼭짓점 5개 이상: 정다각형 (별은 반듯한 별)
+function regularShape(vs, [x0, y0, x1, y1]) {
+  const n = vs.length;
+  const c = [avg(vs.map((q) => q[0])), avg(vs.map((q) => q[1]))];
+  const ang = (u, v) => Math.atan2(v[1] - u[1], v[0] - u[0]);
+  const nearAxis = (t, tol = 15 * DEG) => { const g = Math.abs(t) % (Math.PI / 2); return g < tol || g > Math.PI / 2 - tol; };
+  const ring = (k, r, a0, rr = null) => Array.from({ length: k }, (_, i) => { const t = a0 + (i * 2 * Math.PI) / k, R = rr ? rr[i % 2] : r; return [c[0] + R * Math.cos(t), c[1] + R * Math.sin(t)]; });
+  // 회전은 '위쪽이 꼭짓점' 또는 '밑변이 수평'에 가까우면 그쪽으로 맞춰요
+  const snapRot = (a0, k) => { const step = Math.PI / k, up = -Math.PI / 2; const d = ((a0 - up) % (2 * step) + 2 * step) % (2 * step); return d < 12 * DEG || d > 2 * step - 12 * DEG ? up + Math.round((a0 - up) / (2 * step)) * 2 * step : a0; };
+  if (n === 3) {
+    for (let i = 0; i < 3; i++) {
+      const u = vs[i], v = vs[(i + 1) % 3], apex = vs[(i + 2) % 3];
+      if (!nearAxis(ang(u, v)) || Math.abs(u[1] - v[1]) > Math.abs(u[0] - v[0])) continue; // 수평에 가까운 밑변
+      const baseY = (u[1] + v[1]) / 2, left = Math.min(u[0], v[0]), right = Math.max(u[0], v[0]);
+      const w = right - left;
+      let ax = (left + right) / 2;
+      if (Math.abs(apex[0] - left) < w * 0.2) ax = left; else if (Math.abs(apex[0] - right) < w * 0.2) ax = right; // 직각삼각형
+      return [[left, baseY], [right, baseY], [ax, apex[1]]];
+    }
+    const r = avg(vs.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1])));
+    return ring(3, r, snapRot(Math.atan2(vs[0][1] - c[1], vs[0][0] - c[0]), 3));
+  }
+  if (n === 4) {
+    const w = x1 - x0, h = y1 - y0;
+    // 마름모: 꼭짓점이 상자 각 변의 가운데 근처
+    const mids = [[(x0 + x1) / 2, y0], [x1, (y0 + y1) / 2], [(x0 + x1) / 2, y1], [x0, (y0 + y1) / 2]];
+    if (vs.every((q) => mids.some((m) => Math.hypot(q[0] - m[0], q[1] - m[1]) < Math.max(w, h) * 0.18))) {
+      if (Math.abs(w - h) / Math.max(w, h) < 0.15) { const s2 = (w + h) / 4; return [[c[0], c[1] - s2], [c[0] + s2, c[1]], [c[0], c[1] + s2], [c[0] - s2, c[1]]]; }
+      return mids;
+    }
+    // 직사각형: 첫 변 방향으로 돌린 상자
+    let t = ang(vs[0], vs[1]);
+    if (nearAxis(t, 20 * DEG)) t = 0;
+    const cos = Math.cos(t), sin = Math.sin(t);
+    const loc = vs.map((q) => [(q[0] - c[0]) * cos + (q[1] - c[1]) * sin, -(q[0] - c[0]) * sin + (q[1] - c[1]) * cos]);
+    let hw = (Math.max(...loc.map((q) => q[0])) - Math.min(...loc.map((q) => q[0]))) / 2;
+    let hh = (Math.max(...loc.map((q) => q[1])) - Math.min(...loc.map((q) => q[1]))) / 2;
+    if (Math.abs(hw - hh) / Math.max(hw, hh) < 0.12) hw = hh = (hw + hh) / 2; // 정사각형
+    return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([x, y]) => [c[0] + x * cos - y * sin, c[1] + x * sin + y * cos]);
+  }
+  const r = vs.map((q) => Math.hypot(q[0] - c[0], q[1] - c[1]));
+  if (n === 10) {
+    const odd = r.filter((_, i) => i % 2), even = r.filter((_, i) => i % 2 === 0);
+    const [ro, ri, off] = avg(even) > avg(odd) ? [avg(even), avg(odd), 0] : [avg(odd), avg(even), 1];
+    if (ri / ro < 0.75) {
+      const a0 = snapRot(Math.atan2(vs[off][1] - c[1], vs[off][0] - c[0]), 5);
+      return ring(10, 0, a0 - 0, null).map((_, i) => { const tt = a0 + (i * Math.PI) / 5, R = i % 2 ? ro * 0.38 : ro; return [c[0] + R * Math.cos(tt), c[1] + R * Math.sin(tt)]; });
+    }
+  }
+  return ring(n, avg(r), snapRot(Math.atan2(vs[0][1] - c[1], vs[0][0] - c[0]), n));
+}
 // 그린 방향 (시계/반시계)
 function turnDir(P) {
   let area = 0;
@@ -935,7 +973,10 @@ function styleOpts(st, po) {
   if (!po) return { ball: { scale: 1, thinning: 0, taper: 0, stream: 0.5 }, fountain: { scale: 1, thinning: 0.6, taper: 0, stream: 0.5 }, brush: { scale: 1.4, thinning: 0.75, taper: 14, stream: 0.5 } }[st];
   const stream = 0.25 + (po.stab / 100) * 0.6; // 손떨림 보정: 클수록 손 떨림을 더 눌러 줌
   if (st === 'ball') return { scale: 1, thinning: 0, taper: 0, stream };
-  if (st === 'fountain') return { scale: 1, thinning: 0.2 + (po.pressure / 100) * 0.8, taper: (po.sharp / 100) * 12, stream };
+  if (st === 'fountain') {
+    const flat = (po.flat || 0) / 100;
+    return { scale: 1, thinning: Math.max(0.2 + (po.pressure / 100) * 0.8, 0.85 * flat), taper: (po.sharp / 100) * 12, stream, flat };
+  }
   return { scale: 1.4, thinning: 0.8, taper: (po.sharp / 100) * 26, stream };
 }
 function strokeOpts(o, live) {
@@ -946,15 +987,29 @@ function strokeOpts(o, live) {
     start: { taper: o.taper, cap: true }, end: { taper: live ? 0 : o.taper, cap: true },
   };
 }
+// 평평함: 펜촉이 45° 기울어진 납작한 만년필처럼, 긋는 방향에 따라 굵기가 달라져요 (누르는 힘에 섞어 넣어요)
+function applyFlatNib(pts, k) {
+  const nib = -Math.PI / 4;
+  const n = pts.length;
+  const f = pts.map((_, i) => {
+    const a = pts[Math.max(0, i - 2)], b = pts[Math.min(n - 1, i + 2)];
+    if (a === b) return 0.6;
+    return 0.05 + 0.95 * Math.abs(Math.sin(Math.atan2(b[1] - a[1], b[0] - a[0]) - nib));
+  });
+  for (let i = 0; i < n; i++) pts[i][2] = pts[i][2] * (1 - k) + f[i] * k;
+}
 // 펜 종류 메뉴의 미리보기 획 (실제 그리는 방식 그대로, 누르는 힘이 바뀌는 물결)
 export function penSamplePath(style, w = 84, h = 22, po = settings.penOpts[style]) {
   const o = styleOpts(style, po), pts = [];
-  for (let i = 0; i <= 40; i++) {
-    const t = i / 40;
-    pts.push([4 + t * (w - 8), h / 2 + Math.sin(t * Math.PI * 2) * (h / 2 - 5), 0.25 + 0.65 * Math.sin(t * Math.PI)]);
+  const cycles = Math.max(1, Math.round(w / h / 1.6)); // 넓은 미리보기는 물결을 여러 번 (방향마다 굵기 차이가 보이게)
+  for (let i = 0, N = 40 * cycles; i <= N; i++) {
+    const t = i / N;
+    pts.push([4 + t * (w - 8), h / 2 + Math.sin(t * Math.PI * 2 * cycles) * (h / 2 - 5), 0.25 + 0.65 * Math.sin(t * Math.PI)]);
   }
   const sc = REF_SIZE / (2.6 * 1.25 * o.scale);
-  const out = getStroke(pts.map(([x, y, pr]) => [x * sc, y * sc, style === 'ball' ? 0.5 : pr]), strokeOpts(o, false)).map(([x, y]) => [x / sc, y / sc]);
+  const sp = pts.map(([x, y, pr]) => [x * sc, y * sc, style === 'ball' ? 0.5 : pr]);
+  if (o.flat) applyFlatNib(sp, o.flat);
+  const out = getStroke(sp, strokeOpts(o, false)).map(([x, y]) => [x / sc, y / sc]);
   if (!out.length) return '';
   // 종이에 그릴 때처럼 점 사이를 곡선으로 이어요
   const f = (v) => v.toFixed(1);
