@@ -132,11 +132,11 @@ export class BiblePanel {
     const sel = this.sel;
     const chNotes = marks.chNotes || [];
     const chNotesHTML = this.o.mode === 'note' && chNotes.length ? `
-      <div class="ch-notes">
+      <div class="ch-notes ${this.chNotesOpen ? 'open' : ''}">
         <button class="ch-notes-head" data-act="chnotes">이 장에 쓴 노트 <span class="badge num">${chNotes.length}</span>${this.chNotesOpen ? icon.chevUp : icon.chevDown}</button>
-        ${this.chNotesOpen ? chNotes.map((n) => `<button class="ch-note-row" data-note="${n.id}"><div>
+        ${this.chNotesOpen ? '<div class="ch-notes-list">' + chNotes.map((n) => `<button class="ch-note-row" data-note="${n.id}"><div>
           <div class="t1">${esc(n.passages.map((p) => B.refText(p, true)).join(', '))}<small class="num">${esc(marks.fmt(n.date))}</small></div>
-          <div class="t2">${esc(n.title || '제목 없음')} <em>· ${esc(n.preacher || '설교자 없음')}</em></div></div>${icon.chevRight}</button>`).join('') : ''}
+          <div class="t2">${esc(n.title || '제목 없음')} <em>· ${esc(n.preacher || '설교자 없음')}</em></div></div>${icon.chevRight}</button>`).join('') + '</div>' : ''}
       </div>` : '';
     const last = B.chapterCount(this.book);
     this.el.innerHTML = `${this.head()}${chNotesHTML}
@@ -200,6 +200,8 @@ export class BiblePanel {
       el.querySelector('.bp-body').style.setProperty('--verse-size', settings.verseSize + 'px');
     });
     el.querySelector('[data-act="chnotes"]')?.addEventListener('click', () => { this.chNotesOpen = !this.chNotesOpen; this.render({ keepScroll: true }); });
+    // 펼친 목록 밖(본문)을 누르면 접어요
+    if (this.chNotesOpen) el.querySelector('.bp-body')?.addEventListener('pointerdown', () => { this.chNotesOpen = false; this.render({ keepScroll: true }); }, { once: true, capture: true });
     el.querySelectorAll('[data-note]').forEach((b) => b.addEventListener('click', () => this.o.onOpenNote?.(b.dataset.note)));
   }
 
