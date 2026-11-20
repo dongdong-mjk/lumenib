@@ -1,11 +1,11 @@
 // 서버(Supabase) 연결 정보. 둘 다 '공개용' 값이라 코드에 넣어도 괜찮아요.
 // (진짜 비밀번호인 service_role / secret 키는 절대 여기에 넣지 않아요.)
 // 비어 있으면 로그인 기능이 숨겨지고, 지금처럼 기기에만 저장해요.
-export const SUPABASE_URL = '';      // 예: https://abcdefghijkl.supabase.co
-export const SUPABASE_KEY = '';      // Publishable key (sb_publishable_…) 또는 anon public 키
+export const SUPABASE_URL = 'https://pyfjmqahwsbapsjrbnbx.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_hveg52_968ainpoKQmLs8A_pFDYOdy7'; // Publishable key (공개용)
 
 // 로그인 버튼: Supabase에서 켠 것만 true
-export const LOGIN = { google: true, kakao: true, email: true };
+export const LOGIN = { google: false, kakao: false, email: true }; // 구글·카카오는 콘솔 설정이 끝나면 true
 // 이메일 로그인 방식: 'link' = 메일 속 링크 누르기 (기본 메일 템플릿), 'code' = 메일 속 숫자 넣기 (SMTP 연결 후 템플릿에 {{ .Token }} 넣었을 때)
 export const EMAIL_MODE = 'link';
 
