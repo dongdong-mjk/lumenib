@@ -276,6 +276,8 @@ svg { display: block; }
 .pages { margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 .page { position: relative; isolation: isolate; background: var(--paper); box-shadow: var(--shadow-paper); overflow: hidden; -webkit-user-select: none; user-select: none; }
 .page-inner { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; color: var(--paper-text); }
+/* 빠르게 연달아 눌러도 두 번 탭(확대) 동작으로 먹히지 않게 */
+button { touch-action: manipulation; }
 .page canvas { position: absolute; left: 0; top: 0; touch-action: inherit; }
 .page canvas.bg { pointer-events: none; }
 .page canvas:not(.bg) { mix-blend-mode: multiply; } /* 형광펜이 본문 글자 위가 아니라 밑에 깔린 것처럼 보이게 */

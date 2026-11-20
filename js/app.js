@@ -477,15 +477,15 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
     fitToolbar();
-    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => { tool.type = b.dataset.tool; track('task2_tool_' + b.dataset.tool); ns.paper?.clearSelection(); renderToolbar(); }));
-    slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => {
+    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { tool.type = b.dataset.tool; track('task2_tool_' + b.dataset.tool); ns.paper?.clearSelection(); renderToolbar(); }));
+    slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('pointerdown', () => {
       const key = t === 'pen' ? 'penColor' : 'hlColor';
       const i = +b.dataset.color;
       if (tool[key] === i) return openPalette(i); // 고른 색을 한 번 더 누르면 색 바꾸기
       tool[key] = i; renderToolbar();
     }));
-    slot.querySelectorAll('[data-em]').forEach((b) => b.addEventListener('click', () => { tool.eraserMode = b.dataset.em; renderToolbar(); }));
-    slot.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { tool[t === 'pen' ? 'penSize' : t === 'hl' ? 'hlSize' : 'eraserSize'] = +b.dataset.size; renderToolbar(); showSizePreview(t); }));
+    slot.querySelectorAll('[data-em]').forEach((b) => b.addEventListener('pointerdown', () => { tool.eraserMode = b.dataset.em; renderToolbar(); }));
+    slot.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('pointerdown', () => { tool[t === 'pen' ? 'penSize' : t === 'hl' ? 'hlSize' : 'eraserSize'] = +b.dataset.size; renderToolbar(); showSizePreview(t); }));
     slot.querySelector('[data-act="undo"]').addEventListener('click', () => ns.paper.undo());
     slot.querySelector('[data-act="redo"]').addEventListener('click', () => ns.paper.redo());
     slot.querySelector('[data-act="more"]').addEventListener('click', toggleMore);

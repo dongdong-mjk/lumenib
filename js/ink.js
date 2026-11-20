@@ -340,7 +340,7 @@ export class Paper {
       const [x, y] = this.toLocal(page, e);
       const pr = e.pointerType === 'pen' ? e.pressure : 0.5;
       const t = tool.type;
-      // 선택 상자 손잡이 8개: 모서리 = 비율 유지, 변 가운데 = 그 방향으로만 늘리기
+      // 선택 상자 네 모서리 손잡이: 반대쪽 모서리를 고정하고 비율 유지하며 크기 조절
       if (this.selection && t === 'lasso' && this.selection.page === page.i) {
         const hr = 22 / this.scale;
         const h = selHandles(this.selection.box).find((q) => Math.hypot(x - q.x, y - q.y) <= hr);
@@ -543,8 +543,9 @@ export class Paper {
     const m = document.createElement('div');
     m.className = 'lasso-menu';
     m.innerHTML = `<button data-a="del">삭제</button><button data-a="done">선택 해제</button>`;
-    m.addEventListener('pointerdown', (e) => e.stopPropagation());
-    m.addEventListener('click', (e) => {
+    // 누르는 순간 바로 실행 (click을 기다리면 빠르게 연달아 누를 때 씹혀요)
+    m.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault();
       const a = e.target.closest('button')?.dataset.a;
       if (a === 'del') {
         const sel = this.selection;
@@ -554,7 +555,7 @@ export class Paper {
         this.selection = null; this.hideLassoMenu();
         this.drawPage(this.pages[sel.page]);
         this.changed(this.pages[sel.page]);
-      } else this.clearSelection();
+      } else if (a === 'done') this.clearSelection();
     });
     this.pages[this.selection.page].el.appendChild(m);
     this.lassoMenu = m;
@@ -729,7 +730,7 @@ function bbox(strokes) {
 // 선택 상자 손잡이: 위치(x,y), 늘리는 방향(dx,dy), 고정되는 반대쪽 점(ax,ay)
 function selHandles(b) {
   const mx = (b[0] + b[2]) / 2, my = (b[1] + b[3]) / 2, out = [];
-  for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]) {
+  for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
     const x = dx < 0 ? b[0] : dx > 0 ? b[2] : mx, y = dy < 0 ? b[1] : dy > 0 ? b[3] : my;
     const ax = dx < 0 ? b[2] : dx > 0 ? b[0] : mx, ay = dy < 0 ? b[3] : dy > 0 ? b[1] : my;
     out.push({ x, y, dx, dy, ax, ay });
