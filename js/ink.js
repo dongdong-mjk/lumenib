@@ -1,6 +1,6 @@
 // 손글씨 노트 종이: 펜 · 형광펜 · 지우개 · 올가미
 // 좌표는 종이 기준 논리 단위(폭 726)로 저장하고, 화면 크기에 맞춰 늘리고 줄여요.
-import { esc } from './util.js';
+import { esc, toast } from './util.js';
 import { refText } from './bible.js';
 import { settings } from './store.js';
 import { getStroke } from './vendor/perfect-freehand.js';
@@ -55,6 +55,16 @@ export class Paper {
       if (e.target.closest && e.target.closest('button, .lasso-menu, .cite-ui, input, a')) return;
       const stylus = [...e.touches].some((t) => t.touchType === 'stylus');
       if (stylus) { if (!this.readonly) e.preventDefault(); return; }
+      // 두 손가락 탭 = 되돌리기 (짧게 톡, 거의 안 움직였을 때만)
+      if (e.type === 'touchstart') {
+        if (e.touches.length === 2 && !this._tap2) this._tap2 = { t: performance.now(), pts: [...e.touches].map((t) => [t.identifier, t.clientX, t.clientY]), ok: true };
+        else if (e.touches.length > 2 && this._tap2) this._tap2.ok = false;
+      } else if (this._tap2 && this._tap2.ok) {
+        for (const t of e.touches) {
+          const o = this._tap2.pts.find((q) => q[0] === t.identifier);
+          if (o && Math.hypot(t.clientX - o[1], t.clientY - o[2]) > 12) this._tap2.ok = false;
+        }
+      }
       if (e.touches.length >= 2) {
         e.preventDefault();
         const [a, b] = e.touches;
@@ -64,7 +74,15 @@ export class Paper {
         else this.movePinch(cx, cy, dist);
       }
     };
-    this._touchEnd = (e) => { if (e.touches.length < 2 && this._pan) this.endPinch(); };
+    this._touchEnd = (e) => {
+      if (e.touches.length < 2 && this._pan) this.endPinch();
+      if (e.touches.length === 0 && this._tap2) {
+        const tp = this._tap2; this._tap2 = null;
+        if (tp.ok && performance.now() - tp.t < 350 && !this.readonly) {
+          if (this.undoStack.length) { this.undo(); toast('되돌렸어요'); } else toast('되돌릴 게 없어요');
+        }
+      }
+    };
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchmove', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchend', this._touchEnd);
