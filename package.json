@@ -1,0 +1,17 @@
+{
+  "name": "lumenib",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lumenib 아이패드 테스트 앱 (Capacitor로 웹앱을 감싼 것)",
+  "scripts": {
+    "www": "node scripts/copy-www.mjs",
+    "ios": "npm run www && npx cap sync ios && npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

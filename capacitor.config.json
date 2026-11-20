@@ -1,0 +1,14 @@
+{
+  "appId": "io.github.dongdongmjk.lumenib",
+  "appName": "Lumenib",
+  "webDir": "www",
+  "server": {
+    "url": "https://dongdong-mjk.github.io/lumenib/",
+    "errorPath": "index.html"
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#000000",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
