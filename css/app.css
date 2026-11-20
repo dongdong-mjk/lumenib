@@ -515,7 +515,7 @@ button { touch-action: manipulation; }
 body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 
 /* 굵기 미리보기 */
-.size-preview { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 24px 14px; min-width: 120px; border-radius: 20px; background: rgba(255,255,255,.7); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); box-shadow: 0 4px 20px rgba(0,0,0,.14); opacity: 0; transition: opacity .18s, transform .18s; }
+.size-preview { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 24px 14px; min-width: 120px; border-radius: 20px; background: rgba(255,255,255,.94); box-shadow: 0 4px 20px rgba(0,0,0,.18); opacity: 0; transition: opacity .18s, transform .18s; }
 .size-preview.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .size-preview i { display: block; border-radius: 50%; }
 .size-preview i.eraser { border: 1.5px solid #111; background: rgba(0,0,0,.04); }
