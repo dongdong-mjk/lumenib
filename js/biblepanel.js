@@ -64,11 +64,15 @@ export class BiblePanel {
     const backHead = this.o.mode === 'note'
       ? `<div class="bp-head"><button class="bp-drop" data-go="verses">${icon.arrowLeft} ${esc(B.book(this.book).name)} ${this.ch}장</button></div>` : '';
     this.el.innerHTML = `${backHead}
-      <label class="bp-search">${icon.search}<input type="search" enterkeyhint="search" placeholder="창세기 1:1, ㄹㅁ 8" value="${esc(this.query)}" autocomplete="off"></label>
+      <label class="bp-search">${icon.search}<input type="search" enterkeyhint="search" placeholder="창세기 1:1, ㄹㅁ 8" value="${esc(this.query)}" autocomplete="off"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${this.query ? '' : 'hidden'}>${icon.x}</button></label>
       <div class="bp-body"></div>`;
     const input = this.el.querySelector('input');
     const body = this.el.querySelector('.bp-body');
-    input.addEventListener('input', () => { this.query = input.value; this.fillBooks(body, recent); this.bindCommon(body); });
+    const clear = this.el.querySelector('.bp-search-clear');
+    input.addEventListener('input', () => { this.query = input.value; clear.hidden = !input.value; this.fillBooks(body, recent); this.bindCommon(body); });
+    // 피그마 Search Bar: 입력 중·입력 완료일 때 오른쪽 × (브라우저 기본 지우기 버튼 대신)
+    clear.addEventListener('pointerdown', (e) => e.preventDefault()); // 키보드 포커스 유지
+    clear.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); });
     this.fillBooks(body, recent);
     this.bindCommon();
   }
