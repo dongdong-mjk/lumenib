@@ -685,7 +685,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         if (i) doc.addPage();
         doc.addImage(shot.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, W, H);
       }
-      const name = `${n.date || todayISO()} ${(n.title || refList(n) || '설교 노트').replace(/[\\/:*?"<>|]/g, ' ')}.pdf`;
+      const name = `${n.date || todayISO()} ${(n.title || (n.passages.length ? refList(n) : '설교 노트')).replace(/[\\/:*?"<>|]/g, ' ')}.pdf`;
       const file = new File([doc.output('blob')], name, { type: 'application/pdf' });
       toast('PDF가 준비됐어요', 1500);
       modal(`<div class="modal"><h3>PDF가 준비됐어요</h3><p class="desc">${esc(name)} · ${pages.length}쪽</p>
