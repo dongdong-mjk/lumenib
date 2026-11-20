@@ -3,7 +3,7 @@
 import { icon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
-import { Paper, tool, PEN_STYLES, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
+import { Paper, tool, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
 import { screen as trackScreen, track, isTracking } from './analytics.js';
 
@@ -592,22 +592,44 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     showList();
   }
 
-  // 펜 종류 (굿노트처럼 고른 펜을 한 번 더 누르면 열려요)
+  // 펜 설정 (굿노트처럼 고른 펜을 한 번 더 누르면 열려요): 펜 종류 + 끝 날카로움 · 필압 민감도 · 손떨림 보정
+  const OPT_LABEL = {
+    sharp: ['끝 날카로움', '획의 시작과 끝이 둥글게 ↔ 뾰족하게'],
+    pressure: ['필압 민감도', '누르는 힘에 따라 굵기가 덜 ↔ 많이 바뀜'],
+    stab: ['손떨림 보정', '손 떨림을 덜 ↔ 많이 다듬어 줌'],
+  };
   function openPenStyles() {
     const ex = toolbarEl.querySelector('.tb-menu');
     if (ex) { const same = ex.classList.contains('pen-styles'); ex.remove(); if (same) return; }
     const m = document.createElement('div');
     m.className = 'tb-menu pen-styles';
+    const color = () => PEN_COLORS[tool.penColor];
+    const preview = () => {
+      const st = S.settings.penStyle;
+      m.querySelector('.ps-preview path').setAttribute('d', penSamplePath(st, 240, 44, S.settings.penOpts[st]));
+    };
     const draw = () => {
-      m.innerHTML = `<div class="pal-head"><b>펜 종류</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>`
-        + PEN_STYLES.map((p) => `<button class="ps-row ${S.settings.penStyle === p.id ? 'on' : ''}" data-ps="${p.id}">
-            <svg width="84" height="22" viewBox="0 0 84 22" aria-hidden="true"><path d="${penSamplePath(p.id)}" fill="currentColor"/></svg>
-            <span><b>${p.name}</b><small>${p.desc}</small></span></button>`).join('');
+      const st = S.settings.penStyle, po = S.settings.penOpts[st];
+      const info = PEN_STYLES.find((p) => p.id === st);
+      m.innerHTML = `<div class="pal-head"><b>펜 설정</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>
+        <div class="ps-preview" style="color:${color()}"><svg width="240" height="44" viewBox="0 0 240 44" aria-hidden="true"><path fill="currentColor"/></svg></div>
+        <div class="ps-types">${PEN_STYLES.map((p) => `<button class="ps-type ${st === p.id ? 'on' : ''}" data-ps="${p.id}">
+            <svg width="64" height="20" viewBox="0 0 64 20" aria-hidden="true"><path d="${penSamplePath(p.id, 64, 20, S.settings.penOpts[p.id])}" fill="currentColor"/></svg><span>${p.name}</span></button>`).join('')}</div>
+        <p class="ps-desc">${info.desc}</p>
+        ${PEN_OPT_FOR[st].map((k) => `<div class="ps-opt"><div class="ps-opt-head"><b>${OPT_LABEL[k][0]}</b><span data-v="${k}">${po[k]}%</span></div>
+          <input type="range" min="0" max="100" step="5" value="${po[k]}" data-opt="${k}" aria-label="${OPT_LABEL[k][0]}">
+          <small>${OPT_LABEL[k][1]}</small></div>`).join('')}
+        <button class="ps-reset" data-act="reset">기본값으로</button>`;
+      preview();
       m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
       m.querySelectorAll('[data-ps]').forEach((b) => b.addEventListener('click', () => {
-        S.settings.penStyle = b.dataset.ps; S.saveSettings(); track('pen_style_' + b.dataset.ps);
-        m.remove(); renderToolbar();
+        S.settings.penStyle = b.dataset.ps; S.saveSettings(); track('pen_style_' + b.dataset.ps); draw();
       }));
+      m.querySelectorAll('[data-opt]').forEach((r) => {
+        r.addEventListener('input', () => { po[r.dataset.opt] = +r.value; m.querySelector(`[data-v="${r.dataset.opt}"]`).textContent = r.value + '%'; preview(); });
+        r.addEventListener('change', () => { S.saveSettings(); track('pen_opt_' + r.dataset.opt); draw(); });
+      });
+      m.querySelector('[data-act="reset"]').addEventListener('click', () => { Object.assign(po, PEN_OPT_DEFAULT); S.saveSettings(); draw(); });
     };
     draw();
     toolbarEl.appendChild(m);

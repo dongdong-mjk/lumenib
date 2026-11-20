@@ -524,12 +524,18 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .home.lg .rc-lines b { height: 202px; }
 .pal-pr button { flex: 1; }
 
-/* 펜 종류 메뉴 (펜 도구를 한 번 더 누르면) */
-.tb-menu.pen-styles { left: 8px; right: auto; width: 284px; padding: 8px 8px 10px; }
-.tb-menu.pen-styles .pal-head { margin: 0 0 4px; padding: 0 4px; }
-.ps-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 10px; border-radius: 10px; text-align: left; color: #111; }
-.ps-row.on { background: #f0f0f0; }
-.ps-row svg { flex: none; }
-.ps-row span { display: flex; flex-direction: column; gap: 2px; }
-.ps-row b { font-size: 14px; font-weight: 600; }
-.ps-row small { font-size: 11px; color: #8a8a8a; }
+/* 펜 설정 (펜 도구를 한 번 더 누르면) */
+.tb-menu.pen-styles { left: 8px; right: auto; width: 296px; padding: 8px 12px 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
+.tb-menu.pen-styles .pal-head { margin: 0 -4px 4px; padding: 0 0 0 4px; }
+.ps-preview { height: 56px; border-radius: 10px; background: #f7f7f7; display: grid; place-items: center; margin-bottom: 10px; }
+.ps-types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ps-type { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 6px; border-radius: 10px; border: 1px solid #e8e8e8; color: #111; font-size: 12px; }
+.ps-type.on { border-color: #111; font-weight: 600; }
+.ps-desc { margin: 8px 2px 4px; font-size: 11px; color: #8a8a8a; }
+.ps-opt { padding: 8px 2px 2px; }
+.ps-opt-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+.ps-opt-head b { font-weight: 600; }
+.ps-opt-head span { font-size: 12px; color: #555; font-variant-numeric: tabular-nums; }
+.ps-opt input[type=range] { width: 100%; margin: 6px 0 2px; accent-color: #111; }
+.ps-opt small { font-size: 11px; color: #8a8a8a; }
+.ps-reset { margin-top: 8px; font-size: 12px; color: #555; padding: 6px 2px; }
