@@ -3,7 +3,7 @@
 import { icon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
-import { Paper, tool, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
+import { Paper, tool, PEN_STYLES, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
 import { screen as trackScreen, track, isTracking } from './analytics.js';
 
@@ -477,7 +477,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
     fitToolbar();
-    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { tool.type = b.dataset.tool; track('task2_tool_' + b.dataset.tool); ns.paper?.clearSelection(); renderToolbar(); }));
+    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { if (b.dataset.tool === 'pen' && tool.type === 'pen') return openPenStyles(); tool.type = b.dataset.tool; track('task2_tool_' + b.dataset.tool); ns.paper?.clearSelection(); renderToolbar(); }));
     slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('pointerdown', () => {
       const key = t === 'pen' ? 'penColor' : 'hlColor';
       const i = +b.dataset.color;
@@ -534,8 +534,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         <h6>기본 색</h6><div class="pal-grid">${base.map((c) => sw(c)).join('')}</div>
         <h6>내 색</h6><div class="pal-grid">${mine.map((c) => sw(c, 'data-mine')).join('')}${mine.length < 6 ? `<button class="pal pal-add" data-act="add" aria-label="색 만들기"><i>${icon.plus}</i></button>` : ''}</div>
         ${mine.length ? '<p class="pal-tip">내 색을 길게 누르면 지울 수 있어요</p>' : ''}
-        ${isPen ? `<h6>필압</h6><div class="mode2 pal-pr"><button data-pr="1" class="${S.settings.penPressure !== false ? 'on' : ''}">켜기</button><button data-pr="0" class="${S.settings.penPressure === false ? 'on' : ''}">끄기</button></div>
-          <p class="pal-tip">${S.settings.penPressure === false ? '누르는 힘과 상관없이 같은 굵기로 써져요' : '세게 누르면 굵게, 살살 쓰면 가늘게 써져요'}</p>` : `<h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
+        ${isPen ? '' : `<h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
           <input type="range" min="20" max="80" step="5" value="${Math.round(S.settings.hlAlpha * 100)}" aria-label="형광펜 투명도"></div>
           <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>`}`;
       const ar = m.querySelector('.pal-alpha input');
@@ -545,9 +544,6 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); });
         paint();
       }
-      m.querySelectorAll('[data-pr]').forEach((b) => b.addEventListener('click', () => {
-        S.settings.penPressure = b.dataset.pr === '1'; S.saveSettings(); track('pen_pressure_' + (S.settings.penPressure ? 'on' : 'off')); showList();
-      }));
       m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
       m.querySelectorAll('[data-c]').forEach((b) => {
         let lp;
@@ -594,6 +590,27 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       upd();
     };
     showList();
+  }
+
+  // 펜 종류 (굿노트처럼 고른 펜을 한 번 더 누르면 열려요)
+  function openPenStyles() {
+    const ex = toolbarEl.querySelector('.tb-menu');
+    if (ex) { const same = ex.classList.contains('pen-styles'); ex.remove(); if (same) return; }
+    const m = document.createElement('div');
+    m.className = 'tb-menu pen-styles';
+    const draw = () => {
+      m.innerHTML = `<div class="pal-head"><b>펜 종류</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>`
+        + PEN_STYLES.map((p) => `<button class="ps-row ${S.settings.penStyle === p.id ? 'on' : ''}" data-ps="${p.id}">
+            <svg width="84" height="22" viewBox="0 0 84 22" aria-hidden="true"><path d="${penSamplePath(p.id)}" fill="currentColor"/></svg>
+            <span><b>${p.name}</b><small>${p.desc}</small></span></button>`).join('');
+      m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
+      m.querySelectorAll('[data-ps]').forEach((b) => b.addEventListener('click', () => {
+        S.settings.penStyle = b.dataset.ps; S.saveSettings(); track('pen_style_' + b.dataset.ps);
+        m.remove(); renderToolbar();
+      }));
+    };
+    draw();
+    toolbarEl.appendChild(m);
   }
 
   function toggleMore() {

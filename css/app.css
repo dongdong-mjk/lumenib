@@ -523,3 +523,13 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .size-preview span { font-size: 12px; color: #555; }
 .home.lg .rc-lines b { height: 202px; }
 .pal-pr button { flex: 1; }
+
+/* 펜 종류 메뉴 (펜 도구를 한 번 더 누르면) */
+.tb-menu.pen-styles { left: 8px; right: auto; width: 284px; padding: 8px 8px 10px; }
+.tb-menu.pen-styles .pal-head { margin: 0 0 4px; padding: 0 4px; }
+.ps-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 10px; border-radius: 10px; text-align: left; color: #111; }
+.ps-row.on { background: #f0f0f0; }
+.ps-row svg { flex: none; }
+.ps-row span { display: flex; flex-direction: column; gap: 2px; }
+.ps-row b { font-size: 14px; font-weight: 600; }
+.ps-row small { font-size: 11px; color: #8a8a8a; }

@@ -25,6 +25,15 @@ export const ERASER_SIZES = [8, 18, 32];
 export const HL_ALPHA_DEFAULT = 0.42;
 if (typeof settings.hlAlpha !== 'number') settings.hlAlpha = HL_ALPHA_DEFAULT;
 
+// 펜 종류 (굿노트 참고). 기본은 필압 없는 볼펜.
+// 예전 설정에서 필압을 켜 두었던 사람도 새 기본(볼펜)으로 시작해요.
+export const PEN_STYLES = [
+  { id: 'ball', name: '볼펜', desc: '누르는 힘과 상관없이 같은 굵기' },
+  { id: 'fountain', name: '만년필', desc: '세게 누르면 굵게, 살살 쓰면 가늘게' },
+  { id: 'brush', name: '붓펜', desc: '굵기 차이가 크고 끝이 붓처럼 가늘어져요' },
+];
+if (!PEN_STYLES.some((p) => p.id === settings.penStyle)) settings.penStyle = 'ball';
+
 export const tool = { type: 'pen', penColor: 0, penSize: 1, hlColor: 0, hlSize: 1, eraserSize: 1, eraserMode: 'stroke' };
 
 export class Paper {
@@ -378,7 +387,7 @@ export class Paper {
       if (cur && e.pointerType === 'touch') return;
       if (t === 'pen' || t === 'hl') {
         const s = t === 'pen'
-          ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ...(settings.penPressure === false ? { np: 1 } : {}), pts: [x, y, pr] }
+          ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, pts: [x, y, pr] }
           : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x, y, 0.5] };
         cur = { kind: 'draw', s };
         this.drawLive(page, s);
@@ -753,14 +762,11 @@ function drawStroke(ctx, s, live = false) {
   }
   // 펜: 필압을 부드럽게 다듬은 외곽선을 만들어 면으로 채워요 (선 가장자리가 매끈하게)
   // 굵기마다 다듬는 정도가 달라지지 않게, 가운데 굵기 기준으로 좌표를 키웠다 줄여서 계산해요
-  const size = s.w * 1.25, k = REF_SIZE / size;
+  const st = penStyleOf(s), o = STYLE_OPTS[st];
+  const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   const pts = [];
-  for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, s.np ? 0.5 : p[i + 2]]);
-  const raw = getStroke(pts, {
-    size: REF_SIZE, thinning: s.np ? 0 : 0.45, smoothing: 0.6, streamline: live ? 0.35 : 0.5,
-    simulatePressure: false, last: !live,
-    easing: (t) => Math.sin((t * Math.PI) / 2),
-  });
+  for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
+  const raw = getStroke(pts, strokeOpts(o, live));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
   if (!outline.length) return;
   ctx.fillStyle = s.color;
@@ -774,6 +780,40 @@ function drawStroke(ctx, s, live = false) {
   ctx.fill();
 }
 const round = (v) => Math.round(v * 10) / 10;
+// 예전 획: np(필압 끔) → 볼펜, 표시 없음 → 만년필(그때 기본이 필압 켜짐)
+const penStyleOf = (s) => s.ps || (s.np ? 'ball' : 'fountain');
+const STYLE_OPTS = {
+  ball: { scale: 1, thinning: 0, taper: 0 },
+  fountain: { scale: 1, thinning: 0.6, taper: 0 },
+  brush: { scale: 1.4, thinning: 0.75, taper: 14 },
+};
+function strokeOpts(o, live) {
+  return {
+    size: REF_SIZE, thinning: o.thinning, smoothing: 0.6, streamline: live ? 0.35 : 0.5,
+    simulatePressure: false, last: !live,
+    easing: (t) => Math.sin((t * Math.PI) / 2),
+    start: { taper: o.taper, cap: true }, end: { taper: live ? 0 : o.taper, cap: true },
+  };
+}
+// 펜 종류 메뉴의 미리보기 획 (실제 그리는 방식 그대로, 누르는 힘이 바뀌는 물결)
+export function penSamplePath(style, w = 84, h = 22) {
+  const o = STYLE_OPTS[style], pts = [];
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40;
+    pts.push([4 + t * (w - 8), h / 2 + Math.sin(t * Math.PI * 2) * (h / 2 - 5), 0.25 + 0.65 * Math.sin(t * Math.PI)]);
+  }
+  const sc = REF_SIZE / (2.6 * 1.25 * o.scale);
+  const out = getStroke(pts.map(([x, y, pr]) => [x * sc, y * sc, style === 'ball' ? 0.5 : pr]), strokeOpts(o, false)).map(([x, y]) => [x / sc, y / sc]);
+  if (!out.length) return '';
+  // 종이에 그릴 때처럼 점 사이를 곡선으로 이어요
+  const f = (v) => v.toFixed(1);
+  let d = `M${f(out[0][0])} ${f(out[0][1])}`;
+  for (let i = 1; i < out.length; i++) {
+    const [x0, y0] = out[i], [x1, y1] = out[(i + 1) % out.length];
+    d += `Q${f(x0)} ${f(y0)} ${f((x0 + x1) / 2)} ${f((y0 + y1) / 2)}`;
+  }
+  return d + 'Z';
+}
 // 형광펜은 끝이 납작해서(butt) 첫·마지막 짧은 구간의 방향이 끝 모양을 정해요.
 // 펜슬은 대고 뗄 때 펜촉이 아주 조금씩 흔들린 점을 많이 보내서, 그 방향대로 끝이 비뚤게 잘렸어요.
 // 시작점·끝점 근처(굵기의 절반 안쪽)의 흔들린 점과 너무 촘촘한 점을 빼고 그려요. 저장된 점은 그대로예요.
