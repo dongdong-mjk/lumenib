@@ -271,6 +271,8 @@ svg { display: block; }
 .tabs + .info { margin-top: 0; border-top-left-radius: 0; }
 .paper-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: 16px 20px 140px; position: relative; }
 .paper-scroll.finger { touch-action: none; }
+.paper-scroll.zoomed { overflow-x: auto; }
+.pages { will-change: transform; }
 .pages { margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 .page { position: relative; isolation: isolate; background: var(--paper); box-shadow: var(--shadow-paper); overflow: hidden; -webkit-user-select: none; user-select: none; }
 .page-inner { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; color: var(--paper-text); }
@@ -280,8 +282,8 @@ svg { display: block; }
 .page-inner { z-index: 0; }
 .page canvas.bg { z-index: -1; }
 .page-ui { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; pointer-events: none; z-index: 3; }
-.cite-ui { position: absolute; right: 26px; display: flex; gap: 2px; padding-top: 6px; pointer-events: auto; }
-.cite-ui button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; touch-action: none; }
+.cite-ui { position: absolute; right: 22px; display: flex; gap: 0; padding-top: 2px; pointer-events: auto; }
+.cite-ui button { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; touch-action: none; }
 .cite-ui button:active { background: #eee; }
 .cite-grip { cursor: grab; }
 .cite-block.moving { box-shadow: 0 6px 20px rgba(0,0,0,.18); border-color: #111; }

@@ -46,19 +46,24 @@ export class Paper {
     this._ro.observe(scrollEl);
     // Apple Pencil로 쓸 때 화면이 같이 스크롤되지 않게 (손가락 스크롤은 그대로)
     // 손가락 필기를 켜면: 한 손가락 = 쓰기, 두 손가락 = 스크롤
+    // 두 손가락 = 확대·축소 (+ 손가락 필기 모드에서는 이동도)
     this._cancels = [];
+    this.zoom = 1;
     this._touchBlock = (e) => {
-      if (this.readonly) return;
-      for (const t of e.touches) if (t.touchType === 'stylus') { e.preventDefault(); return; }
-      if (!this.fingerDraw) return;
+      // 버튼(올가미 메뉴, 인용 빼기 등)은 펜슬로 눌러도 클릭이 되게 막지 않아요
+      if (e.target.closest && e.target.closest('button, .lasso-menu, .cite-ui, input, a')) return;
+      const stylus = [...e.touches].some((t) => t.touchType === 'stylus');
+      if (stylus) { if (!this.readonly) e.preventDefault(); return; }
       if (e.touches.length >= 2) {
         e.preventDefault();
-        const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        if (!this._pan) { this._pan = { y }; this._cancels.forEach((f) => f()); }
-        else { scrollEl.scrollTop -= y - this._pan.y; this._pan.y = y; }
+        const [a, b] = e.touches;
+        const cx = (a.clientX + b.clientX) / 2, cy = (a.clientY + b.clientY) / 2;
+        const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        if (!this._pan) { this.startPinch(cx, cy, dist); this._cancels.forEach((f) => f()); }
+        else this.movePinch(cx, cy, dist);
       }
     };
-    this._touchEnd = (e) => { if (e.touches.length === 0) this._pan = null; };
+    this._touchEnd = (e) => { if (e.touches.length < 2 && this._pan) this.endPinch(); };
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchmove', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchend', this._touchEnd);
@@ -71,6 +76,37 @@ export class Paper {
     this.scrollEl.removeEventListener('touchmove', this._touchBlock);
     this.scrollEl.removeEventListener('touchend', this._touchEnd);
     this.scrollEl.removeEventListener('touchcancel', this._touchEnd);
+  }
+
+  // ---------- 확대 · 축소 ----------
+  // 손가락을 움직이는 동안은 CSS로만 키웠다가, 손을 떼면 그 배율로 다시 선명하게 그려요
+  startPinch(cx, cy, dist) {
+    const r = this.scrollEl.getBoundingClientRect();
+    this._pan = { cx, cy, dist, ox: cx - r.left, oy: cy - r.top, z: 1, sl: this.scrollEl.scrollLeft, st: this.scrollEl.scrollTop };
+    const pr = this.pagesEl.getBoundingClientRect();
+    this.pagesEl.style.transformOrigin = `${cx - pr.left}px ${cy - pr.top}px`;
+  }
+  movePinch(cx, cy, dist) {
+    const p = this._pan;
+    const z = Math.min(3 / this.zoom, Math.max(1 / this.zoom, dist / p.dist));
+    p.z = z;
+    this.pagesEl.style.transform = `translate(${cx - p.cx}px, ${cy - p.cy}px) scale(${z})`;
+    p.lx = cx; p.ly = cy;
+  }
+  endPinch() {
+    const p = this._pan; this._pan = null;
+    const el = this.scrollEl;
+    this.pagesEl.style.transform = ''; this.pagesEl.style.transformOrigin = '';
+    const z0 = this.zoom, z1 = Math.min(3, Math.max(1, z0 * p.z));
+    // 손가락 가운데 있던 종이 위치가 그대로 그 자리에 오게
+    const offL = this.pagesEl.offsetLeft, offT = this.pagesEl.offsetTop;
+    const contentX = (p.sl + p.ox - offL) / z0, contentY = (p.st + p.oy - offT) / z0;
+    const dx = (p.lx ?? p.cx) - p.cx, dy = (p.ly ?? p.cy) - p.cy;
+    this.zoom = z1;
+    el.classList.toggle('zoomed', z1 > 1.001);
+    this.layout();
+    el.scrollLeft = contentX * z1 + this.pagesEl.offsetLeft - p.ox - dx;
+    el.scrollTop = contentY * z1 + this.pagesEl.offsetTop - p.oy - dy;
   }
 
   setFingerDraw(on) {
@@ -213,7 +249,7 @@ export class Paper {
   layout() {
     if (!this.pages) return;
     const avail = this.scrollEl.clientWidth - 40;
-    const w = Math.max(320, Math.min(avail, 1100));
+    const w = Math.round(Math.max(320, Math.min(avail, 1100)) * (this.zoom || 1));
     this.scale = w / PAGE_W;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.pagesEl.style.width = w + 'px';
@@ -304,6 +340,15 @@ export class Paper {
       const [x, y] = this.toLocal(page, e);
       const pr = e.pointerType === 'pen' ? e.pressure : 0.5;
       const t = tool.type;
+      // 선택 상자 오른쪽 아래 손잡이: 크기 조절
+      if (this.selection && t === 'lasso' && this.selection.page === page.i) {
+        const b = this.selection.box, hr = 22 / this.scale;
+        if (Math.hypot(x - b[2], y - b[3]) <= hr) {
+          cur = { kind: 'scale', k: 1 };
+          this.hideLassoMenu();
+          return;
+        }
+      }
       if (this.selection && t === 'lasso' && this.selection.page === page.i && inBox(this.selection.box, x, y)) {
         cur = { kind: 'move', x0: x, y0: y, dx: 0, dy: 0 };
         this.hideLassoMenu();
@@ -343,11 +388,15 @@ export class Paper {
           cur.pts.push(x, y);
         } else if (cur.kind === 'move') {
           cur.dx = x - cur.x0; cur.dy = y - cur.y0;
+        } else if (cur.kind === 'scale') {
+          const b = this.selection.box, w = b[2] - b[0], h = b[3] - b[1];
+          cur.k = Math.max(0.2, Math.min(5, Math.max((x - b[0]) / w, (y - b[1]) / h)));
         }
       }
       if (cur.kind === 'draw') this.drawLive(page, cur.s);
       else if (cur.kind === 'lasso') this.drawLasso(page, cur.pts);
       else if (cur.kind === 'move') this.drawSelection(page, cur.dx, cur.dy);
+      else if (cur.kind === 'scale') this.drawSelection(page, 0, 0, cur.k);
     });
 
     const end = (e) => {
@@ -356,7 +405,6 @@ export class Paper {
       cur = null;
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
-        k.s.pts = densify(k.s.pts);
         this.pushHistory();
         this.note.pages[page.i].strokes.push(k.s);
         this.drawPage(page);
@@ -369,8 +417,23 @@ export class Paper {
       } else if (k.kind === 'move') {
         if (Math.abs(k.dx) + Math.abs(k.dy) > 1) {
           this.pushHistory();
-          for (const s of this.selection.set) for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + k.dy); }
+          for (const s of this.selection.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + k.dy); } }
           this.selection.box = moveBox(this.selection.box, k.dx, k.dy);
+          this.changed(page, false);
+        }
+        this.drawSelection(page);
+        this.showLassoMenu();
+      } else if (k.kind === 'scale') {
+        if (Math.abs(k.k - 1) > 0.01) {
+          this.pushHistory();
+          const b = this.selection.box, ox = b[0] + 10, oy = b[1] + 10;
+          for (const s of this.selection.set) {
+            _dense.delete(s);
+            s.w = Math.round(s.w * k.k * 100) / 100;
+            for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(ox + (s.pts[i] - ox) * k.k); s.pts[i + 1] = round(oy + (s.pts[i + 1] - oy) * k.k); }
+          }
+          this.selection.box = bbox([...this.selection.set]);
+          this.drawPage(page);
           this.changed(page, false);
         }
         this.drawSelection(page);
@@ -393,14 +456,16 @@ export class Paper {
     let hit = false;
     const partial = tool.eraserMode === 'partial';
     for (let i = strokes.length - 1; i >= 0; i--) {
-      const s = strokes[i];
+      const orig = strokes[i];
+      // 점 사이가 먼 획도 지우개가 정확히 닿게, 검사할 때만 촘촘하게 채운 점을 써요 (그리기는 원래 점으로)
+      const s = { ...orig, pts: denseOf(orig) };
       const rr = partial ? r : r + s.w / 2;
       const inside = (j) => { const dx = s.pts[j] - x, dy = s.pts[j + 1] - y; return dx * dx + dy * dy <= rr * rr; };
       let any = false;
       for (let j = 0; j < s.pts.length; j += 3) if (inside(j)) { any = true; break; }
       if (!any) continue;
       hit = true;
-      cur.removed.push(s);
+      cur.removed.push(orig);
       if (!partial) { strokes.splice(i, 1); continue; }
       // 부분 지우기: 지우개에 닿은 점만 빼고 나머지를 조각으로 남겨요
       const pieces = [];
@@ -442,15 +507,23 @@ export class Paper {
     this.showLassoMenu();
   }
 
-  drawSelection(page, dx = 0, dy = 0) {
+  drawSelection(page, dx = 0, dy = 0, k = 1) {
     const sel = this.selection;
     const ctx = this.clearLive(page);
+    const b = sel.box, ox = b[0] + 10, oy = b[1] + 10;
     ctx.save(); ctx.translate(dx, dy);
+    ctx.save(); ctx.translate(ox, oy); ctx.scale(k, k); ctx.translate(-ox, -oy);
     for (const s of sel.set) if (s.tool === 'hl') drawStroke(ctx, s);
     for (const s of sel.set) if (s.tool !== 'hl') drawStroke(ctx, s);
-    const b = sel.box;
-    ctx.setLineDash([6, 5]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4;
-    ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+    ctx.restore();
+    // 상자는 배율만큼 커지되, 선 굵기와 손잡이 크기는 화면 기준으로 일정하게
+    const bx0 = ox + (b[0] - ox) * k, by0 = oy + (b[1] - oy) * k, bx1 = ox + (b[2] - ox) * k, by1 = oy + (b[3] - oy) * k;
+    const u = 1 / this.scale;
+    ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u;
+    ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(bx1, by1, 7 * u, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2 * u; ctx.stroke();
     ctx.restore();
   }
 
@@ -607,24 +680,24 @@ function drawStroke(ctx, s) {
     ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[p.length - 3], p[p.length - 2]); ctx.stroke();
     return;
   }
-  // 굵기가 비슷한 구간끼리 한 번에 그려서 이음매 없이 매끈하게
-  const wOf = (pr) => Math.round(s.w * (0.55 + 0.9 * pr) * 4) / 4;
-  let mx = p[0], my = p[1];
-  let curW = wOf(p[5]);
-  ctx.lineWidth = curW;
-  ctx.beginPath(); ctx.moveTo(mx, my);
+  // 점마다 굵기를 부드럽게 바꾸며 곡선 조각을 이어 그려요 (굵기 계단 없이 매끈하게)
+  const wOf = (pr) => s.w * (0.55 + 0.9 * pr);
+  let mx = p[0], my = p[1], pw = wOf(p[2]);
   for (let i = 1; i < n - 1; i++) {
-    const x = p[i * 3], y = p[i * 3 + 1], w = wOf(p[i * 3 + 2]);
+    const x = p[i * 3], y = p[i * 3 + 1];
     const nx = (x + p[i * 3 + 3]) / 2, ny = (y + p[i * 3 + 4]) / 2;
-    if (w !== curW) { ctx.stroke(); ctx.lineWidth = curW = w; ctx.beginPath(); ctx.moveTo(mx, my); }
-    ctx.quadraticCurveTo(x, y, nx, ny);
+    const w = wOf(p[i * 3 + 2]);
+    ctx.lineWidth = (pw + w) / 2; pw = w;
+    ctx.beginPath(); ctx.moveTo(mx, my); ctx.quadraticCurveTo(x, y, nx, ny); ctx.stroke();
     mx = nx; my = ny;
   }
-  ctx.lineTo(p[p.length - 3], p[p.length - 2]);
-  ctx.stroke();
+  ctx.lineWidth = pw;
+  ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(p[p.length - 3], p[p.length - 2]); ctx.stroke();
 }
 const round = (v) => Math.round(v * 10) / 10;
 // 점 사이가 멀면 사이 점을 채워 넣어요 (부분 지우개가 정확하게 닿도록)
+const _dense = new WeakMap();
+function denseOf(stroke) { let d = _dense.get(stroke); if (!d) { d = densify(stroke.pts); _dense.set(stroke, d); } return d; }
 function densify(p) {
   const out = [p[0], p[1], p[2]];
   for (let i = 3; i < p.length; i += 3) {
