@@ -18,7 +18,7 @@
    - Database Password: **Generate** 눌러 만들고 비밀번호 관리 앱에 저장 (Claude에게 보내지 않기)
    - Region: **Northeast Asia (Seoul)**
    - 요금제: Free
-3. 왼쪽 **SQL Editor** → **New query** → 저장소의 `supabase/schema.sql` 내용을 통째로 붙여 넣고 **Run**
+3. 왼쪽 **SQL Editor** → **New query** → `schema.sql`(프로젝트 파일 `login/schema.sql`, 저장소 `supabase/schema.sql` 같은 내용)을 통째로 붙여 넣고 **Run**
    - "Success. No rows returned"가 나오면 끝. 노트 표, 동의 기록 표, 손글씨 저장소(`ink`), 1인 500MB 제한이 만들어져요.
 4. 왼쪽 **Authentication → URL Configuration**
    - Site URL: `https://dongdong-mjk.github.io/lumenib/`
