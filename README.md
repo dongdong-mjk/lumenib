@@ -53,3 +53,17 @@ fonts/wanted-sans/    Wanted Sans (SIL OFL 1.1)
 python3 -m http.server 8000
 ```
 브라우저에서 http://localhost:8000 을 열어요. 빌드 과정은 없어요.
+
+## 아이패드 앱으로 설치하기 (Capacitor, `capacitor-ios` 브랜치)
+
+웹앱을 그대로 감싼 iPad 앱이에요. 앱은 GitHub Pages 주소를 열기 때문에 웹을 고치면 앱에도 바로 반영돼요.
+앱에서만 되는 것: **애플펜슬 더블탭(2세대·Pro)과 스퀴즈(Pro)로 되돌리기**. 설정 > Apple Pencil에서 더블탭을 '끔'으로 하면 동작하지 않아요.
+
+1. App Store에서 Xcode 설치 → 한 번 실행해서 추가 구성요소 설치
+2. 터미널에서 `./scripts/prepare-ios.sh` (Node 없이 준비)
+3. `open ios/App/App.xcodeproj` → 처음 열면 Capacitor 패키지를 내려받느라 잠깐 기다려요
+4. 왼쪽 App → Signing & Capabilities → Team에서 내 Apple ID(Personal Team) 고르기. 번들 ID가 겹친다고 나오면 끝에 글자를 하나 붙이기
+5. iPad를 케이블로 연결 → 위쪽 기기 목록에서 iPad 고르기 → ▶ 실행
+6. iPad: 설정 > 개인정보 보호 및 보안 > 개발자 모드 켜기(재시동), 설정 > 일반 > VPN 및 기기 관리에서 내 Apple ID 신뢰
+
+무료 Apple ID로 설치한 앱은 7일 뒤에 열리지 않아요. 다시 ▶ 실행하면 7일 연장돼요. 테스터에게 나눠 주려면(TestFlight) 유료 개발자 계정(연 $99)이 필요해요.

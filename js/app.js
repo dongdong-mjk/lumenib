@@ -632,6 +632,15 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     renderToolbar();
   }
 
+  // 아이패드 앱(Capacitor)에서 애플펜슬 더블탭·스퀴즈가 오면 되돌리기 (ios/App/App/SceneDelegate.swift)
+  window.lumenibPencil = (kind) => {
+    const p = ns.paper;
+    if (!p || p.readonly || !p.scrollEl?.isConnected) return false;
+    track('pencil_' + kind + '_undo');
+    if (p.undoStack.length) { p.undo(); toast('되돌렸어요'); } else toast('되돌릴 게 없어요');
+    return true;
+  };
+
   function openTab(id) {
     if (id === main.id) return switchTab(id);
     if (!ns.tabs.includes(id)) ns.tabs.push(id);
