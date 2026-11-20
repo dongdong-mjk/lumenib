@@ -19,6 +19,7 @@ export const icon = {
   search: s('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'),
   calendar: s('<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/>'),
   x: s('<path d="M6 6l12 12M18 6 6 18"/>'),
+  download: s('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
   plus: s('<path d="M12 5v14M5 12h14"/>'),
   undo: s('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
   redo: s('<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),

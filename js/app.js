@@ -45,6 +45,16 @@ function modal(html, bind) {
   return close;
 }
 
+// 필요할 때만 외부 도구를 불러와요 (PDF 만들기)
+const _scripts = {};
+function loadScript(src) {
+  return (_scripts[src] ||= new Promise((ok, fail) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok; s.onerror = () => { delete _scripts[src]; fail(new Error('load ' + src)); };
+    document.head.appendChild(s);
+  }));
+}
+
 function go(screen, arg) {
   cleanup();
   cleanup = () => {};
@@ -641,9 +651,64 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (ex) { ex.remove(); return; }
     const m = document.createElement('div');
     m.className = 'tb-menu';
-    m.innerHTML = `<h6>종이 종류</h6><div class="row">${PAPERS.map(([k, l]) => `<button class="paper-opt ${k === main.paper ? 'on' : ''}" data-p="${k}"><span class="paper-thumb ${k}"></span>${l.replace(' 종이', '')}</button>`).join('')}</div>`;
+    m.innerHTML = `<h6>종이 종류</h6><div class="row">${PAPERS.map(([k, l]) => `<button class="paper-opt ${k === main.paper ? 'on' : ''}" data-p="${k}"><span class="paper-thumb ${k}"></span>${l.replace(' 종이', '')}</button>`).join('')}</div>
+      <button class="menu-item" data-act="pdf">${icon.download || ''}<span>PDF로 내보내기</span></button>`;
     toolbarEl.appendChild(m);
+    m.querySelector('[data-act="pdf"]').addEventListener('click', () => { m.remove(); exportPdf(); });
     m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.touch(main); ns.paper.render(); m.remove(); }));
+  }
+
+  // ---------- PDF 내보내기 ----------
+  // 지금 열린 노트를 쪽마다 그림으로 찍어(본문 · 인용 · 손글씨 그대로) A4 PDF로 만들어요. 기기 밖으로 보내지 않고 기기 안에서 만들어요.
+  let pdfBusy = false;
+  async function exportPdf() {
+    const p = ns.paper;
+    if (!p || pdfBusy) return;
+    pdfBusy = true;
+    track('note_pdf_export');
+    toast('PDF 만드는 중…', 60000);
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      p.clearSelection();
+      const n = p.note;
+      const used = (i) => i === 0 || n.pages[i]?.strokes.length || n.citations.some((c) => c.page === i);
+      const pages = p.pages.filter((pg) => pg && used(pg.i));
+      const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4', compress: true });
+      const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+      for (let i = 0; i < pages.length; i++) {
+        const el = pages[i].el;
+        const shot = await window.html2canvas(el, {
+          scale: Math.min(3, 1400 / el.offsetWidth), backgroundColor: '#ffffff', logging: false,
+          ignoreElements: (x) => x.classList && (x.classList.contains('page-ui') || x.classList.contains('live') || x.classList.contains('lasso-menu')),
+        });
+        if (i) doc.addPage();
+        doc.addImage(shot.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, W, H);
+      }
+      const name = `${n.date || todayISO()} ${(n.title || refList(n) || '설교 노트').replace(/[\\/:*?"<>|]/g, ' ')}.pdf`;
+      const file = new File([doc.output('blob')], name, { type: 'application/pdf' });
+      toast('PDF가 준비됐어요', 1500);
+      modal(`<div class="modal"><h3>PDF가 준비됐어요</h3><p class="desc">${esc(name)} · ${pages.length}쪽</p>
+        <div class="modal-actions"><button class="btn btn-outline" data-a="no">닫기</button><button class="btn btn-primary" data-a="save">저장 · 공유</button></div></div>`, (d, close) => {
+        d.querySelector('[data-a="no"]').addEventListener('click', close);
+        d.querySelector('[data-a="save"]').addEventListener('click', async () => {
+          // iPad는 공유 시트(파일에 저장 · 메일 · 카카오톡 등), 안 되면 내려받기
+          if (navigator.canShare?.({ files: [file] })) {
+            try { await navigator.share({ files: [file], title: name }); close(); return; } catch (e) { if (e.name === 'AbortError') return; }
+          }
+          const url = URL.createObjectURL(file);
+          const a = document.createElement('a');
+          a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+          close();
+        });
+      });
+    } catch (e) {
+      console.error(e);
+      toast('PDF를 만들지 못했어요. 인터넷 연결을 확인해 주세요');
+    } finally {
+      pdfBusy = false;
+    }
   }
 
   let savedT;
