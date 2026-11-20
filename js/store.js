@@ -1,4 +1,5 @@
-// 노트 · 설정 저장 (테스트 기기 브라우저 안에만 저장, 서버 없음)
+// 노트 · 설정 저장. 기기 브라우저(localStorage)에 먼저 저장하고,
+// 로그인하면 cloud.js 가 내 노트(owner = 내 계정)를 서버에 올리고 내려받아요.
 import { uid, todayISO } from './util.js';
 
 const KEY_NOTES = 'lumenib.v1.notes';
@@ -79,8 +80,14 @@ const SEED = [
 
 let userNotes = read(KEY_NOTES, []);
 
-export const allNotes = () => [...userNotes, ...SEED].sort((a, b) => (b.date + (b.updatedAt || '')).localeCompare(a.date + (a.updatedAt || '')));
-export const getNote = (id) => userNotes.find((n) => n.id === id) || SEED.find((n) => n.id === id);
+// 지금 로그인한 계정 (없으면 null = 이 기기에만 저장하는 노트만 보여요)
+let owner = null;
+const visible = (n) => !n.deleted && (owner ? n.owner === owner : !n.owner);
+export const setOwner = (uid) => { owner = uid || null; };
+export const hooks = { changed: () => {} }; // cloud.js 가 채워요
+
+export const allNotes = () => [...userNotes.filter(visible), ...SEED].sort((a, b) => (b.date + (b.updatedAt || '')).localeCompare(a.date + (a.updatedAt || '')));
+export const getNote = (id) => userNotes.find((n) => n.id === id && (owner ? n.owner === owner : !n.owner)) || SEED.find((n) => n.id === id);
 
 export function newNote({ date, title, preacher, passages, paper }) {
   const n = {
@@ -88,8 +95,10 @@ export function newNote({ date, title, preacher, passages, paper }) {
     passages: passages || [], paper: paper || 'lined', pages: [{ strokes: [] }], citations: [],
     createdAt: Date.now(), updatedAt: String(Date.now()), done: false,
   };
+  if (owner) { n.owner = owner; n._dirty = 1; }
   userNotes.unshift(n);
   saveNotes();
+  hooks.changed(n);
   return n;
 }
 
@@ -99,14 +108,50 @@ export function saveNotes(now = false) {
   const run = () => { if (!write(KEY_NOTES, userNotes)) console.warn('저장 공간이 부족해요'); };
   if (now) run(); else saveTimer = setTimeout(run, 400);
 }
-export function touch(note) { note.updatedAt = String(Date.now()); saveNotes(); }
-export function deleteNote(id) { userNotes = userNotes.filter((n) => n.id !== id); saveNotes(true); }
+export function touch(note) {
+  if (note.seed) return;
+  note.updatedAt = String(Date.now());
+  if (note.owner) note._dirty = 1;
+  saveNotes();
+  hooks.changed(note);
+}
+export function deleteNote(id) {
+  const n = userNotes.find((x) => x.id === id && (owner ? x.owner === owner : !x.owner));
+  if (!n) return;
+  if (n.owner) { // 서버에도 지웠다고 알려야 해서 표시만 남겨요
+    Object.assign(n, { deleted: true, pages: [{ strokes: [] }], citations: [], updatedAt: String(Date.now()), _dirty: 1 });
+    hooks.changed(n);
+  } else userNotes = userNotes.filter((x) => x !== n);
+  saveNotes(true);
+}
 
+// 로그인 안 한 상태의 노트만 지워요 (로그인한 계정의 노트는 서버에 있어서 그대로)
 export function resetAll() {
-  userNotes = [];
-  localStorage.removeItem(KEY_NOTES);
+  userNotes = userNotes.filter((n) => n.owner);
+  saveNotes(true);
   localStorage.removeItem(KEY_RECENT);
 }
+
+// ---------- 서버 동기화용 (cloud.js) ----------
+export const ownedBy = (uid) => userNotes.filter((n) => n.owner === uid);
+export const unownedCount = () => userNotes.filter((n) => !n.owner && !n.deleted).length;
+// 로그인 전에 이 기기에서 쓴 노트를 내 계정으로 옮겨요 (동의 화면에서 알려 줌)
+export function adoptUnowned(uid) {
+  let k = 0;
+  userNotes.forEach((n) => { if (!n.owner) { n.owner = uid; n._dirty = 1; k++; } });
+  if (k) saveNotes(true);
+  return k;
+}
+// 서버에서 받은 노트로 바꾸거나 새로 넣어요
+export function putRemote(uid, note) {
+  note.owner = uid;
+  delete note._dirty;
+  const i = userNotes.findIndex((n) => n.id === note.id && n.owner === uid);
+  if (i >= 0) userNotes[i] = note; else userNotes.push(note);
+}
+export function removeLocal(uid, id) { userNotes = userNotes.filter((n) => !(n.id === id && n.owner === uid)); }
+// 로그아웃하면 그 계정 노트는 이 기기에서 빼요 (서버에 그대로 있어요)
+export function dropOwner(uid) { userNotes = userNotes.filter((n) => n.owner !== uid); saveNotes(true); }
 
 // ---------- 설정 ----------
 export const settings = Object.assign({ theme: 'dark', fingerDraw: false, verseSize: 16 }, read(KEY_SET, {}));

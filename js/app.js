@@ -6,12 +6,14 @@ import * as S from './store.js';
 import { Paper, tool, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
 import { screen as trackScreen, track, isTracking } from './analytics.js';
+import * as C from './cloud.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay-root');
 let cleanup = () => {};
 let reading = [];
 let lastLocation = null; // 본문 고르기에서 마지막으로 본 곳
+let curScreen = null;
 
 const PAPERS = [['lined', '줄 종이'], ['blank', '빈 종이'], ['grid', '모눈 종이'], ['dot', '점 종이']];
 const OUT_OF_SCOPE = '1차 테스트에서는 아직 열 수 없어요';
@@ -60,6 +62,8 @@ function go(screen, arg) {
   cleanup = () => {};
   overlay.innerHTML = '';
   document.body.classList.toggle('noting', screen === 'note');
+  curScreen = screen;
+  if (screen === 'home' && C.currentUser() && Date.now() - C.syncStatus().lastSync > 30000) C.sync();
   trackScreen(screen === 'note' && arg?.noteId ? 'note_view' : screen);
   ({ home: Home, pick: Pick, note: NoteScreen })[screen](arg);
 }
@@ -192,15 +196,78 @@ function fitHome() {
   inner.style.transform = z === 1 ? '' : `scale(${z})`;
 }
 
+function accountHTML() {
+  if (!C.enabled) return '';
+  const u = C.currentUser();
+  if (!u) {
+    return `<button class="toggle-row" data-act="login"><span>로그인하고 노트 보관하기<small class="toggle-sub">기기를 바꾸거나 테스트가 끝나도 내가 쓴 노트가 남아요</small></span>${icon.chevRight}</button>`;
+  }
+  const st = C.syncStatus();
+  const ago = st.lastSync ? relTime(st.lastSync) : '';
+  const line = {
+    syncing: '서버에 올리는 중…',
+    ok: st.pending ? `올릴 노트 ${st.pending}편 대기 중` : `서버에 보관됨${ago ? ' · ' + ago : ''}`,
+    offline: '인터넷 연결이 없어요. 이 기기에 저장해 두고 연결되면 올려요',
+    error: '서버에 올리지 못했어요. 이 기기에는 저장돼 있어요',
+    quota: '보관 용량(500MB)이 다 찼어요. 이 기기에만 저장돼요',
+    off: '',
+  }[st.status];
+  return `<div class="toggle-row acct"><span>${esc(C.displayName())}<small class="toggle-sub">${C.providerName() ? C.providerName() + ' 로그인 · ' : ''}<span data-sync>${line}</span></small></span>
+      <button class="btn btn-outline" data-act="sync">지금 맞추기</button></div>
+    <button class="toggle-row" data-act="logout">로그아웃<small class="toggle-sub">이 기기에서만 노트가 빠지고, 서버에는 그대로 남아요</small></button>
+    <button class="toggle-row" data-act="delacct" style="color:var(--accent-mid)">계정과 보관한 노트 모두 지우기</button>`;
+}
+function relTime(ms) {
+  const m = Math.floor((Date.now() - ms) / 60000);
+  if (m < 1) return '방금'; if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60); return h < 24 ? `${h}시간 전` : `${Math.floor(h / 24)}일 전`;
+}
+
 function openSettings() {
-  modal(`<div class="modal sheet">
+  const loggedIn = !!C.currentUser();
+  const close0 = modal(`<div class="modal sheet">
     <h3>설정</h3>
+    ${accountHTML()}
     <div class="toggle-row">화면 모드 <div class="seg2"><button data-th="dark" class="${S.settings.theme === 'dark' ? 'on' : ''}">다크</button><button data-th="light" class="${S.settings.theme === 'light' ? 'on' : ''}">라이트</button></div></div>
     <button class="toggle-row" data-act="finger"><span>손가락으로도 필기하기<small class="toggle-sub">애플펜슬이 없을 때 켜요. 켜면 두 손가락으로 스크롤해요.</small></span> <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>
-    <button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기</button>
+    ${loggedIn ? '' : `<button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기</button>`}
     <div class="about"><div class="logo"></div>1차 사용성 테스트 버전 · 성경 본문: 개역한글 (대한성서공회)<br>사용 기록(Clarity): ${isTracking() ? '켜짐' : '꺼짐'}</div>
     <div class="modal-actions"><button class="btn btn-primary" data-act="close">닫기</button></div>
   </div>`, (d, close) => {
+    const off = C.on((what) => {
+      if (!d.isConnected) { off(); return; }
+      if (what === 'user') { close(); openSettings(); }
+      else if (what === 'status') { // 보관 상태 글자만 바꿔요
+        const fresh = document.createElement('div'); fresh.innerHTML = accountHTML();
+        const n = fresh.querySelector('[data-sync]'), o = d.querySelector('[data-sync]');
+        if (n && o) o.textContent = n.textContent;
+      }
+    });
+    d.querySelector('[data-act="login"]')?.addEventListener('click', () => { close(); openLogin(); });
+    d.querySelector('[data-act="sync"]')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget; btn.disabled = true; await C.sync(); btn.disabled = false;
+    });
+    d.querySelector('[data-act="logout"]')?.addEventListener('click', async () => {
+      close();
+      if (await C.signOut()) { go('home'); toast('로그아웃했어요'); return; }
+      modal(`<div class="modal"><h3>아직 서버에 못 올린 노트가 있어요</h3><p class="desc">지금 로그아웃하면 그 노트의 마지막 내용이 사라질 수 있어요. 인터넷 연결을 확인하고 다시 해 주세요.</p>
+        <div class="modal-actions"><button class="btn btn-outline" data-a="force">그래도 로그아웃</button><button class="btn btn-primary" data-a="no">취소</button></div></div>`, (d2, close2) => {
+        d2.querySelector('[data-a="no"]').addEventListener('click', close2);
+        d2.querySelector('[data-a="force"]').addEventListener('click', async () => { close2(); await C.signOut({ force: true }); go('home'); toast('로그아웃했어요'); });
+      });
+    });
+    d.querySelector('[data-act="delacct"]')?.addEventListener('click', () => {
+      close();
+      modal(`<div class="modal"><h3>계정과 노트를 모두 지울까요?</h3><p class="desc">서버에 보관한 노트와 로그인 정보가 모두 지워지고, 이 기기에서도 빠져요. 되돌릴 수 없어요. 필요한 노트는 먼저 PDF로 내보내 주세요.</p>
+        <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">모두 지우기</button></div></div>`, (d2, close2) => {
+        d2.querySelector('[data-a="no"]').addEventListener('click', close2);
+        d2.querySelector('[data-a="yes"]').addEventListener('click', async (e) => {
+          e.currentTarget.disabled = true;
+          try { await C.deleteAccount(); close2(); go('home'); toast('계정과 노트를 모두 지웠어요'); }
+          catch (err) { console.warn(err); close2(); toast('지우지 못했어요. 인터넷 연결을 확인해 주세요', 3000); }
+        });
+      });
+    });
     d.querySelectorAll('[data-th]').forEach((b) => b.addEventListener('click', () => {
       S.settings.theme = b.dataset.th; S.saveSettings(); applyTheme();
       d.querySelectorAll('[data-th]').forEach((x) => x.classList.toggle('on', x === b));
@@ -209,7 +276,7 @@ function openSettings() {
       S.settings.fingerDraw = !S.settings.fingerDraw; S.saveSettings();
       e.currentTarget.querySelector('.switch').classList.toggle('on', S.settings.fingerDraw);
     });
-    d.querySelector('[data-act="reset"]').addEventListener('click', () => {
+    d.querySelector('[data-act="reset"]')?.addEventListener('click', () => {
       close();
       modal(`<div class="modal"><h3>테스트 기록을 지울까요?</h3><p class="desc">이 기기에서 쓴 노트가 모두 지워지고, 미리 넣어 둔 예시 노트만 남아요.</p>
         <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">지우기</button></div></div>`, (d2, close2) => {
@@ -218,6 +285,92 @@ function openSettings() {
       });
     });
     d.querySelector('[data-act="close"]').addEventListener('click', close);
+  });
+  return close0;
+}
+
+// ---------- 로그인 · 보관 안내 ----------
+// 보관 안내 문구 (로그인 전 창과 로그인 뒤 확인 창이 같이 써요)
+function consentHTML(localCount) {
+  return `<ul class="consent">
+    <li>로그인하면 이 앱에서 쓴 노트(손글씨, 제목, 설교자, 본문, 날짜)가 서버(Supabase)에 보관돼요.</li>
+    <li>보관 기간: ${esc(C.consentInfo.KEEP_UNTIL)}. 그 전에라도 설정에서 언제든 모두 지울 수 있어요.</li>
+    <li>노트는 내 계정으로만 열려요. 노트 내용은 테스트 분석에 쓰지 않고, 운영자는 노트 수와 용량만 확인해요.</li>
+    <li>로그인에는 이메일과 이름(구글·카카오가 알려 주는 것)만 써요.</li>
+    ${localCount ? `<li>이 기기에서 이미 쓴 노트 ${localCount}편도 함께 보관돼요.</li>` : ''}
+  </ul>`;
+}
+
+function askConsentAfterLogin({ localCount }) {
+  return new Promise((resolve) => {
+    modal(`<div class="modal"><h3>노트 보관 안내</h3>${consentHTML(localCount)}
+      <div class="modal-actions"><button class="btn btn-outline" data-a="no">동의 안 함</button><button class="btn btn-primary" data-a="yes">동의하고 보관</button></div></div>`, (d, close) => {
+      d.addEventListener('click', (e) => { if (e.target === d) resolve(false); });
+      d.querySelector('[data-a="no"]').addEventListener('click', () => { close(); resolve(false); });
+      d.querySelector('[data-a="yes"]').addEventListener('click', () => { close(); resolve(true); });
+    });
+  });
+}
+
+function openLogin() {
+  const L = C.loginOptions;
+  const native = C.isNativeApp();
+  const google = L.google && !native; // 구글은 앱 안 화면(WebView)에서 로그인을 막아요
+  modal(`<div class="modal login">
+    <h3>내 노트를 보관할까요?</h3>
+    ${consentHTML(S.unownedCount())}
+    <label class="agree"><input type="checkbox" data-a="agree"><span>위 내용을 확인했고 동의해요</span></label>
+    <div class="login-btns">
+      ${google ? `<button class="btn btn-l btn-outline" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>` : ''}
+      ${L.kakao ? `<button class="btn btn-l btn-outline" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>` : ''}
+      ${L.email ? `<button class="btn btn-l btn-outline" data-a="email" disabled>이메일로 코드 받기</button>
+      <div class="email-box" hidden>
+        <div class="field"><label>이메일</label><input type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" data-f="email"></div>
+        <div class="field" hidden><label>메일로 받은 숫자</label><input inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6자리 숫자" data-f="code"></div>
+        <button class="btn btn-l btn-primary" data-a="send">코드 보내기</button>
+      </div>` : ''}
+    </div>
+    ${native && L.google ? '<p class="login-note">구글 로그인은 Safari에서 열었을 때만 돼요.</p>' : ''}
+    <div class="modal-actions"><button class="btn btn-outline" data-a="close">나중에</button></div>
+  </div>`, (d, close) => {
+    const off = C.on((w) => { if (w === 'user' && C.currentUser()) { off(); close(); go('home'); } });
+    const agree = d.querySelector('[data-a="agree"]');
+    agree.addEventListener('change', () => d.querySelectorAll('[data-p], [data-a="email"]').forEach((b) => { b.disabled = !agree.checked; }));
+    d.querySelector('[data-a="close"]').addEventListener('click', close);
+    d.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', async () => {
+      track('login_' + b.dataset.p);
+      b.disabled = true;
+      try { await C.signInWith(b.dataset.p); } // 로그인 화면으로 넘어가요
+      catch (e) { console.warn(e); b.disabled = false; toast('로그인 창을 열지 못했어요', 2600); }
+    }));
+    const box = d.querySelector('.email-box');
+    d.querySelector('[data-a="email"]')?.addEventListener('click', (e) => { e.currentTarget.hidden = true; box.hidden = false; box.querySelector('[data-f="email"]').focus(); });
+    let sentTo = null;
+    d.querySelector('[data-a="send"]')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const email = box.querySelector('[data-f="email"]').value.trim();
+      const codeF = box.querySelector('[data-f="code"]');
+      btn.disabled = true;
+      try {
+        if (!sentTo) {
+          if (!/^\S+@\S+\.\S+$/.test(email)) { toast('이메일 주소를 확인해 주세요'); return; }
+          await C.sendEmailCode(email);
+          sentTo = email;
+          codeF.parentElement.hidden = false; codeF.focus();
+          btn.textContent = '로그인';
+          toast('메일로 숫자를 보냈어요. 메일함을 확인해 주세요', 3000);
+        } else {
+          const code = codeF.value.replace(/\D/g, '');
+          if (code.length < 6) { toast('메일로 받은 숫자를 넣어 주세요'); return; }
+          await C.verifyEmailCode(sentTo, code);
+          close();
+        }
+      } catch (err) {
+        console.warn(err);
+        const m = String(err?.message || '');
+        toast(/rate|limit|seconds/i.test(m) ? '잠시 뒤에 다시 보내 주세요' : sentTo ? '숫자가 맞지 않거나 시간이 지났어요' : '메일을 보내지 못했어요', 3000);
+      } finally { btn.disabled = false; }
+    });
   });
 }
 
@@ -919,7 +1072,11 @@ async function main() {
   const t0 = Date.now();
   await B.loadIndex();
   reading = S.readingSeed(B.books().map((b) => b.verses.length));
+  C.ui.toast = toast;
+  C.ui.askConsent = askConsentAfterLogin;
+  C.on((what) => { if ((what === 'notes' || what === 'user') && curScreen === 'home' && !overlay.querySelector('.dim')) go('home'); });
   go('home');
+  C.init().catch((e) => console.warn('[cloud] init', e)); // 로그인돼 있으면 서버 노트를 받아 와요 (홈은 먼저 보여 줘요)
   if (window.__trackMsg) setTimeout(() => toast(window.__trackMsg), 600);
   const wait = Math.max(0, 900 - (Date.now() - t0));
   setTimeout(() => document.getElementById('splash').classList.add('hide'), wait);
