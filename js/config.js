@@ -11,6 +11,6 @@ export const EMAIL_MODE = 'link';
 
 // 첫 로그인 때 보여 주는 보관 안내 (바꾸면 VERSION도 올려요 → 다음 로그인 때 다시 동의 받아요)
 export const CONSENT = {
-  VERSION: '2026-11-20',
-  KEEP_UNTIL: '정식 앱이 나오면 옮겨 드릴 때까지, 늦어도 2027년 12월 31일까지',
+  VERSION: '2026-11-21',
+  KEEP_UNTIL: '2027년 12월 31일까지예요. 그 전에 정식 앱이 나오면 정식 앱으로 옮겨 드려요.',
 };

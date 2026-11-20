@@ -293,18 +293,19 @@ function openSettings() {
 // 보관 안내 문구 (로그인 전 창과 로그인 뒤 확인 창이 같이 써요)
 function consentHTML(localCount) {
   return `<ul class="consent">
-    <li>로그인하면 이 앱에서 쓴 노트(손글씨, 제목, 설교자, 본문, 날짜)가 서버(Supabase)에 보관돼요.</li>
-    <li>보관 기간: ${esc(C.consentInfo.KEEP_UNTIL)}. 그 전에라도 설정에서 언제든 모두 지울 수 있어요.</li>
-    <li>노트는 내 계정으로만 열려요. 노트 내용은 테스트 분석에 쓰지 않고, 운영자는 노트 수와 용량만 확인해요.</li>
-    <li>로그인에는 이메일과 이름(구글·카카오가 알려 주는 것)만 써요.</li>
+    <li>이 앱에서 쓴 노트(손글씨, 제목, 설교자, 본문, 날짜)를 서버에 보관해요.</li>
+    <li>보관 기간은 ${esc(C.consentInfo.KEEP_UNTIL)}</li>
+    <li>노트는 내 계정으로만 열려요. 운영자는 노트 수와 용량만 확인해요.</li>
+    <li>설정에서 언제든 모두 지울 수 있어요.</li>
+    <li>로그인에는 이메일과 이름만 써요.</li>
     ${localCount ? `<li>이 기기에서 이미 쓴 노트 ${localCount}편도 함께 보관돼요.</li>` : ''}
   </ul>`;
 }
 
 function askConsentAfterLogin({ localCount }) {
   return new Promise((resolve) => {
-    modal(`<div class="modal"><h3>노트 보관 안내</h3>${consentHTML(localCount)}
-      <div class="modal-actions"><button class="btn btn-outline" data-a="no">동의 안 함</button><button class="btn btn-primary" data-a="yes">동의하고 보관</button></div></div>`, (d, close) => {
+    modal(`<div class="modal"><h3>노트 보관 안내</h3><p class="sub">계속 쓰려면 아래 내용에 동의해 주세요</p>${consentHTML(localCount)}
+      <div class="modal-col"><button class="btn btn-l btn-primary" data-a="yes">동의하고 보관</button><button class="btn btn-l btn-text" data-a="no">동의 안 함</button></div></div>`, (d, close) => {
       d.addEventListener('click', (e) => { if (e.target === d) resolve(false); });
       d.querySelector('[data-a="no"]').addEventListener('click', () => { close(); resolve(false); });
       d.querySelector('[data-a="yes"]').addEventListener('click', () => { close(); resolve(true); });
@@ -321,8 +322,9 @@ function openLogin() {
   const email = L.email && !(linkMode && (native || C.isStandalone()));
   modal(`<div class="modal login">
     <h3>내 노트를 보관할까요?</h3>
+    <p class="sub">로그인하면 기기를 바꾸거나 테스트가 끝나도 노트가 남아요</p>
     ${consentHTML(S.unownedCount())}
-    <label class="agree"><input type="checkbox" data-a="agree"><span>위 내용을 확인했고 동의해요</span></label>
+    <label class="agree"><input type="checkbox" class="cbx" data-a="agree"><span>위 내용을 확인했고 동의해요</span></label>
     <div class="login-btns">
       ${google ? `<button class="btn btn-l btn-outline" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>` : ''}
       ${L.kakao ? `<button class="btn btn-l btn-outline" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>` : ''}
@@ -335,7 +337,7 @@ function openLogin() {
       </div>` : ''}
     </div>
     ${(L.google && !google) || (L.email && !email) ? `<p class="login-note">${[L.google && !google ? '구글' : '', L.email && !email ? '이메일' : ''].filter(Boolean).join('·')} 로그인은 Safari에서 주소를 열었을 때만 돼요.</p>` : ''}
-    <div class="modal-actions"><button class="btn btn-outline" data-a="close">나중에</button></div>
+    <button class="btn btn-l btn-text later" data-a="close">나중에</button>
   </div>`, (d, close) => {
     const off = C.on((w) => { if (w === 'user' && C.currentUser()) { off(); close(); go('home'); } });
     const agree = d.querySelector('[data-a="agree"]');
