@@ -758,7 +758,18 @@ final class WebInkOverlay: UIView {
         return l
     }
     /// 웹이 다 그렸다고 알려 주면 가장 오래된 남겨 둔 획을 지워요
-    func dropOldestPending() { if !pending.isEmpty { remove(pending.removeFirst()) } }
+    func dropOldestPending() {
+        guard !pending.isEmpty else { return }
+        let l = pending.removeFirst()
+        // 형광펜은 반투명이라 웹 획과 겹치는 순간 진해졌다 옅어져서 깜빡여 보였어요. 아주 짧게 흐려지며 사라지게 해요
+        if l.compositingFilter != nil {
+            CATransaction.begin()
+            CATransaction.setCompletionBlock { l.removeFromSuperlayer() }
+            let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = 1; a.toValue = 0; a.duration = 0.12
+            l.opacity = 0; l.add(a, forKey: "fade")
+            CATransaction.commit()
+        } else { remove(l) }
+    }
     func drop(_ l: CAShapeLayer) { if let i = pending.firstIndex(of: l) { pending.remove(at: i); remove(l) } }
     private func remove(_ l: CAShapeLayer) {
         CATransaction.begin(); CATransaction.setDisableActions(true); l.removeFromSuperlayer(); CATransaction.commit()

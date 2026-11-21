@@ -987,7 +987,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     const ok = !!ns.paper?.addExternalStroke(pts);
     if (ok) track('native_ink_stroke');
     // 웹이 새 획을 실제로 화면에 그린 다음(두 프레임 뒤)에 네이티브가 임시 선을 지우게 알려요. 바로 지우면 한 번 깜빡였어요
-    if (ok) requestAnimationFrame(() => requestAnimationFrame(() => nativeInk?.postMessage({ action: 'inkDrawn' })));
+    // 형광펜은 겹치면 진해 보여서 한 프레임만 기다려요 (네이티브가 짧게 흐려지며 지워요)
+    const post = () => nativeInk?.postMessage({ action: 'inkDrawn' });
+    if (ok) requestAnimationFrame(() => (tool.type === 'hl' ? post() : requestAnimationFrame(post)));
     return ok;
   };
   if (nativeInk) {
