@@ -89,6 +89,8 @@ export class Paper {
           if (o && Math.hypot(t.clientX - o[1], t.clientY - o[2]) > 12) this._tap2.ok = false;
         }
       }
+      if (window.__nativeInk && e.touches.length >= 2 && e.type === 'touchstart') console.log('[pinch] touchstart 2 cancelable=' + e.cancelable);
+      if (window.__nativeInk && e.touches.length >= 2 && e.type === 'touchmove' && !this._pan) console.log('[pinch] move2 cancelable=' + e.cancelable);
       if (e.touches.length >= 2) {
         e.preventDefault();
         const [a, b] = e.touches;
