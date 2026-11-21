@@ -89,7 +89,6 @@ export class Paper {
           if (o && Math.hypot(t.clientX - o[1], t.clientY - o[2]) > 12) this._tap2.ok = false;
         }
       }
-      if (window.__nativeInk && e.touches.length >= 2 && e.type === 'touchstart') console.log('[pinch] start n=' + e.touches.length); // 임시 기록
       if (e.touches.length >= 2) {
         e.preventDefault();
         const [a, b] = e.touches;
@@ -419,7 +418,7 @@ export class Paper {
     let cur = null; // 진행 중인 동작
     const accept = (e) => {
       // iPad 앱에서 네이티브 필기를 켜 두면 애플펜슬 펜·형광펜은 네이티브가 그려서 넘겨줘요 (addExternalStroke)
-      if (window.__nativeInk && e.pointerType === 'pen' && (tool.type === 'pen' || tool.type === 'hl')) return false;
+      if (window.__nativeInk && e.pointerType === 'pen' && e.pointerId !== 77) return false; // 진짜 펜슬은 네이티브가 받아서 그리거나 중계(77)해요
       return e.pointerType !== 'touch' || (this.fingerDraw && !this._pan);
     };
     // 두 손가락 스크롤이 시작되면 손가락으로 쓰던 획은 버려요

@@ -280,56 +280,29 @@ final class InkWindow: UIWindow {
         return SIMD3(Double(p.x), Double(p.y), min(1, max(0.05, f)))
     }
 
-    // 펜슬로 쓰는 동안 손바닥·손가락이 새로 닿으면, 그 터치의 시작은 웹에 안 갔어요.
-    // 그 뒤 움직임·떼기만 웹에 가면 웹이 터치 상태를 잘못 알아서 확대(두 손가락)가 멈췄어요. 그런 터치는 끝까지 웹에 안 보내요.
-    private var swallowed = Set<UITouch>() // 터치 자체를 기억 (번호로 기억하면 새 터치가 같은 번호를 받아 잘못 삼켜졌어요)
-
+    // 펜슬 터치는 여기서 보고 네이티브로 그리지만, 이벤트 자체는 항상 웹에도 그대로 보내요.
+    // (예전엔 웹에 안 보냈더니 웹이 터치 상태를 잘못 기억해서 손가락 확대·버튼이 멈췄어요.
+    //  웹은 네이티브가 그리는 동안 진짜 펜슬 입력을 무시해요: js/ink.js accept)
     override func sendEvent(_ event: UIEvent) {
-        if event.type == .touches, let a = event.allTouches, a.contains(where: { $0.type == .direct && $0.phase == .began }) { print("[touch] began fingers=\(a.filter { $0.type == .direct }.count) swallowed=\(swallowed.count) tracked=\(tracked != nil)") } // 임시 기록
-        guard event.type == .touches, let b = bridge, let web = b.webView, let all = event.allTouches else { return super.sendEvent(event) }
-        let pencil = all.first(where: { $0.type == .pencil })
-        if let t = tracked, let pencil, t === pencil {
-            for f in all where f.type != .pencil && f.phase == .began { swallowed.insert(f) }
-            switch pencil.phase {
-            case .moved, .stationary:
-                b.inkMove((event.coalescedTouches(for: pencil) ?? [pencil]).map { point($0, in: web) },
-                          (event.predictedTouches(for: pencil) ?? []).map { point($0, in: web) })
-            case .ended:
-                b.inkMove([point(pencil, in: web)], [])
-                b.inkEnd(); tracked = nil
-            case .cancelled:
-                b.inkCancel(); tracked = nil
-            default: break
+        if event.type == .touches, let b = bridge, let web = b.webView, let all = event.allTouches,
+           let pencil = all.first(where: { $0.type == .pencil }) {
+            if let t = tracked, t === pencil {
+                switch pencil.phase {
+                case .moved, .stationary:
+                    b.inkMove((event.coalescedTouches(for: pencil) ?? [pencil]).map { point($0, in: web) },
+                              (event.predictedTouches(for: pencil) ?? []).map { point($0, in: web) })
+                case .ended:
+                    b.inkMove([point(pencil, in: web)], [])
+                    b.inkEnd(); tracked = nil
+                case .cancelled:
+                    b.inkCancel(); tracked = nil
+                default: break
+                }
+            } else if pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
+                tracked = pencil
+                b.inkBegin(point(pencil, in: web))
             }
-            passFingers(event, all)
-            forget(all)
-            return // 이 펜슬 획은 웹으로 보내지 않아요
         }
-        if let pencil, pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
-            tracked = pencil
-            for f in all where f.type != .pencil && f.phase == .began { swallowed.insert(f) }
-            b.inkBegin(point(pencil, in: web))
-            passFingers(event, all)
-            return
-        }
-        // 웹이 시작을 못 본 손가락 터치만 움직이는 이벤트면 그대로 삼켜요
-        if !swallowed.isEmpty {
-            let changing = all.filter { $0.phase != .stationary }
-            if !changing.isEmpty && changing.allSatisfy({ swallowed.contains($0) }) { forget(all); return }
-        }
-        forget(all)
         super.sendEvent(event)
-    }
-
-    // 펜슬보다 먼저 닿아 있던 손가락(손바닥)은 웹이 시작을 이미 봤어요. 그 손가락이 떼어질 때 웹에 꼭 알려야
-    // 웹이 "손가락이 아직 있다"고 착각하지 않아요(그러면 다음 두 손가락 확대가 막혔어요). 그래서 이벤트를 웹에도 보내요.
-    // (펜슬 획은 웹이 시작을 못 봐서 웹은 무시해요)
-    private func passFingers(_ event: UIEvent, _ all: Set<UITouch>) {
-        if all.contains(where: { $0.type != .pencil && !swallowed.contains($0) }) { super.sendEvent(event) }
-    }
-
-    private func forget(_ all: Set<UITouch>) {
-        // 화면에 없는 터치와 끝난 터치는 잊어요 (남아 있으면 다음 손가락 터치가 웹에 안 가요)
-        swallowed = swallowed.intersection(all).filter { $0.phase != .ended && $0.phase != .cancelled }
     }
 }
