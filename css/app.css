@@ -292,7 +292,8 @@ svg { display: block; }
 button { touch-action: manipulation; }
 .page canvas { position: absolute; left: 0; top: 0; touch-action: inherit; }
 .page canvas.bg { pointer-events: none; }
-.page canvas:not(.bg) { mix-blend-mode: multiply; } /* 형광펜이 본문 글자 위가 아니라 밑에 깔린 것처럼 보이게 */
+.page canvas:not(.bg):not(.ink):not(.live) { mix-blend-mode: multiply; } /* 형광펜만: 본문 글자 위가 아니라 밑에 깔린 것처럼. 펜 글씨(.ink)는 그대로 (종이 줄이 비치지 않게) */
+.page canvas.ink { pointer-events: none; }
 .page-inner { z-index: 0; }
 .page canvas.bg { z-index: -1; }
 .page-ui { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; pointer-events: none; z-index: 3; }

@@ -192,14 +192,18 @@ export class Paper {
     const ui = document.createElement('div');
     ui.className = 'page-ui';
     ui.style.height = PAGE_H + 'px';
+    // base = 형광펜(곱하기로 본문 글자 밑에 깔린 것처럼), ink = 펜 글씨(그대로, 종이 줄이 비치지 않게), live = 쓰는 중인 획
     const base = document.createElement('canvas');
+    const ink = document.createElement('canvas');
+    ink.className = 'ink';
     const live = document.createElement('canvas');
     live.className = 'live';
     pageEl.appendChild(base);
+    pageEl.appendChild(ink);
     pageEl.appendChild(live);
     pageEl.appendChild(ui);
     this.pagesEl.appendChild(pageEl);
-    const page = { i, el: pageEl, inner, ui, bg, base, live, linesTop: 10 };
+    const page = { i, el: pageEl, inner, ui, bg, base, ink, live, linesTop: 10 };
     this.pages[i] = page;
     if (i === 0) this.renderPassage(page);
     this.renderCitations(page);
@@ -303,7 +307,7 @@ export class Paper {
       p.el.style.width = w + 'px';
       p.el.style.height = h + 'px';
       p.inner.style.transform = p.ui.style.transform = `scale(${this.scale})`;
-      for (const c of [p.bg, p.base, p.live]) {
+      for (const c of [p.bg, p.base, p.ink, p.live]) {
         c.width = Math.round(w * dpr);
         c.height = Math.round(h * dpr);
         c.style.width = w + 'px';
@@ -348,12 +352,13 @@ export class Paper {
   }
 
   drawPage(page) {
-    const ctx = this.ctxFor(page.base, page);
+    const ctx = this.ctxFor(page.base, page), ictx = this.ctxFor(page.ink, page);
     ctx.clearRect(0, 0, PAGE_W, PAGE_H);
+    ictx.clearRect(0, 0, PAGE_W, PAGE_H);
     const strokes = this.note.pages[page.i].strokes;
     const sel = this.selection && this.selection.page === page.i ? this.selection : null;
     for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s))) drawStroke(ctx, s);
-    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s))) drawStroke(ctx, s);
+    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s))) drawStroke(ictx, s);
     this.clearLive(page);
     if (sel) this.drawSelection(page);
   }
