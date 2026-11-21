@@ -107,6 +107,8 @@ export class Paper {
         }
       }
     };
+    this._onScroll = () => { cancelAnimationFrame(this._citeRaf); this._citeRaf = requestAnimationFrame(() => this.placeCiteUis()); };
+    scrollEl.addEventListener('scroll', this._onScroll, { passive: true });
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchmove', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchend', this._touchEnd);
@@ -116,6 +118,7 @@ export class Paper {
   destroy() {
     this._ro.disconnect();
     this.scrollEl.removeEventListener('touchstart', this._touchBlock);
+    this.scrollEl.removeEventListener('scroll', this._onScroll);
     this.scrollEl.removeEventListener('touchmove', this._touchBlock);
     this.scrollEl.removeEventListener('touchend', this._touchEnd);
     this.scrollEl.removeEventListener('touchcancel', this._touchEnd);
@@ -232,6 +235,7 @@ export class Paper {
   renderCitations(page) {
     page.inner.querySelectorAll('.cite-block').forEach((e) => e.remove());
     page.ui.querySelectorAll('.cite-ui').forEach((e) => e.remove());
+    requestAnimationFrame(() => this.placeCiteUis());
     this.note.citations.filter((c) => c.page === page.i).forEach((c) => {
       const el = document.createElement('div');
       el.className = 'cite-block';
@@ -297,7 +301,7 @@ export class Paper {
 
   layout() {
     if (!this.pages) return;
-    queueMicrotask(() => this.onLayout?.());
+    queueMicrotask(() => { this.onLayout?.(); this.placeCiteUis(); });
     const avail = this.scrollEl.clientWidth - 40;
     const w = Math.round(Math.max(320, Math.min(avail, 1100)) * (this.zoom || 1));
     this.scale = w / PAGE_W;
@@ -452,7 +456,7 @@ export class Paper {
         } else if (cur.kind === 'lasso') {
           cur.pts.push(x, y);
         } else if (cur.kind === 'move') {
-          cur.dx = x - cur.x0; cur.dy = y - cur.y0;
+          cur.dx = this.selection?.cites?.size ? 0 : x - cur.x0; cur.dy = y - cur.y0; // 인용이 섞이면 위아래로만 (인용은 가로로 안 움직여요)
         } else if (cur.kind === 'scale') {
           const h = cur.h, clamp = (v) => Math.max(0.2, Math.min(5, v));
           const fx = h.dx ? clamp((x - h.ax) / (h.x - h.ax)) : 1;
@@ -602,6 +606,19 @@ export class Paper {
     this.selection = { page: page.i, set, cites, box };
     this.drawPage(page);
     this.showLassoMenu();
+  }
+
+  // 인용 옮기기·빼기 아이콘은 화면에 보이는 오른쪽 끝에 붙여요 (확대해서 인용 오른쪽이 화면 밖이어도 보이게)
+  placeCiteUis() {
+    const sr = this.scrollEl.getBoundingClientRect();
+    for (const p of this.pages || []) {
+      if (!p) continue;
+      const pr = p.el.getBoundingClientRect();
+      if (pr.bottom < sr.top || pr.top > sr.bottom) continue;
+      const visRight = Math.min(pr.right, sr.right - 8);
+      const right = Math.max(22, PAGE_W - (visRight - pr.left) / this.scale + 22);
+      for (const u of p.ui.querySelectorAll('.cite-ui')) u.style.right = right + 'px';
+    }
   }
 
   // 인용 블록이 종이에서 차지하는 상자 (종이 단위)
