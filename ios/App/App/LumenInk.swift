@@ -604,6 +604,7 @@ final class LumenPenSettingsViewController: UIViewController {
 struct WebInkConfig {
     var enabled = false
     var tool: LumenStroke.Tool = .pen
+    var relay = false          // 지우개 · 올가미: 네이티브는 그리지 않고 펜슬 움직임만 웹에 넘겨요
     var color = "#111111"
     var width = 2.6            // 종이 단위
     var style: LumenPenStyle = .ball
@@ -616,7 +617,9 @@ struct WebInkConfig {
     init() {}
     init(_ b: [String: Any]) {
         enabled = b["enabled"] as? Bool ?? false
-        tool = (b["tool"] as? String) == "hl" ? .highlighter : .pen
+        let t = b["tool"] as? String ?? "pen"
+        tool = t == "hl" ? .highlighter : .pen
+        relay = t == "eraser" || t == "lasso"
         color = b["color"] as? String ?? color
         width = b["width"] as? Double ?? width
         style = LumenPenStyle.allCases.first { ["ball", "fountain", "brush"][$0.rawValue] == (b["style"] as? String) } ?? .ball

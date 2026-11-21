@@ -391,7 +391,7 @@ export class Paper {
     c.addEventListener('pointerdown', (e) => {
       if (!accept(e) || e.button > 0) return;
       e.preventDefault();
-      c.setPointerCapture(e.pointerId);
+      try { c.setPointerCapture(e.pointerId); } catch {} // 앱에서 넘겨준 펜슬(가짜 포인터)은 잡을 수 없어요
       const [x, y] = this.toLocal(page, e);
       const pr = e.pointerType === 'pen' ? e.pressure : 0.5;
       const t = tool.type;

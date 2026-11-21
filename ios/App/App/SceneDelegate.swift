@@ -56,9 +56,22 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     // 창(InkWindow)이 애플펜슬 터치를 웹보다 먼저 받아서 여기로 넘겨요.
     // 펜·형광펜이고 종이 위에서 시작하면 true → 그 획은 웹에 안 가고 네이티브가 그려요.
     func inkShouldTake(_ p: CGPoint) -> Bool { presentedViewController == nil && inkConfig.allows(p) }
-    func inkBegin(_ p: SIMD3<Double>) { inkOverlay.begin(p) }
-    func inkMove(_ pts: [SIMD3<Double>], _ pred: [SIMD3<Double>]) { inkOverlay.add(pts, predicted: pred) }
-    func inkCancel() { inkOverlay.clear() }
+    private var relaying = false
+    private var inkLastPoint: SIMD3<Double>?
+    func inkBegin(_ p: SIMD3<Double>) {
+        relaying = inkConfig.relay
+        inkLastPoint = p
+        if relaying { relay("down", [p]) } else { inkOverlay.begin(p) }
+    }
+    func inkMove(_ pts: [SIMD3<Double>], _ pred: [SIMD3<Double>]) {
+        if let l = pts.last { inkLastPoint = l }
+        if relaying { relay("move", pts) } else { inkOverlay.add(pts, predicted: pred) }
+    }
+    func inkCancel() { if relaying { relay("cancel", []) } else { inkOverlay.clear() } }
+    private func relay(_ type: String, _ pts: [SIMD3<Double>]) {
+        let arr = pts.map { "[\(($0.x * 10).rounded() / 10),\(($0.y * 10).rounded() / 10),\(($0.z * 100).rounded() / 100)]" }.joined(separator: ",")
+        webView?.evaluateJavaScript("window.lumenibPointer && window.lumenibPointer('\(type)', [\(arr)])", completionHandler: nil)
+    }
 
     // 웹 안의 스크롤 영역(노트 종이 등)은 손가락으로만 스크롤되게 해요.
     // 그래야 올가미·지우개처럼 웹이 받는 펜슬 획이 도구를 바꾼 직후에도 스크롤로 바뀌지 않아요.
@@ -83,6 +96,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     }
 
     func inkEnd() {
+        if relaying { relay("up", [inkLastPoint ?? SIMD3(0, 0, 0.5)]); relaying = false; return }
         do {
             let pts = inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
             guard let data = try? JSONSerialization.data(withJSONObject: pts), let json = String(data: data, encoding: .utf8) else { inkOverlay.clear(); return }

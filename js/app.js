@@ -559,7 +559,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     </header>
     <div class="workspace">
       <section class="panel bible-panel"></section>
-      <section class="panel right-panel note"><div class="tb-slot"></div><div class="tabs-slot"></div><div class="info-slot"></div><div class="paper-scroll"></div></section>
+      <section class="panel right-panel note"><div class="tabs-slot"></div><div class="info-slot"></div><div class="tb-slot"></div><div class="paper-scroll"></div></section>
     </div></div>`;
   const right = app.querySelector('.right-panel');
   const scrollEl = right.querySelector('.paper-scroll');
@@ -920,19 +920,38 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (!nativeInk) return;
     const p = ns.paper;
     const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
-    const blocked = !!(toolbarEl?.querySelector('.tb-menu') || document.querySelector('#overlay-root .dim') || p?.selection);
-    const on = !!p && !p.readonly && p.scrollEl?.isConnected && (tool.type === 'pen' || tool.type === 'hl') && !blocked;
+    const blocked = !!(toolbarEl?.querySelector('.tb-menu') || document.querySelector('#overlay-root .dim'));
+    const on = !!p && !p.readonly && p.scrollEl?.isConnected && !blocked;
     const pen = tool.type === 'pen';
+    // 펜·형광펜은 네이티브가 그리고, 지우개·올가미는 네이티브가 펜슬을 받아 웹에 그대로 넘겨요(lumenibPointer)
+    const btns = [...(p?.scrollEl?.querySelectorAll('.cite-ui button, .lasso-menu, .passage-block button') || [])].map(rect);
     nativeInk.postMessage({
       action: 'inkConfig', enabled: on,
-      tool: pen ? 'pen' : 'hl',
+      tool: tool.type,
       color: pen ? PEN_COLORS[tool.penColor] : HL_COLORS[tool.hlColor],
       width: pen ? PEN_SIZES[tool.penSize] : HL_SIZES[tool.hlSize],
       style: S.settings.penStyle, opts: S.settings.penOpts[S.settings.penStyle] || {},
       hlAlpha: S.settings.hlAlpha, scale: p?.scale || 1,
-      area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(p?.lassoMenu)].filter(Boolean),
+      area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(p?.lassoMenu), ...btns].filter(Boolean),
     });
   }
+  // 지우개 · 올가미: 네이티브가 받은 펜슬 움직임을 종이에 포인터 이벤트로 그대로 전해요
+  let relayTarget = null;
+  window.lumenibPointer = (type, pts) => {
+    const p = ns.paper;
+    if (!p) return false;
+    for (const [x, y, pr] of pts) {
+      if (type === 'down') {
+        const pageEl = document.elementFromPoint(x, y)?.closest('.page');
+        relayTarget = p.pages.find((q) => q?.el === pageEl)?.base || null;
+      }
+      if (!relayTarget) return false;
+      relayTarget.dispatchEvent(new PointerEvent(type === 'down' ? 'pointerdown' : type === 'up' ? 'pointerup' : type === 'cancel' ? 'pointercancel' : 'pointermove',
+        { clientX: x, clientY: y, pressure: pr, pointerType: 'pen', pointerId: 77, isPrimary: true, bubbles: true, cancelable: true, button: 0, buttons: type === 'up' ? 0 : 1 }));
+      if (type === 'up' || type === 'cancel') { relayTarget = null; break; }
+    }
+    return true;
+  };
   // 네이티브 펜 설정 · 굵기 창에서 바꾼 값을 받아요
   window.lumenibSetPen = (style, opts) => {
     S.settings.penStyle = style;
@@ -955,6 +974,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     mo.observe(document.getElementById('overlay-root'), { childList: true });
     mo.observe(right, { childList: true, subtree: true, attributes: false });
     window.addEventListener('resize', sendInkConfig);
+    // 스크롤하면 인용 손잡이 같은 버튼 위치가 바뀌니 다시 알려 줘요
+    let sRaf = 0;
+    scrollEl.addEventListener('scroll', () => { cancelAnimationFrame(sRaf); sRaf = requestAnimationFrame(sendInkConfig); }, { passive: true });
     ns.offInk = () => { mo.disconnect(); window.removeEventListener('resize', sendInkConfig); nativeInk.postMessage({ action: 'inkConfig', enabled: false }); };
   }
 
