@@ -41,10 +41,29 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         webView?.configuration.userContentController.add(self, name: "lumenibNative")
+        applyTheme(UserDefaults.standard.string(forKey: "theme"))
+    }
+
+    // 웹앱의 화면 모드(라이트/다크)를 기억해서, 앱을 켤 때 웹이 뜨기 전 바탕색도 맞춰요
+    private func applyTheme(_ t: String?) {
+        let light = t == "light"
+        let bg = light ? UIColor(red: 0xF7 / 255.0, green: 0xF7 / 255.0, blue: 0xF7 / 255.0, alpha: 1) : .black
+        view.backgroundColor = bg
+        webView?.backgroundColor = bg
+        webView?.scrollView.backgroundColor = bg
+        webView?.isOpaque = false
+        overrideUserInterfaceStyle = light ? .light : .dark
+        view.window?.overrideUserInterfaceStyle = light ? .light : .dark
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any], body["action"] as? String == "openInk", presentedViewController == nil else { return }
+        guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
+        if action == "theme", let t = body["value"] as? String {
+            UserDefaults.standard.set(t, forKey: "theme")
+            applyTheme(t)
+            return
+        }
+        guard action == "openInk", presentedViewController == nil else { return }
         let vc = NativeInkViewController()
         vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)

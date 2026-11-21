@@ -6,6 +6,10 @@
 <title>lumenib 루메닙</title>
 <meta name="description" content="성경 본문 위에 손글씨로 설교 노트를 쓰는 앱 · 1차 사용성 테스트용">
 <meta name="theme-color" content="#000000">
+<script>
+  // 스플래시가 뜨기 전에 저장된 화면 모드(라이트/다크)를 먼저 적용해요
+  try { var t = (JSON.parse(localStorage.getItem('lumenib.v1.settings') || '{}').theme) || 'dark'; document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

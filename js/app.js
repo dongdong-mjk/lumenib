@@ -22,6 +22,8 @@ const OUT_OF_SCOPE = '1차 테스트에서는 아직 열 수 없어요';
 function applyTheme() {
   document.documentElement.dataset.theme = S.settings.theme;
   document.querySelector('meta[name="theme-color"]').content = S.settings.theme === 'dark' ? '#000000' : '#f7f7f7';
+  // iPad 앱이면 앱 바탕색도 같이 (다음에 켤 때 처음 보이는 색)
+  window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'theme', value: S.settings.theme });
 }
 const otherNotesFor = (passages, exceptId) =>
   S.allNotes().filter((n) => n.id !== exceptId && n.passages.some((p) => passages.some((q) => B.overlaps(p, q))));
@@ -138,6 +140,7 @@ function Home({ highlight } = {}) {
     </section>
   </div></div>`;
   fitHome();
+  setTimeout(fitHome, 300); // 앱에서는 상태 표시줄 높이(safe-area)가 조금 늦게 잡혀서 한 번 더
   window.addEventListener('resize', fitHome);
   const offResize = () => window.removeEventListener('resize', fitHome);
 
@@ -166,20 +169,21 @@ function fitHome() {
   // 13인치(가로 1300 이상)는 큰 화면 시안(1376×1032)으로: 카드 · 점 지도가 더 커요
   home.classList.toggle('lg', home.clientWidth >= 1300);
   const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed;visibility:hidden;height:env(safe-area-inset-top,0px);width:env(safe-area-inset-bottom,0px)';
+  probe.style.cssText = 'position:fixed;visibility:hidden;width:env(safe-area-inset-bottom,0px)';
   document.body.appendChild(probe);
-  const st = probe.offsetHeight, sb = probe.offsetWidth;
+  const sb = probe.offsetWidth;
   probe.remove();
-  // 위쪽 상태 표시줄(앱에서는 화면 맨 위 24pt)이 있으면 피그마처럼 그 아래 8 더 띄워요 (피그마: 상태 표시줄 32 → 내비게이션)
-  const topGap = st ? st + 8 : 0;
-  const nat = { ...GAP_NAT, S: Math.max(GAP_NAT.S, topGap), F: Math.max(GAP_NAT.F, sb + 12) };
-  const min = { ...GAP_MIN, S: Math.max(GAP_MIN.S, topGap), F: Math.max(GAP_MIN.F, sb + 8) };
+  // 위쪽 상태 표시줄 자리는 CSS(.home padding-top = safe-area)가 잡아요. 그 높이가 피그마의 상태 표시줄(32)과 같아서
+  // 상태 표시줄이 있으면 내비게이션을 바로 그 아래에 붙여요 (피그마: 상태 표시줄 32 → 내비게이션). 없으면(사파리) 16 띄워요.
+  const pt = parseFloat(getComputedStyle(home).paddingTop) || 0;
+  const nat = { ...GAP_NAT, S: pt ? 0 : GAP_NAT.S, F: Math.max(GAP_NAT.F, sb + 12) };
+  const min = { ...GAP_MIN, S: pt ? 0 : GAP_MIN.S, F: Math.max(GAP_MIN.F, sb + 8) };
   const fixed = [...inner.children].reduce((a, el) => a + el.offsetHeight, 0);
   const W = home.clientWidth;
   // 너비가 시안보다 좁으면(아이패드 미니 등) 먼저 전체를 그 폭에 맞게 줄여요
   const portrait = matchMedia('(orientation: portrait)').matches;
   const zW = portrait ? 1 : Math.min(1, W / HOME_MIN_W);
-  const H = home.clientHeight / zW;
+  const H = (home.clientHeight - pt) / zW;
   const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
   let g = {}, z = 1;
   if (H >= fixed + sum(nat)) {

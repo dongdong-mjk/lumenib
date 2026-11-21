@@ -116,12 +116,12 @@ svg { display: block; }
 
 /* ---------- 스플래시 ---------- */
 .splash {
-  position: fixed; inset: 0; z-index: 100; background: #000;
+  position: fixed; inset: 0; z-index: 100; background: var(--bg-app); /* 화면 모드를 따라가요 */
   display: grid; place-items: center; transition: opacity .35s ease;
 }
 .splash.hide { opacity: 0; pointer-events: none; }
 .splash-logo {
-  width: 180px; height: 162px; background: #fff;
+  width: 180px; height: 162px; background: var(--text-primary);
   -webkit-mask: url(../icons/lockup-stacked-mask.png) center / contain no-repeat;
   mask: url(../icons/lockup-stacked-mask.png) center / contain no-repeat;
 }
@@ -399,7 +399,7 @@ button { touch-action: manipulation; }
 .drag-ghost span { display: block; font-size: 13px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- 홈 ---------- */
-.home { height: 100%; overflow: hidden; }
+.home { height: 100%; overflow: hidden; padding-top: var(--safe-top); box-sizing: border-box; }
 .home-inner { padding: 0 24px var(--gF, 24px); transform-origin: 0 0; }
 .home-nav { position: relative; display: flex; justify-content: center; align-items: center; height: 54px; margin-top: var(--gS, 16px); }
 .home-tabs { display: flex; gap: 4px; }
