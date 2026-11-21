@@ -491,7 +491,7 @@ final class LumenPenSettingsViewController: UIViewController {
     var onChange: ((LumenPenStyle, [LumenPenStyle: [String: Double]]) -> Void)?
 
     private let preview = CAShapeLayer()
-    private let previewBox = UIView()
+    private let previewBox = LayoutNotifyingView()
     private let stack = UIStackView()
 
     init(style: LumenPenStyle, opts: [LumenPenStyle: [String: Double]], color: String) {
@@ -537,6 +537,7 @@ final class LumenPenSettingsViewController: UIViewController {
         let title = UILabel(); title.text = "펜 설정"; title.font = .systemFont(ofSize: 15, weight: .semibold); title.textColor = .lumenTextPrimary
         stack.addArrangedSubview(title)
 
+        previewBox.onLayout = { [weak self] in self?.drawPreview() } // 실제 크기가 정해진 뒤 다시 그려요 (처음 열 때 샘플이 찌그러지던 것)
         previewBox.backgroundColor = .white // 미리보기는 종이처럼 흰 바탕
         previewBox.layer.cornerRadius = 10
         previewBox.heightAnchor.constraint(equalToConstant: 64).isActive = true
@@ -851,4 +852,14 @@ extension UIColor {
     static let lumenPanel = lumen("#ffffff", "#1e1e1e")          // bg/panel
     static let lumenTextPrimary = lumen("#111111", "#fafafa")    // text/primary
     static let lumenTextSecondary = lumen("#555555", "#b5b5b5")  // text/secondary
+}
+
+/// 크기가 바뀔 때마다 알려 주는 뷰 (펜 설정 미리보기용)
+final class LayoutNotifyingView: UIView {
+    var onLayout: (() -> Void)?
+    private var last: CGSize = .zero
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != last { last = bounds.size; onLayout?() }
+    }
 }
