@@ -77,12 +77,19 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     }
     private var relaying = false
     // 굿노트처럼: 종이가 미끄러지듯 스크롤되는 중에 펜슬을 대면 스크롤을 그 자리에서 멈춰요
+    private var lockedScrolls: [UIScrollView] = []
+    private func unlockScrolls() {
+        lockedScrolls.forEach { $0.panGestureRecognizer.isEnabled = true }
+        lockedScrolls = []
+    }
     private func stopScrolling(at p: CGPoint) {
         guard let web = webView else { return }
         var v = web.hitTest(p, with: nil)
         while let cur = v, cur !== web {
-            if let sv = cur as? UIScrollView, sv.isDecelerating || sv.isDragging {
-                sv.setContentOffset(sv.contentOffset, animated: false)
+            if let sv = cur as? UIScrollView {
+                if sv.isDecelerating || sv.isDragging { sv.setContentOffset(sv.contentOffset, animated: false) }
+                // 펜슬이 종이에 닿아 있는 동안은 이 스크롤을 잠가요 (도구를 바꾼 직후 빠르게 쓰면 웹이 막기 전에 스크롤이 시작되곤 했어요)
+                if sv.panGestureRecognizer.isEnabled { sv.panGestureRecognizer.isEnabled = false; lockedScrolls.append(sv) }
             }
             v = cur.superview
         }
@@ -98,7 +105,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         if let l = pts.last { inkLastPoint = l }
         if relaying { relay("move", pts) } else { inkOverlay.add(pts, predicted: pred) }
     }
-    func inkCancel() { if relaying { relay("cancel", []) } else { inkOverlay.clear() } }
+    func inkCancel() { unlockScrolls(); if relaying { relay("cancel", []) } else { inkOverlay.clear() } }
     private func relay(_ type: String, _ pts: [SIMD3<Double>]) {
         let arr = pts.map { "[\(($0.x * 10).rounded() / 10),\(($0.y * 10).rounded() / 10),\(($0.z * 100).rounded() / 100)]" }.joined(separator: ",")
         webView?.evaluateJavaScript("window.lumenibPointer && window.lumenibPointer('\(type)', [\(arr)])", completionHandler: nil)
@@ -134,6 +141,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     }
 
     func inkEnd() {
+        unlockScrolls()
         if relaying { relay("up", [inkLastPoint ?? SIMD3(0, 0, 0.5)]); relaying = false; return }
         do {
             let pts = inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
