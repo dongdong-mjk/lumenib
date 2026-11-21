@@ -151,7 +151,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             pop.sourceView = web
             pop.sourceRect = rect
             pop.permittedArrowDirections = [.down, .up]
-            pop.backgroundColor = .systemBackground // 유리처럼 비치지 않게 (글자 대비)
+            pop.backgroundColor = .lumenPanel // 유리처럼 비치지 않게 (글자 대비)
         }
         present(vc, animated: true)
     }

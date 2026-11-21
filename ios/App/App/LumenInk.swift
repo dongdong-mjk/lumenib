@@ -502,7 +502,7 @@ final class LumenPenSettingsViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground // 앱의 라이트/다크를 따라가요
+        view.backgroundColor = .lumenPanel // 앱의 라이트/다크를 따라가요
         view.tintColor = .label // 디자인 규칙: 포인트 색 없이 검정(다크는 흰색)
         stack.axis = .vertical
         stack.spacing = 10
@@ -534,7 +534,7 @@ final class LumenPenSettingsViewController: UIViewController {
 
     private func build() {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let title = UILabel(); title.text = "펜 설정"; title.font = .systemFont(ofSize: 15, weight: .semibold)
+        let title = UILabel(); title.text = "펜 설정"; title.font = .systemFont(ofSize: 15, weight: .semibold); title.textColor = .lumenTextPrimary
         stack.addArrangedSubview(title)
 
         previewBox.backgroundColor = .white // 미리보기는 종이처럼 흰 바탕
@@ -547,24 +547,24 @@ final class LumenPenSettingsViewController: UIViewController {
         seg.selectedSegmentIndex = style.rawValue
         seg.addTarget(self, action: #selector(styleChanged(_:)), for: .valueChanged)
         stack.addArrangedSubview(seg)
-        let desc = UILabel(); desc.text = style.desc; desc.font = .systemFont(ofSize: 12); desc.textColor = .secondaryLabel; desc.numberOfLines = 0
+        let desc = UILabel(); desc.text = style.desc; desc.font = .systemFont(ofSize: 12); desc.textColor = .lumenTextSecondary; desc.numberOfLines = 0
         stack.addArrangedSubview(desc)
 
         for k in style.options {
             let head = UIStackView()
-            let name = UILabel(); name.text = k.title; name.font = .systemFont(ofSize: 13, weight: .semibold)
-            let val = UILabel(); val.text = "\(Int(value(k)))%"; val.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium); val.textColor = .label
+            let name = UILabel(); name.text = k.title; name.font = .systemFont(ofSize: 13, weight: .semibold); name.textColor = .lumenTextPrimary
+            let val = UILabel(); val.text = "\(Int(value(k)))%"; val.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium); val.textColor = .lumenTextPrimary
             val.tag = 1000 + LumenPenOption.allCases.firstIndex(of: k)!
             head.addArrangedSubview(name); head.addArrangedSubview(UIView()); head.addArrangedSubview(val)
             let slider = UISlider(); slider.minimumValue = 0; slider.maximumValue = 100; slider.value = Float(value(k))
             slider.tag = LumenPenOption.allCases.firstIndex(of: k)!
             slider.addTarget(self, action: #selector(sliderChanged(_:)), for: .valueChanged)
-            let hint = UILabel(); hint.text = k.hint; hint.font = .systemFont(ofSize: 12); hint.textColor = .secondaryLabel; hint.numberOfLines = 0
+            let hint = UILabel(); hint.text = k.hint; hint.font = .systemFont(ofSize: 12); hint.textColor = .lumenTextSecondary; hint.numberOfLines = 0
             let box = UIStackView(arrangedSubviews: [head, slider, hint]); box.axis = .vertical; box.spacing = 2
             stack.addArrangedSubview(box)
         }
         let reset = UIButton(type: .system); reset.setTitle("기본값으로", for: .normal)
-        reset.setTitleColor(.label, for: .normal); reset.setTitleColor(.tertiaryLabel, for: .disabled)
+        reset.setTitleColor(.lumenTextPrimary, for: .normal); reset.setTitleColor(.tertiaryLabel, for: .disabled)
         reset.contentHorizontalAlignment = .leading
         reset.isEnabled = !isDefault
         resetButton = reset
@@ -811,13 +811,13 @@ final class LumenSizeSliderViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .lumenPanel
         view.tintColor = .label // 디자인 규칙: 포인트 색 없이 검정(다크는 흰색)
-        let title = UILabel(); title.text = titleText; title.font = .systemFont(ofSize: 15, weight: .semibold)
+        let title = UILabel(); title.text = titleText; title.font = .systemFont(ofSize: 15, weight: .semibold); title.textColor = .lumenTextPrimary
         slider.minimumValue = Float(minV); slider.maximumValue = Float(maxV); slider.value = Float(value)
         slider.addTarget(self, action: #selector(changed), for: .valueChanged)
         slider.addTarget(self, action: #selector(done), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-        valueLabel.text = fmt(value); valueLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium); valueLabel.textColor = .label
+        valueLabel.text = fmt(value); valueLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium); valueLabel.textColor = .lumenTextPrimary
         valueLabel.widthAnchor.constraint(equalToConstant: 36).isActive = true
         valueLabel.textAlignment = .right
         let row = UIStackView(arrangedSubviews: [slider, valueLabel]); row.spacing = 12; row.alignment = .center
@@ -840,4 +840,15 @@ final class LumenSizeSliderViewController: UIViewController {
     }
     @objc private func done() { onChange?(value, true) }
     @objc private func resetTapped() { value = defaultV; slider.setValue(Float(value), animated: true); valueLabel.text = fmt(value); onChange?(value, true) }
+}
+
+
+// 피그마·웹과 같은 색 토큰 (css/app.css): 라이트 / 다크
+extension UIColor {
+    private static func lumen(_ light: String, _ dark: String) -> UIColor {
+        UIColor { $0.userInterfaceStyle == .dark ? UIColor(hexString: dark) : UIColor(hexString: light) }
+    }
+    static let lumenPanel = lumen("#ffffff", "#1e1e1e")          // bg/panel
+    static let lumenTextPrimary = lumen("#111111", "#fafafa")    // text/primary
+    static let lumenTextSecondary = lumen("#555555", "#b5b5b5")  // text/secondary
 }

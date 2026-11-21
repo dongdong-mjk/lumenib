@@ -92,7 +92,7 @@ export const getNote = (id) => userNotes.find((n) => n.id === id && (owner ? n.o
 export function newNote({ date, title, preacher, passages, paper }) {
   const n = {
     id: uid(), date: date || todayISO(), title: title || '', preacher: preacher || '',
-    passages: passages || [], paper: paper || 'lined', pages: [{ strokes: [] }], citations: [],
+    passages: passages || [], paper: paper || settings.lastPaper || 'lined', pages: [{ strokes: [] }], citations: [],
     createdAt: Date.now(), updatedAt: String(Date.now()), done: false,
   };
   if (owner) { n.owner = owner; n._dirty = 1; }

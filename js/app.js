@@ -411,7 +411,7 @@ function openLogin() {
 // T2 · T3 본문 고르기
 // =========================================================
 function Pick() {
-  const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: [], paper: 'lined' };
+  const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: [], paper: PAPERS.some((p) => p[0] === S.settings.lastPaper) ? S.settings.lastPaper : 'lined' }; // 마지막에 고른 종이로 시작
   app.innerHTML = `<div class="screen">
     <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${icon.arrowLeft.replace('width="24" height="24"', 'width="18" height="18"')} 홈</button></div>
       <div class="title">오늘 설교 기록하기</div><div class="right"></div></header>
@@ -504,7 +504,7 @@ function Pick() {
     }));
     right.querySelector('[data-act="start"]')?.addEventListener('click', () => start(current()));
     right.querySelectorAll('[data-old]').forEach((b) => b.addEventListener('click', () => openOldTab(b.dataset.old)));
-    right.querySelector('[data-act="paper"]')?.addEventListener('click', (e) => paperMenu(e.currentTarget, st.paper, (v) => { st.paper = v; renderRight(); }));
+    right.querySelector('[data-act="paper"]')?.addEventListener('click', (e) => paperMenu(e.currentTarget, st.paper, (v) => { st.paper = v; S.settings.lastPaper = v; S.saveSettings(); renderRight(); }));
   }
 
   async function start(passages) {
@@ -924,7 +924,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     toolbarEl.appendChild(m);
     m.querySelector('[data-act="native-ink"]')?.addEventListener('click', () => { m.remove(); track('native_ink_open'); window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' }); });
     m.querySelector('[data-act="pdf"]').addEventListener('click', () => { m.remove(); exportPdf(); });
-    m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.touch(main); ns.paper.render(); m.remove(); }));
+    m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.settings.lastPaper = main.paper; S.saveSettings(); S.touch(main); ns.paper.render(); m.remove(); }));
   }
 
   // ---------- iPad 앱: 필기만 네이티브 엔진으로 ----------
