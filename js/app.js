@@ -49,6 +49,9 @@ function modal(html, bind) {
   return close;
 }
 
+// iPad 앱 표시 (앱에서만 필요한 화면 조정용)
+document.documentElement.classList.toggle('ios-app', !!window.webkit?.messageHandlers?.lumenibNative);
+
 // 슬라이더 채워진 부분 표시 (CSS --p)
 const fillRange = (r) => r.style.setProperty('--p', ((r.value - r.min) / (r.max - r.min || 1)) * 100 + '%');
 document.addEventListener('input', (e) => { if (e.target.matches?.('input[type=range]')) fillRange(e.target); });
