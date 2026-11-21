@@ -65,6 +65,12 @@ function loadScript(src) {
 }
 
 function go(screen, arg) {
+  // 떠 있던 토스트(예: "노트가 저장됐어요")는 다른 화면으로 가면 그 자리에서 사라져요
+  const t = document.getElementById('toast');
+  if (t?.classList.contains('show')) {
+    t.classList.add('leave'); t.classList.remove('show');
+    setTimeout(() => t.classList.remove('leave'), 200);
+  }
   cleanup();
   cleanup = () => {};
   overlay.innerHTML = '';
