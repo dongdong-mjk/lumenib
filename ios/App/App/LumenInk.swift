@@ -338,7 +338,7 @@ final class LumenInkView: UIView {
             l.fillColor = nil
             l.strokeColor = color.withAlphaComponent(hlAlpha).cgColor
             l.lineWidth = s.width * scale
-            l.lineCap = .butt; l.lineJoin = .round
+            l.lineCap = .round; l.lineJoin = .round // 굿노트처럼 끝이 부드럽게
             l.compositingFilter = "multiplyBlendMode"
             l.zPosition = -1
         } else {

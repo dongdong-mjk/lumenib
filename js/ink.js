@@ -778,7 +778,7 @@ function drawStroke(ctx, s, live = false) {
     ctx.save();
     ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT;
     ctx.globalCompositeOperation = 'multiply';
-    ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'butt';
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
     const q = hlPoints(p, s.w);
     ctx.beginPath(); ctx.moveTo(q[0], q[1]);
     for (let i = 2; i < q.length - 2; i += 2) ctx.quadraticCurveTo(q[i], q[i + 1], (q[i] + q[i + 2]) / 2, (q[i + 1] + q[i + 3]) / 2);
