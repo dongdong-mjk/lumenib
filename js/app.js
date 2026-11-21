@@ -641,6 +641,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   const tbRO = new ResizeObserver(() => fitToolbar());
   tbRO.observe(right);
   function renderToolbar() {
+    // 툴바를 누르고 있는 동안에는 툴바를 다시 만들지 않고, 손을 뗀 뒤에 만들어요.
+    // 누른 버튼이 손가락·펜 아래에서 사라지면 iPad가 다음 펜슬 획을 스크롤로 착각했어요.
+    if (tbPressing) { tbPending = true; sendInkConfig(); return; }
     const slot = right.querySelector('.tb-slot');
     if (isReadonly()) { slot.innerHTML = ''; return; }
     const t = tool.type;
@@ -685,6 +688,21 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   // 굵기를 고르면 종이 위 실제 크기를 잠깐 보여 줘요
   let prevT;
   const sizeArr = (t) => (t === 'pen' ? PEN_SIZES : t === 'hl' ? HL_SIZES : ERASER_SIZES);
+
+  let tbPressing = false, tbPending = false;
+  const tbSlot = right.querySelector('.tb-slot');
+  tbSlot.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.tb-menu')) return; // 펼친 창 안(슬라이더 등)은 그대로
+    tbPressing = true;
+    if (e.target.closest('[data-tool], [data-color], [data-size], [data-em]')) e.preventDefault();
+  }, true);
+  const tbRelease = () => {
+    if (!tbPressing) return;
+    tbPressing = false;
+    if (tbPending) { tbPending = false; requestAnimationFrame(renderToolbar); }
+  };
+  window.addEventListener('pointerup', tbRelease, true);
+  window.addEventListener('pointercancel', tbRelease, true);
 
   // 툴바에서 연 창(펜 설정 · 색 · 굵기 · 더 보기)은 바깥을 누르면 닫혀요
   const closeMenusOutside = (e) => {
@@ -1186,7 +1204,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     });
   }
 
-  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); ns.offInk?.(); document.removeEventListener('pointerdown', closeMenusOutside, true); };
+  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); ns.offInk?.(); document.removeEventListener('pointerdown', closeMenusOutside, true); window.removeEventListener('pointerup', tbRelease, true); window.removeEventListener('pointercancel', tbRelease, true); };
 
   renderTabs();
   renderInfo();
