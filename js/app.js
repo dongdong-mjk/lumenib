@@ -973,7 +973,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   // 네이티브 펜 설정 · 굵기 창에서 바꾼 값을 받아요
   window.lumenibSetPen = (style, opts) => {
     S.settings.penStyle = style;
-    Object.assign(S.settings.penOpts, opts);
+    // 네이티브는 이 펜 종류의 값만 보내요. 그 종류 칸에 넣어야 다시 열 때 남아 있어요 (전에는 바깥에 섞여 저장돼 사라졌어요)
+    S.settings.penOpts[style] = Object.assign({}, S.settings.penOpts[style], opts);
     S.saveSettings(); track('pen_style_' + style);
     renderToolbar(); sendInkConfig();
   };
