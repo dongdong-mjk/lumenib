@@ -3,10 +3,6 @@
 const s = (d, extra = '') =>
   `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d}</svg>`;
 
-// 형광펜: 펜과 헷갈리지 않게 굵은 몸통 + 바닥에 닿는 납작한 펜촉(채움) (11/21, 피그마 반영 전 제안)
-export const hlIcon = () =>
-  `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"><g transform="rotate(40 12 12)"><path d="M9 2.5h6a1 1 0 0 1 1 1V12l-1.5 3h-5L8 12V3.5a1 1 0 0 1 1-1z"/><path d="M9.6 15h4.8l-.9 4.2-3 1.3z" fill="currentColor"/></g></svg>`;
-
 export const icon = {
   home: s('<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>'),
   homeLine: s('<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>'),
@@ -30,10 +26,10 @@ export const icon = {
   undo: s('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
   redo: s('<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),
   more: s('<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>'),
-  pen: s('<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="m14.5 6.5 3 3"/>'),
-  highlighter: s('<path d="m9 11-5 5v3h3l5-5"/><path d="m9 11 6.5-6.5a2.1 2.1 0 0 1 3 3L12 14"/><path d="M9 11l3 3"/>'),
-  eraser: s('<path d="M7 21h13"/><path d="M5.5 15.5 14 7a2 2 0 0 1 2.8 0l2.7 2.7a2 2 0 0 1 0 2.8L12 20H9z"/><path d="m9.5 11.5 5 5"/>'),
-  lasso: s('<path d="M7.5 18.5C4.8 17.3 3 15.2 3 12.5 3 8.4 7 5 12 5s9 3.4 9 7.5-4 7.5-9 7.5c-1 0-2-.1-2.9-.4"/><circle cx="8" cy="18.5" r="1.8"/><path d="M8 20.3c0 1.2-.6 2.2-1.6 2.7"/>'),
+  pen: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20H21"/><path d="M16.4567 3.04876L4.25017 15.2553C4.18078 15.3247 4.13334 15.413 4.11377 15.5092L3.2721 19.6443C3.20065 19.9954 3.51073 20.3055 3.86178 20.234L7.99694 19.3923C8.09311 19.3728 8.18138 19.3253 8.25077 19.2559L20.4574 7.04936"/></svg>', // 피그마 pen toolbar 아이콘 (11/21)
+  highlighter: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11L3 17V20H12L15 17"/><path d="M23 11.5031L18.1107 16.3923C17.7134 16.7818 17.1791 17 16.6227 17C16.0663 17 15.532 16.7818 15.1347 16.3923L9.60767 10.8653C9.21817 10.468 9 9.93373 9 9.3773C9 8.82088 9.21817 8.28663 9.60767 7.88927L14.4969 3"/></svg>', // 피그마 pen toolbar 아이콘 (11/21)
+  eraser: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.99995 20L2.69995 15.7C1.69995 14.7 1.69995 13.2 2.69995 12.3L12.3 2.69995C13.3 1.69995 14.8 1.69995 15.7 2.69995L21.2999 8.29995C22.2999 9.29995 22.2999 10.8 21.2999 11.7L13 20"/><path d="M22 20H7"/><path d="M5 10L14 19"/></svg>', // 피그마 pen toolbar 아이콘 (11/21)
+  lasso: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 22C6.37902 21.5343 5.875 20.9303 5.52786 20.2361C5.18073 19.5418 5 18.7762 5 18"/><path d="M3.3 14C2.45485 12.8376 1.99974 11.4372 2 10C2 5.6 6.5 2 12 2C17.5 2 22 5.6 22 10C22 14.4 17.5 18 12 18C10.2809 18.0287 8.57578 17.6877 7 17"/><path d="M5 18C5.53043 18 6.03914 17.7893 6.41421 17.4142C6.78929 17.0391 7 16.5304 7 16C7 15.4696 6.78929 14.9609 6.41421 14.5858C6.03914 14.2107 5.53043 14 5 14C4.46957 14 3.96086 14.2107 3.58579 14.5858C3.21071 14.9609 3 15.4696 3 16C3 16.5304 3.21071 17.0391 3.58579 17.4142C3.96086 17.7893 4.46957 18 5 18Z"/></svg>', // 피그마 pen toolbar 아이콘 (11/21)
   backReturn: s('<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>'), // 성경 패널 '오늘 본문으로' (같은 이름 back이 위의 피그마 뒤로 아이콘을 덮어쓰고 있었어요)
 };
 
