@@ -509,11 +509,11 @@ final class LumenPenSettingsViewController: UIViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
+            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20), // 팝오버 화살표 영역을 피해서 위 여백 확보
             stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
         ])
-        preferredContentSize = CGSize(width: 320, height: 470)
+        preferredContentSize = CGSize(width: 320, height: 480)
         build()
     }
 
