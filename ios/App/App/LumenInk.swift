@@ -507,17 +507,30 @@ final class LumenPenSettingsViewController: UIViewController {
         stack.axis = .vertical
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
+        // 만년필처럼 항목이 많으면 창보다 길어져서 스크롤되게 해요
+        let scroll = UIScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.alwaysBounceVertical = false
+        view.addSubview(scroll)
+        scroll.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20), // 팝오버 화살표 영역을 피해서 위 여백 확보
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20), // 위 여백
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -16),
+            stack.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: scroll.frameLayoutGuide.trailingAnchor, constant: -16),
         ])
         preferredContentSize = CGSize(width: 320, height: 480)
         build()
     }
 
     private func value(_ k: LumenPenOption) -> Double { opts[style]?[k.rawValue] ?? k.defaultValue }
+    private weak var resetButton: UIButton?
+    // 지금 펜 종류의 값이 모두 기본값이면 '기본값으로'를 꺼 둬요
+    private var isDefault: Bool { style.options.allSatisfy { value($0) == $0.defaultValue } }
 
     private func build() {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -550,8 +563,11 @@ final class LumenPenSettingsViewController: UIViewController {
             let box = UIStackView(arrangedSubviews: [head, slider, hint]); box.axis = .vertical; box.spacing = 2
             stack.addArrangedSubview(box)
         }
-        let reset = UIButton(type: .system); reset.setTitle("기본값으로", for: .normal); reset.setTitleColor(.darkGray, for: .normal)
+        let reset = UIButton(type: .system); reset.setTitle("기본값으로", for: .normal)
+        reset.setTitleColor(.label, for: .normal); reset.setTitleColor(.tertiaryLabel, for: .disabled)
         reset.contentHorizontalAlignment = .leading
+        reset.isEnabled = !isDefault
+        resetButton = reset
         reset.addTarget(self, action: #selector(resetTapped), for: .touchUpInside)
         stack.addArrangedSubview(reset)
         view.layoutIfNeeded()
@@ -589,10 +605,14 @@ final class LumenPenSettingsViewController: UIViewController {
         var o = opts[style] ?? [:]; o[k.rawValue] = v; opts[style] = o
         (view.viewWithTag(1000 + s.tag) as? UILabel)?.text = "\(Int(v))%"
         drawPreview()
+        resetButton?.isEnabled = !isDefault
         onChange?(style, opts)
     }
     @objc private func resetTapped() {
-        opts[style] = [:]
+        // 빈 값을 보내면 웹이 예전 값을 그대로 두어서, 기본값을 하나하나 적어 보내요
+        var o: [String: Double] = [:]
+        for k in style.options { o[k.rawValue] = k.defaultValue }
+        opts[style] = o
         onChange?(style, opts); build()
     }
 }
