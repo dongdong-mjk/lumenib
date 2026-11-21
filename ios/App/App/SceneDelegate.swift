@@ -65,7 +65,16 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     // 창(InkWindow)이 애플펜슬 터치를 웹보다 먼저 받아서 여기로 넘겨요.
     // 펜·형광펜이고 종이 위에서 시작하면 true → 그 획은 웹에 안 가고 네이티브가 그려요.
-    func inkShouldTake(_ p: CGPoint) -> Bool { presentedViewController == nil && inkConfig.allows(p) }
+    func inkShouldTake(_ p: CGPoint) -> Bool {
+        guard inkConfig.allows(p) else { return false }
+        // 펜 설정·굵기 창이 열려 있어도, 창 밖 종이에 펜슬을 대면 창을 닫고 바로 써요 (굿노트처럼)
+        if let pv = presentedViewController {
+            if let v = pv.view, let web = webView, v.convert(v.bounds, to: web).contains(p) { return false }
+            pv.dismiss(animated: true)
+        }
+        webView?.evaluateJavaScript("window.lumenibCloseMenus && window.lumenibCloseMenus()", completionHandler: nil)
+        return true
+    }
     private var relaying = false
     private var inkLastPoint: SIMD3<Double>?
     func inkBegin(_ p: SIMD3<Double>) {

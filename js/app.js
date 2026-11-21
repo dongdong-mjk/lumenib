@@ -936,7 +936,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (!nativeInk) return;
     const p = ns.paper;
     const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
-    const blocked = !!(toolbarEl?.querySelector('.tb-menu') || document.querySelector('#overlay-root .dim'));
+    const blocked = !!document.querySelector('#overlay-root .dim'); // 툴바 창이 열려 있어도 종이에 바로 쓸 수 있어요 (창 영역만 빼고, 쓰기 시작하면 창은 닫혀요)
     const on = !!p && !p.readonly && p.scrollEl?.isConnected && !blocked;
     const pen = tool.type === 'pen';
     // 펜·형광펜은 네이티브가 그리고, 지우개·올가미는 네이티브가 펜슬을 받아 웹에 그대로 넘겨요(lumenibPointer)
@@ -951,6 +951,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(toolbarEl?.querySelector('.tb-menu')), rect(p?.lassoMenu), ...btns].filter(Boolean),
     });
   }
+  // 펜슬로 종이에 쓰기 시작하면 열려 있던 툴바 창을 닫아요 (굿노트처럼 바로 써지게)
+  window.lumenibCloseMenus = () => { toolbarEl?.querySelector('.tb-menu')?.remove(); };
   // 지우개 · 올가미: 네이티브가 받은 펜슬 움직임을 종이에 포인터 이벤트로 그대로 전해요
   let relayTarget = null;
   window.lumenibPointer = (type, pts) => {
