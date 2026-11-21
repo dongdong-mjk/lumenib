@@ -22,6 +22,14 @@ final class NativeInkViewController: UIViewController, UIPencilInteractionDelega
     private let penColors: [UIColor] = [UIColor(hex: 0x111111), UIColor(hex: 0x004CE5), UIColor(hex: 0xDC3333)]
     private let penWidths: [CGFloat] = [1.6, 2.6, 4]
 
+    // 펜 종류 (웹앱과 같은 3가지, 기본 볼펜). PencilKit이 제공하는 펜으로 맞춰요.
+    //  볼펜 = monoline(굵기 일정), 만년필 = fountainPen(필압·방향에 따라 굵기), 붓펜 = pen(필압 변화가 큰 기본 펜, 굵게)
+    //  iPadOS 17 이전 기기는 셋 다 기본 pen으로 그려져요.
+    private enum PenStyle: Int, CaseIterable { case ball, fountain, brush
+        var name: String { ["볼펜", "만년필", "붓펜"][rawValue] }
+    }
+    private var penStyle: PenStyle = .ball
+
     private let toolStack = UIStackView()
     private let optionStack = UIStackView()
     private var undoButton: UIButton!
@@ -153,7 +161,17 @@ final class NativeInkViewController: UIViewController, UIPencilInteractionDelega
 
     private func applyTool() {
         switch tool {
-        case .pen: canvas.tool = PKInkingTool(.pen, color: penColor, width: penWidth * scale * 1.6)
+        case .pen:
+            var ink: PKInkingTool.InkType = .pen
+            var w = penWidth * scale * 1.6
+            if #available(iOS 17.0, *) {
+                switch penStyle {
+                case .ball: ink = .monoline
+                case .fountain: ink = .fountainPen; w *= 1.3
+                case .brush: ink = .pen; w *= 2.2
+                }
+            } else if penStyle == .brush { w *= 2.2 }
+            canvas.tool = PKInkingTool(ink, color: penColor, width: w)
         case .highlighter: canvas.tool = PKInkingTool(.marker, color: UIColor(hex: 0xFFE14D), width: 18 * scale)
         case .eraser: canvas.tool = PKEraserTool(.vector)
         case .lasso: canvas.tool = PKLassoTool()
@@ -166,6 +184,16 @@ final class NativeInkViewController: UIViewController, UIPencilInteractionDelega
         // 펜일 때만 색·굵기
         optionStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         guard tool == .pen else { return }
+        let seg = UISegmentedControl(items: PenStyle.allCases.map(\.name))
+        seg.selectedSegmentIndex = penStyle.rawValue
+        seg.addTarget(self, action: #selector(styleChanged(_:)), for: .valueChanged)
+        seg.accessibilityLabel = "펜 종류"
+        optionStack.addArrangedSubview(seg)
+        let sep2 = UIView()
+        sep2.backgroundColor = UIColor(white: 0, alpha: 0.12)
+        sep2.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        sep2.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        optionStack.addArrangedSubview(sep2)
         for (i, c) in penColors.enumerated() {
             let b = UIButton(type: .system)
             b.tag = i
@@ -203,6 +231,7 @@ final class NativeInkViewController: UIViewController, UIPencilInteractionDelega
     }
 
     @objc private func toolTapped(_ b: UIButton) { setTool(Tool(rawValue: b.tag) ?? .pen) }
+    @objc private func styleChanged(_ c: UISegmentedControl) { penStyle = PenStyle(rawValue: c.selectedSegmentIndex) ?? .ball; applyTool() }
     @objc private func colorTapped(_ b: UIButton) { penColor = penColors[b.tag]; applyTool() }
     @objc private func widthTapped(_ b: UIButton) { penWidth = penWidths[b.tag]; applyTool() }
 
