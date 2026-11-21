@@ -631,9 +631,10 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .topbar .tb-slot .tb-sep { background: var(--border-panel); }
 .topbar .tb-slot .size-dot i { background: var(--icon-primary); }
 .topbar .tb-slot .size-dot i[style*="border"] { border-color: var(--icon-primary) !important; }
-.topbar .tb-slot .swatch.on i { box-shadow: 0 0 0 2px var(--bg-app), 0 0 0 4px var(--icon-primary); }
 .topbar .tb-slot .mode2 { background: var(--bg-panel-inset); }
 .topbar .tb-slot .tb-hint { color: var(--text-secondary); }
 .topbar .tb-slot .tb-menu { top: 56px; }
 .topbar .tb-slot .mode2 button { color: var(--text-secondary); }
 .topbar .tb-slot .mode2 button.on { background: var(--bg-panel); color: var(--text-primary); }
+.topbar .tb-slot .swatch i { box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .35); } /* 다크에서 검정 색도 보이게 */
+.topbar .tb-slot .swatch.on i { box-shadow: inset 0 0 0 1px rgba(128, 128, 128, .35), 0 0 0 2px var(--bg-app), 0 0 0 4px var(--icon-primary); }
