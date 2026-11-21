@@ -89,7 +89,7 @@ export class Paper {
           if (o && Math.hypot(t.clientX - o[1], t.clientY - o[2]) > 12) this._tap2.ok = false;
         }
       }
-      if (window.__nativeInk && e.touches.length >= 2) console.log('[pinch] ' + e.type + ' n=' + e.touches.length + ' pan=' + !!this._pan + ' cancelable=' + e.cancelable);
+      if (window.__nativeInk && e.touches.length >= 2 && e.type === 'touchstart') console.log('[pinch] start n=' + e.touches.length); // 임시 기록
       if (e.touches.length >= 2) {
         e.preventDefault();
         const [a, b] = e.touches;
@@ -142,7 +142,6 @@ export class Paper {
     p.lx = cx; p.ly = cy;
   }
   endPinch() {
-    if (window.__nativeInk) console.log('[pinch] end zoom=' + this.zoom);
     const p = this._pan; this._pan = null;
     const el = this.scrollEl;
     this.pagesEl.style.transform = ''; this.pagesEl.style.transformOrigin = '';
