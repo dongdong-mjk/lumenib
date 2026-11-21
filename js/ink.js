@@ -289,6 +289,17 @@ export class Paper {
         return cl;
       });
       d = { y0: e.clientY, lastY: e.clientY, cy: c.y, st0: this.scrollEl.scrollTop, snap: this.snapshot(), moved: false, carry };
+      if (carry.length) {
+        // 끄는 동안엔 같이 갈 글씨를 따로 그린 판을 통째로 옮기기만 해요 (매번 페이지 전체를 다시 그리면 렉이 걸렸어요)
+        this._hidden = new Set(carry.map((x) => x.s));
+        this.drawPage(page);
+        const mk = (cls) => { const cv = document.createElement('canvas'); cv.className = cls; cv.width = page.base.width; cv.height = page.base.height; cv.style.width = page.base.style.width; cv.style.height = page.base.style.height; cv.style.pointerEvents = 'none'; return cv; };
+        const hc = mk('carryhl'), ic = mk('ink carryink');
+        page.base.after(hc); page.ink.after(ic);
+        const hx = this.ctxFor(hc, page), ix = this.ctxFor(ic, page);
+        for (const { s } of carry) drawStroke(s.tool === 'hl' ? hx : ix, s);
+        d.layers = [hc, ic];
+      }
       el.classList.add('moving');
       // 종이 위·아래 끝 가까이 끌고 가면 종이가 저절로 따라 스크롤돼요
       const tick = () => {
@@ -306,11 +317,7 @@ export class Paper {
       if (Math.abs(ny - d.cy) > 1) d.moved = true;
       c.y = Math.round(ny);
       el.style.top = u.style.top = c.y + 'px';
-      if (d.carry.length) {
-        const delta = c.y - d.cy;
-        for (const { s, ys } of d.carry) { _dense.delete(s); for (let i = 1, j = 0; i < s.pts.length; i += 3, j++) s.pts[i] = round(ys[j] + delta); }
-        this.drawPage(page);
-      }
+      if (d.layers) { const px = (c.y - d.cy) * this.scale; for (const l of d.layers) l.style.transform = `translateY(${px}px)`; }
     };
     grip.addEventListener('pointermove', (e) => {
       if (!d) return;
@@ -321,6 +328,13 @@ export class Paper {
       if (!d) return;
       cancelAnimationFrame(d.raf);
       el.classList.remove('moving');
+      if (d.carry.length) {
+        const delta = c.y - d.cy;
+        for (const { s, ys } of d.carry) { _dense.delete(s); for (let i = 1, j = 0; i < s.pts.length; i += 3, j++) s.pts[i] = round(ys[j] + delta); }
+        this._hidden = null;
+        this.drawPage(page);
+        d.layers?.forEach((l) => l.remove());
+      }
       if (d.moved) { this._push({ t: 'full', json: d.snap }); this.onChange({}); this.onHistory(); }
       d = null;
     };
@@ -432,8 +446,9 @@ export class Paper {
     ictx.clearRect(0, 0, PAGE_W, PAGE_H);
     const strokes = this.note.pages[page.i].strokes;
     const sel = this.selection && this.selection.page === page.i ? this.selection : null;
-    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s)) drawStroke(ctx, s);
-    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s))) drawStroke(ictx, s);
+    const hid = this._hidden;
+    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s)) drawStroke(ctx, s);
+    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s)) drawStroke(ictx, s);
     this.clearLive(page);
     this.clearHlLive(page);
     if (sel) this.drawSelection(page);
@@ -548,6 +563,7 @@ export class Paper {
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
         this.pagePush(page.i);
+        k.s.t = Date.now(); // 쓴 시각: 인용보다 나중에 쓴 글씨만 인용과 같이 움직여요
         this.note.pages[page.i].strokes.push(k.s);
         this.drawPage(page);
         this.changed(page);
@@ -745,7 +761,10 @@ export class Paper {
   strokesInCite(pageI, c) {
     const b = this.citeBox(c), out = new Set();
     if (!b) return out;
+    // 인용을 넣은 뒤에 그 위에 쓴 글씨만 인용 것으로 봐요. 인용을 원래 노트 위에 넣어도 원래 노트는 안 움직여요
+    const ct = c.t || 0; // 예전 인용(시각 없음): 이번 수정 뒤에 쓴 글씨만
     for (const s of this.note.pages[pageI].strokes) {
+      if (!s.t || s.t <= ct) continue;
       let n = 0, inn = 0;
       for (let i = 0; i < s.pts.length; i += 3) { n++; if (s.pts[i] >= b[0] - 4 && s.pts[i] <= b[2] + 4 && s.pts[i + 1] >= b[1] - 4 && s.pts[i + 1] <= b[3] + 4) inn++; }
       if (n && inn / n >= 0.6) out.add(s);
@@ -952,7 +971,7 @@ export class Paper {
     if (pageIdx === 0) y = Math.max(y, page.linesTop - 10);
     const estH = 46 + (cite.text?.length || 1) * 20;
     y = Math.max(20, Math.min(y, PAGE_H - estH - 20));
-    const c = { ...cite, page: pageIdx, y: Math.round(y) };
+    const c = { ...cite, page: pageIdx, y: Math.round(y), t: Date.now() };
     this.note.citations.push(c);
     this.renderCitations(page);
     this.changed(page);
@@ -981,6 +1000,7 @@ export class Paper {
     }
     if (s.pts.length === 3) s.pts.push(s.pts[0] + 0.3, s.pts[1] + 0.3, s.pts[2]);
     this.pagePush(page.i);
+    s.t = Date.now();
     this.note.pages[page.i].strokes.push(s);
     if (s.tool === 'hl' && opts?.fadeIn) this.fadeInHl(page, s, opts.fadeIn);
     else this.drawPage(page);

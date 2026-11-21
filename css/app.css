@@ -338,6 +338,7 @@ button { touch-action: manipulation; }
 .pk-hex { font-family: var(--font-num); font-size: 14px; color: #555; flex: 1; letter-spacing: 0; }
 .pk-ok { height: 36px; padding: 0 14px; font-size: 14px; border-radius: 10px; background: #111; color: #fff; }
 .page canvas.live { pointer-events: none; }
+.page canvas.carryhl, .page canvas.carryink { pointer-events: none; will-change: transform; } /* 인용과 같이 옮기는 글씨 (끄는 동안만) */
 .page canvas.hllive { pointer-events: none; } /* 쓰는 중 형광펜: 곱하기(위 규칙)로 글씨 밑에 깔린 것처럼 */
 .page canvas.hlfade { pointer-events: none; transition: opacity .16s linear; }
 .passage-block { position: absolute; left: 18.7px; right: 18.7px; top: 11.2px; }
