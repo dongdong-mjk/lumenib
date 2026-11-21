@@ -176,10 +176,10 @@ export class BiblePanel {
     const f = this.el.querySelector('.bp-float');
     if (!f) return;
     const sel = this.selection;
-    if (sel && this.o.actions) {
-      const acts = this.o.actions(sel);
+    if (sel) {
+      const acts = this.o.actions ? this.o.actions(sel) : [];
       // 선택 취소: 생각과 다르게 골라졌을 때 한 번에 풀어요 (11/21)
-      f.innerHTML = acts.length ? `<div class="bp-action"><button class="btn btn-outline bp-cancel" aria-label="선택 취소">${icon.x}</button>${acts.map((a, i) => `<button class="btn ${a.kind === 'outline' ? 'btn-outline' : 'btn-primary'}" data-a="${i}">${esc(a.label)}</button>`).join('')}</div>` : '';
+      f.innerHTML = `<div class="bp-action"><button class="btn btn-outline bp-cancel" aria-label="선택 취소">${icon.x}</button>${acts.map((a, i) => `<button class="btn ${a.kind === 'outline' ? 'btn-outline' : 'btn-primary'}" data-a="${i}">${esc(a.label)}</button>`).join('')}</div>`; // 본문 고르기처럼 버튼이 없는 화면에도 선택 취소는 보여요
       f.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => acts[+b.dataset.a].onClick(sel)));
       f.querySelector('.bp-cancel')?.addEventListener('click', () => this.clearSel());
       return;
@@ -239,33 +239,49 @@ export class BiblePanel {
       this.o.onChange?.();
     });
     if (!this.o.onDrag) return;
+    // 고른 구절 위에서: 세로로 움직이면 목록 스크롤, 옆으로(비스듬히 포함) 움직이면 노트로 끌기.
+    // 브라우저에 맡기면 방향을 잘못 읽어 끌기가 중간에 끊겨서, 방향 판단과 스크롤을 직접 해요 (11/21)
     body.addEventListener('pointerdown', (e) => {
       const v = e.target.closest('.verse.sel');
       if (!v || e.button > 0) return;
-      drag = { x0: e.clientX, y0: e.clientY, started: false, id: e.pointerId };
+      drag = { x0: e.clientX, y0: e.clientY, mode: null, id: e.pointerId, ly: e.clientY, lt: e.timeStamp, vy: 0 };
+      cancelAnimationFrame(this._fling);
+      try { body.setPointerCapture(e.pointerId); } catch {}
     });
     const move = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
-      if (!drag.started) {
+      if (!drag.mode) {
         const dx = Math.abs(e.clientX - drag.x0), dy = Math.abs(e.clientY - drag.y0);
-        if (Math.hypot(dx, dy) < 10) return;
-        // 세로로 움직이면 끌기가 아니라 말씀 목록 스크롤이에요 (가로로 움직일 때만 노트로 끌어 옮기기)
-        if (dy > dx) { drag = null; return; }
-        drag.started = true;
-        try { body.setPointerCapture(e.pointerId); } catch {}
-        this.o.onDrag.start?.(this.selection);
+        if (Math.hypot(dx, dy) < 8) return;
+        drag.mode = dy > dx * 1.7 ? 'scroll' : 'drag'; // 거의 세로일 때만 스크롤
+        suppressClick = true;
+        if (drag.mode === 'drag') this.o.onDrag.start?.(this.selection);
       }
       e.preventDefault();
+      if (drag.mode === 'scroll') {
+        const dt = Math.max(1, e.timeStamp - drag.lt);
+        body.scrollTop -= e.clientY - drag.ly;
+        drag.vy = (e.clientY - drag.ly) / dt;
+        drag.ly = e.clientY; drag.lt = e.timeStamp;
+        return;
+      }
       this.o.onDrag.move(e.clientX, e.clientY, this.selection);
     };
     const up = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
-      if (drag.started) {
-        suppressClick = true;
-        setTimeout(() => (suppressClick = false), 300);
-        this.o.onDrag.drop(e.type === 'pointercancel' ? null : e.clientX, e.clientY, this.selection);
+      const d = drag; drag = null;
+      if (d.mode) setTimeout(() => (suppressClick = false), 300);
+      if (d.mode === 'drag') this.o.onDrag.drop(e.type === 'pointercancel' ? null : e.clientX, e.clientY, this.selection);
+      if (d.mode === 'scroll' && Math.abs(d.vy) > 0.05) {
+        // 손을 떼면 미끄러지듯 조금 더 스크롤
+        let v = d.vy * 16, last = performance.now();
+        const step = (t) => {
+          const k = (t - last) / 16; last = t;
+          body.scrollTop -= v * k; v *= Math.pow(0.95, k);
+          if (Math.abs(v) > 0.3) this._fling = requestAnimationFrame(step);
+        };
+        this._fling = requestAnimationFrame(step);
       }
-      drag = null;
     };
     body.addEventListener('pointermove', move);
     body.addEventListener('pointerup', up);
