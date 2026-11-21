@@ -247,6 +247,7 @@ export class Paper {
   addCiteHandle(page, c, el) {
     const u = document.createElement('div');
     u.className = 'cite-ui';
+    citeUis.set(c, u);
     u.style.top = c.y + 'px';
     u.innerHTML = `<button class="cite-grip" aria-label="옮기기"><svg width="18" height="18" viewBox="0 0 24 24" fill="#555"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button><button class="cite-x" aria-label="빼기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
     page.ui.appendChild(u);
@@ -495,7 +496,7 @@ export class Paper {
           sel.box = moveBox(sel.box, sel.cites?.size ? 0 : k.dx, k.dy);
           this.changed(page, false);
         }
-        for (const c of this.selection.cites || []) { const el = citeEls.get(c); if (el) el.style.transform = ''; }
+        for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = '';
         this.drawSelection(page);
         this.showLassoMenu();
       } else if (k.kind === 'scale') {
@@ -615,8 +616,7 @@ export class Paper {
     const ctx = this.clearLive(page);
     // 고른 인용 블록은 옮기는 동안 위아래로 같이 따라와요 (인용은 가로로는 안 움직여요)
     for (const c of sel.cites || []) {
-      const el = citeEls.get(c);
-      if (el) el.style.transform = dy ? `translateY(${dy}px)` : '';
+      for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = dy ? `translateY(${dy}px)` : '';
     }
     const b = sel.box;
     const ox = sc ? sc.h.ax : 0, oy = sc ? sc.h.ay : 0, kx = sc ? sc.kx : 1, ky = sc ? sc.ky : 1;
@@ -637,7 +637,7 @@ export class Paper {
 
   clearSelection() {
     const sel = this.selection;
-    for (const c of sel?.cites || []) { const el = citeEls.get(c); if (el) el.style.transform = ''; }
+    for (const c of sel?.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = '';
     this.selection = null;
     this.hideLassoMenu();
     if (sel) this.drawPage(this.pages[sel.page]);
@@ -1143,6 +1143,7 @@ function pip(poly, x, y) {
   return inside;
 }
 const citeEls = new WeakMap(); // 인용 → 화면의 블록
+const citeUis = new WeakMap(); // 인용 → 오른쪽 손잡이(옮기기 · 빼기)
 function bbox(strokes) {
   let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
   for (const s of strokes) for (let i = 0; i < s.pts.length; i += 3) {

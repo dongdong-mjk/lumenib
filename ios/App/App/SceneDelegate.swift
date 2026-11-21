@@ -60,6 +60,20 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     func inkMove(_ pts: [SIMD3<Double>], _ pred: [SIMD3<Double>]) { inkOverlay.add(pts, predicted: pred) }
     func inkCancel() { inkOverlay.clear() }
 
+    // 웹 안의 스크롤 영역(노트 종이 등)은 손가락으로만 스크롤되게 해요.
+    // 그래야 올가미·지우개처럼 웹이 받는 펜슬 획이 도구를 바꾼 직후에도 스크롤로 바뀌지 않아요.
+    func pencilNeverScrolls() {
+        guard let root = webView?.scrollView else { return }
+        let fingers = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        func walk(_ v: UIView) {
+            if let sv = v as? UIScrollView, sv !== root, sv.panGestureRecognizer.allowedTouchTypes != fingers {
+                sv.panGestureRecognizer.allowedTouchTypes = fingers
+            }
+            v.subviews.forEach(walk)
+        }
+        walk(root)
+    }
+
     private func setupInk() {
         guard let web = webView else { return }
         // 웹뷰 위에 고정 (웹뷰 안 스크롤과 상관없이 화면 좌표 그대로)
@@ -238,6 +252,7 @@ final class InkWindow: UIWindow {
             }
             return // 이 펜슬 획은 웹으로 보내지 않아요
         }
+        if pencil.phase == .began { b.pencilNeverScrolls() }
         if pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
             tracked = pencil
             b.inkBegin(point(pencil, in: web))

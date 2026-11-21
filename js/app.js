@@ -559,7 +559,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     </header>
     <div class="workspace">
       <section class="panel bible-panel"></section>
-      <section class="panel right-panel note"><div class="tabs-slot"></div><div class="info-slot"></div><div class="paper-scroll"></div><div class="tb-slot"></div></section>
+      <section class="panel right-panel note"><div class="tb-slot"></div><div class="tabs-slot"></div><div class="info-slot"></div><div class="paper-scroll"></div></section>
     </div></div>`;
   const right = app.querySelector('.right-panel');
   const scrollEl = right.querySelector('.paper-scroll');
