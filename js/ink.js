@@ -1019,9 +1019,9 @@ function drawStroke(ctx, s, live = false) {
     ctx.globalCompositeOperation = 'multiply';
     ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
     const q = hlPoints(p, s.w);
+    // 곡선(quadratic)으로 이으면 급하게 꺾이는 곳에서 굵은 선 안쪽에 구멍이 뚫렸어요. 촘촘한 점을 직선 + 둥근 이음으로 이어요
     ctx.beginPath(); ctx.moveTo(q[0], q[1]);
-    for (let i = 2; i < q.length - 2; i += 2) ctx.quadraticCurveTo(q[i], q[i + 1], (q[i] + q[i + 2]) / 2, (q[i + 1] + q[i + 3]) / 2);
-    ctx.lineTo(q[q.length - 2], q[q.length - 1]);
+    for (let i = 2; i < q.length; i += 2) ctx.lineTo(q[i], q[i + 1]);
     ctx.stroke();
     ctx.restore();
     return;
