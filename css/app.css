@@ -603,3 +603,17 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .sz-row { display: flex; align-items: center; gap: 12px; padding: 4px 2px; }
 .sz-row input { flex: 1; accent-color: #111; }
 .sz-v { width: 32px; text-align: right; font-size: 13px; color: #555; font-variant-numeric: tabular-nums; }
+
+/* 슬라이더: iPad 기본 슬라이더 느낌 (가는 트랙 + 채워진 부분 + 떠 있는 흰 손잡이) */
+input[type=range] { -webkit-appearance: none; appearance: none; height: 28px; background: transparent; --p: 50%; touch-action: none; }
+input[type=range]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, #111 0 var(--p), rgba(120, 120, 128, 0.2) var(--p) 100%);
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 38px; height: 24px; margin-top: -9px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92); border: 0.5px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 6px 13px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: transform .15s ease;
+}
+input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }

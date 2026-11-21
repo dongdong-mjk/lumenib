@@ -49,6 +49,11 @@ function modal(html, bind) {
   return close;
 }
 
+// 슬라이더 채워진 부분 표시 (CSS --p)
+const fillRange = (r) => r.style.setProperty('--p', ((r.value - r.min) / (r.max - r.min || 1)) * 100 + '%');
+document.addEventListener('input', (e) => { if (e.target.matches?.('input[type=range]')) fillRange(e.target); });
+new MutationObserver(() => document.querySelectorAll('input[type=range]').forEach(fillRange)).observe(document.body, { childList: true, subtree: true });
+
 // 필요할 때만 외부 도구를 불러와요 (PDF 만들기)
 const _scripts = {};
 function loadScript(src) {

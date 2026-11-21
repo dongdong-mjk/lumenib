@@ -657,7 +657,10 @@ final class PencilInkGestureRecognizer: UIGestureRecognizer {
         return SIMD3(Double(p.x), Double(p.y), min(1, max(0.05, f)))
     }
 
+    var moves = 0
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        moves = 0
+        if let t = touches.first { print("[ink] touchesBegan type=\(t.type.rawValue) at=\(t.location(in: view)) allows=\(config.allows(t.location(in: view)))") }
         guard touch == nil, let t = touches.first, config.allows(t.location(in: view)) else {
             if touch == nil { state = .failed }
             return
@@ -668,6 +671,7 @@ final class PencilInkGestureRecognizer: UIGestureRecognizer {
     }
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
         guard let t = touch, touches.contains(t) else { return }
+        moves += 1
         let pts = (event.coalescedTouches(for: t) ?? [t]).map(point)
         let pred = (event.predictedTouches(for: t) ?? []).map(point)
         onMove?(pts, pred)
@@ -675,16 +679,18 @@ final class PencilInkGestureRecognizer: UIGestureRecognizer {
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
         guard let t = touch, touches.contains(t) else { return }
+        print("[ink] ended moves=\(moves) state=\(state.rawValue)")
         onMove?([point(t)], [])
         onEnd?()
         state = .ended
     }
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
         guard let t = touch, touches.contains(t) else { return }
+        print("[ink] cancelled moves=\(moves)")
         onCancel?()
         state = .cancelled
     }
-    override func reset() { super.reset(); touch = nil }
+    override func reset() { if touch != nil { print("[ink] reset moves=\(moves) state=\(state.rawValue)") }; super.reset(); touch = nil }
     // 웹뷰의 스크롤·제스처와 함께 인식 (손가락 스크롤은 그대로)
     override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
 }

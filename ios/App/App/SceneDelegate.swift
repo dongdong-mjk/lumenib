@@ -8,7 +8,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        window = UIWindow(windowScene: windowScene)
+        window = InkWindow(windowScene: windowScene)
         window?.rootViewController = PencilBridgeViewController()
         window?.makeKeyAndVisible()
 
@@ -47,7 +47,14 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     // MARK: 필기만 네이티브 (웹 노트 위에서 애플펜슬 펜·형광펜)
     private let inkOverlay = WebInkOverlay()
-    private let inkGesture = PencilInkGestureRecognizer(target: nil, action: nil)
+    private var inkConfig = WebInkConfig()
+
+    // 창(InkWindow)이 애플펜슬 터치를 웹보다 먼저 받아서 여기로 넘겨요.
+    // 펜·형광펜이고 종이 위에서 시작하면 true → 그 획은 웹에 안 가고 네이티브가 그려요.
+    func inkShouldTake(_ p: CGPoint) -> Bool { presentedViewController == nil && inkConfig.allows(p) }
+    func inkBegin(_ p: SIMD3<Double>) { inkOverlay.begin(p) }
+    func inkMove(_ pts: [SIMD3<Double>], _ pred: [SIMD3<Double>]) { inkOverlay.add(pts, predicted: pred) }
+    func inkCancel() { inkOverlay.clear() }
 
     private func setupInk() {
         guard let web = webView else { return }
@@ -55,16 +62,14 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         inkOverlay.frame = web.bounds
         inkOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         web.addSubview(inkOverlay)
-        web.addGestureRecognizer(inkGesture)
-        inkGesture.onBegin = { [weak self] p in self?.inkOverlay.begin(p) }
-        inkGesture.onMove = { [weak self] pts, pred in self?.inkOverlay.add(pts, predicted: pred) }
-        inkGesture.onCancel = { [weak self] in self?.inkOverlay.clear() }
-        inkGesture.onEnd = { [weak self] in
-            guard let self else { return }
-            let pts = self.inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
-            guard let data = try? JSONSerialization.data(withJSONObject: pts), let json = String(data: data, encoding: .utf8) else { self.inkOverlay.clear(); return }
+    }
+
+    func inkEnd() {
+        do {
+            let pts = inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
+            guard let data = try? JSONSerialization.data(withJSONObject: pts), let json = String(data: data, encoding: .utf8) else { inkOverlay.clear(); return }
             // 웹이 노트에 넣어 다시 그린 다음에 지워서 깜빡이지 않게
-            self.webView?.evaluateJavaScript("window.lumenibInk && window.lumenibInk(\(json))") { [weak self] _, _ in
+            webView?.evaluateJavaScript("window.lumenibInk && window.lumenibInk(\(json))") { [weak self] _, _ in
                 DispatchQueue.main.async { self?.inkOverlay.clear() }
             }
         }
@@ -86,7 +91,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
         if action == "inkConfig" {
             let c = WebInkConfig(body)
-            inkGesture.config = c
+            inkConfig = c
             inkOverlay.config = c
             return
         }
@@ -149,5 +154,44 @@ enum PencilAction {
             if a == .runSystemShortcut { return "ignore" } // 단축어는 iPad가 직접 실행
         }
         return "ignore"
+    }
+}
+
+/// 애플펜슬 터치를 웹보다 먼저 가로채는 창.
+/// 웹뷰 안의 제스처들이 펜슬 획을 중간에 끊어 버려서(점만 찍힘), 창 단계에서 받아 네이티브로 그려요.
+final class InkWindow: UIWindow {
+    private weak var tracked: UITouch?
+
+    private var bridge: PencilBridgeViewController? { rootViewController as? PencilBridgeViewController }
+
+    private func point(_ t: UITouch, in v: UIView) -> SIMD3<Double> {
+        let p = t.preciseLocation(in: v)
+        let f = t.maximumPossibleForce > 0 ? Double(t.force / t.maximumPossibleForce) : 0.5
+        return SIMD3(Double(p.x), Double(p.y), min(1, max(0.05, f)))
+    }
+
+    override func sendEvent(_ event: UIEvent) {
+        guard event.type == .touches, let b = bridge, let web = b.webView,
+              let pencil = event.allTouches?.first(where: { $0.type == .pencil }) else { return super.sendEvent(event) }
+        if let t = tracked, t === pencil {
+            switch pencil.phase {
+            case .moved, .stationary:
+                b.inkMove((event.coalescedTouches(for: pencil) ?? [pencil]).map { point($0, in: web) },
+                          (event.predictedTouches(for: pencil) ?? []).map { point($0, in: web) })
+            case .ended:
+                b.inkMove([point(pencil, in: web)], [])
+                b.inkEnd(); tracked = nil
+            case .cancelled:
+                b.inkCancel(); tracked = nil
+            default: break
+            }
+            return // 이 펜슬 획은 웹으로 보내지 않아요
+        }
+        if pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
+            tracked = pencil
+            b.inkBegin(point(pencil, in: web))
+            return
+        }
+        super.sendEvent(event)
     }
 }
