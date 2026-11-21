@@ -259,19 +259,47 @@ export class Paper {
     let d = null;
     grip.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
-      grip.setPointerCapture(e.pointerId);
-      d = { y0: e.clientY, cy: c.y, snap: this.snapshot(), moved: false };
+      try { grip.setPointerCapture(e.pointerId); } catch {}
+      // 인용 안에 쓴 밑줄·메모도 같이 옮겨요 (11/21). 원래 획은 되돌리기 기록에 두고, 새 획으로 바꿔 끼워 옮겨요
+      const pg = this.note.pages[page.i], inside = this.strokesInCite(page.i, c), carry = [];
+      if (inside.size) pg.strokes = pg.strokes.map((s) => {
+        if (!inside.has(s)) return s;
+        const cl = { ...s, pts: s.pts.slice() };
+        carry.push({ s: cl, ys: s.pts.filter((_, i) => i % 3 === 1) });
+        return cl;
+      });
+      d = { y0: e.clientY, lastY: e.clientY, cy: c.y, st0: this.scrollEl.scrollTop, snap: this.snapshot(), moved: false, carry };
       el.classList.add('moving');
+      // 종이 위·아래 끝 가까이 끌고 가면 종이가 저절로 따라 스크롤돼요
+      const tick = () => {
+        if (!d) return;
+        const r = this.scrollEl.getBoundingClientRect(), edge = 70;
+        const v = d.lastY > r.bottom - edge ? Math.min(18, (d.lastY - (r.bottom - edge)) / 3) : d.lastY < r.top + edge ? -Math.min(18, ((r.top + edge) - d.lastY) / 3) : 0;
+        if (v) { this.scrollEl.scrollTop += v; apply(); }
+        d.raf = requestAnimationFrame(tick);
+      };
+      d.raf = requestAnimationFrame(tick);
     });
-    grip.addEventListener('pointermove', (e) => {
-      if (!d) return;
-      const ny = Math.max(10, Math.min(PAGE_H - el.offsetHeight - 10, d.cy + (e.clientY - d.y0) / this.scale));
+    const apply = () => {
+      const dy = (d.lastY - d.y0 + (this.scrollEl.scrollTop - d.st0)) / this.scale;
+      const ny = Math.max(10, Math.min(PAGE_H - el.offsetHeight - 10, d.cy + dy));
       if (Math.abs(ny - d.cy) > 1) d.moved = true;
       c.y = Math.round(ny);
       el.style.top = u.style.top = c.y + 'px';
+      if (d.carry.length) {
+        const delta = c.y - d.cy;
+        for (const { s, ys } of d.carry) { _dense.delete(s); for (let i = 1, j = 0; i < s.pts.length; i += 3, j++) s.pts[i] = round(ys[j] + delta); }
+        this.drawPage(page);
+      }
+    };
+    grip.addEventListener('pointermove', (e) => {
+      if (!d) return;
+      d.lastY = e.clientY;
+      apply();
     });
     const up = () => {
       if (!d) return;
+      cancelAnimationFrame(d.raf);
       el.classList.remove('moving');
       if (d.moved) { this._push({ t: 'full', json: d.snap }); this.onChange({}); this.onHistory(); }
       d = null;
