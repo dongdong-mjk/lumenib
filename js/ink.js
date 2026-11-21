@@ -419,6 +419,7 @@ export class Paper {
     for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s)) drawStroke(ctx, s);
     for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s))) drawStroke(ictx, s);
     this.clearLive(page);
+    this.clearHlLive(page);
     if (sel) this.drawSelection(page);
   }
 
@@ -584,22 +585,47 @@ export class Paper {
     if (!pts) return;
     k.snapped = true;
     k.s.pts = pts;
+    page._hlS = null; // 형광펜 도형: 처음부터 다시 그려요
     this.drawLive(page, k.s);
   }
 
   drawLive(page, s) {
     const ctx = this.clearLive(page);
-    if (s.tool === 'hl') {
-      // 형광펜은 쓰는 중에도 완성본과 같은 캔버스(본문·펜 글씨 밑, 곱하기)에 그려요.
-      // 위에 덮는 캔버스에 그리면 쓰는 동안엔 글씨를 가렸다가 펜을 떼면 비쳐 보여서 색이 바뀌는 것처럼 보였어요
-      const b = this.ctxFor(page.base, page);
-      b.clearRect(0, 0, PAGE_W, PAGE_H);
-      const sel = this.selection && this.selection.page === page.i ? this.selection : null;
-      for (const q of this.note.pages[page.i].strokes) if (q.tool === 'hl' && q !== s && !(sel && sel.set.has(q))) drawStroke(b, q);
-      drawStroke(b, s, true);
-      return;
-    }
+    if (s.tool === 'hl') { this.drawHlLive(page, s); return; }
     drawStroke(ctx, s, true);
+  }
+
+  // 형광펜 쓰는 중: 완성본처럼 본문·펜 글씨 밑(곱하기)에 깔리는 전용 캔버스에, 새로 그은 부분만 이어 그려요.
+  // 캔버스에는 불투명하게 그리고 캔버스 자체를 투명하게 해서, 이음새가 겹쳐도 진해지지 않아요. (매번 전부 다시 그리면 늦고 끊겼어요)
+  drawHlLive(page, s) {
+    let c = page.hlLive;
+    if (!c) {
+      c = page.hlLive = document.createElement('canvas');
+      c.className = 'hllive';
+      page.base.after(c);
+    }
+    if (page._hlS !== s) {
+      if (c.width !== page.base.width || c.height !== page.base.height) { c.width = page.base.width; c.height = page.base.height; }
+      c.style.width = page.base.style.width; c.style.height = page.base.style.height;
+      this.ctxFor(c, page).clearRect(0, 0, PAGE_W, PAGE_H);
+      c.style.opacity = String(s.a ?? HL_ALPHA_DEFAULT);
+      page._hlS = s; page._hlN = 0;
+    }
+    const ctx = this.ctxFor(c, page), p = s.pts, n = p.length / 3;
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const from = Math.max(0, page._hlN - 1);
+    ctx.moveTo(p[from * 3], p[from * 3 + 1]);
+    for (let k = from + 1; k < n; k++) ctx.lineTo(p[k * 3], p[k * 3 + 1]);
+    if (n === 1) ctx.lineTo(p[0] + 0.01, p[1]);
+    ctx.stroke();
+    page._hlN = n;
+  }
+
+  clearHlLive(page) {
+    if (!page.hlLive || !page._hlS) return;
+    this.ctxFor(page.hlLive, page).clearRect(0, 0, PAGE_W, PAGE_H);
+    page._hlS = null;
   }
 
   eraseAt(page, x, y, cur) {
