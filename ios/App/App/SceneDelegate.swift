@@ -196,7 +196,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         web.addSubview(box)
         vc.didMove(toParent: self)
         panel = vc; panelBox = box
-        box.layoutIfNeeded() // 먼저 자리를 잡아야 펜 종류 탭 선택이 옆에서 미끄러져 들어오지 않아요
+        // 먼저 자리를 다 잡아야 펜 종류 탭 선택이 옆에서 미끄러져 들어오지 않아요 (애니메이션 없이)
+        UIView.performWithoutAnimation { box.layoutIfNeeded(); vc.view.setNeedsLayout(); vc.view.layoutIfNeeded(); vc.view.subviews.forEach { $0.layoutIfNeeded() } }
         box.alpha = 0; UIView.animate(withDuration: 0.15) { box.alpha = 1 }
     }
     // 웹 창 안의 슬라이더 자리에 진짜 iOS 슬라이더를 겹쳐 놓아요 (형광펜 투명도 등)

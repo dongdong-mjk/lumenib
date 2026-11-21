@@ -529,6 +529,15 @@ final class LumenPenSettingsViewController: UIViewController {
 
     private func value(_ k: LumenPenOption) -> Double { opts[style]?[k.rawValue] ?? k.defaultValue }
     private weak var resetButton: UIButton?
+    private weak var segControl: UISegmentedControl?
+    // 탭 선택은 실제 크기가 정해진 뒤 애니메이션 없이 넣어요 (처음 열 때 옆에서 미끄러져 들어오던 것)
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if let seg = segControl, seg.bounds.width > 0, seg.selectedSegmentIndex != style.rawValue {
+            UIView.performWithoutAnimation { seg.selectedSegmentIndex = style.rawValue; seg.layoutIfNeeded() }
+        }
+        drawPreview()
+    }
     // 지금 펜 종류의 값이 모두 기본값이면 '기본값으로'를 꺼 둬요
     private var isDefault: Bool { style.options.allSatisfy { value($0) == $0.defaultValue } }
 
@@ -545,9 +554,9 @@ final class LumenPenSettingsViewController: UIViewController {
         stack.addArrangedSubview(previewBox)
 
         let seg = UISegmentedControl(items: LumenPenStyle.allCases.map(\.name))
-        seg.selectedSegmentIndex = style.rawValue
         seg.addTarget(self, action: #selector(styleChanged(_:)), for: .valueChanged)
         stack.addArrangedSubview(seg)
+        segControl = seg
         let desc = UILabel(); desc.text = style.desc; desc.font = .systemFont(ofSize: 12); desc.textColor = .lumenTextSecondary; desc.numberOfLines = 0
         stack.addArrangedSubview(desc)
 
@@ -572,10 +581,10 @@ final class LumenPenSettingsViewController: UIViewController {
         reset.addTarget(self, action: #selector(resetTapped), for: .touchUpInside)
         stack.addArrangedSubview(reset)
         view.layoutIfNeeded()
+        if let seg = segControl, seg.bounds.width > 0 { UIView.performWithoutAnimation { seg.selectedSegmentIndex = style.rawValue; seg.layoutIfNeeded() } }
         drawPreview()
     }
 
-    override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); drawPreview() }
 
     private func drawPreview() {
         let w = Double(previewBox.bounds.width), h = Double(previewBox.bounds.height)
