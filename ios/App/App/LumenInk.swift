@@ -547,19 +547,19 @@ final class LumenPenSettingsViewController: UIViewController {
         seg.selectedSegmentIndex = style.rawValue
         seg.addTarget(self, action: #selector(styleChanged(_:)), for: .valueChanged)
         stack.addArrangedSubview(seg)
-        let desc = UILabel(); desc.text = style.desc; desc.font = .systemFont(ofSize: 11); desc.textColor = .gray
+        let desc = UILabel(); desc.text = style.desc; desc.font = .systemFont(ofSize: 12); desc.textColor = .secondaryLabel; desc.numberOfLines = 0
         stack.addArrangedSubview(desc)
 
         for k in style.options {
             let head = UIStackView()
             let name = UILabel(); name.text = k.title; name.font = .systemFont(ofSize: 13, weight: .semibold)
-            let val = UILabel(); val.text = "\(Int(value(k)))%"; val.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular); val.textColor = .darkGray
+            let val = UILabel(); val.text = "\(Int(value(k)))%"; val.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium); val.textColor = .label
             val.tag = 1000 + LumenPenOption.allCases.firstIndex(of: k)!
             head.addArrangedSubview(name); head.addArrangedSubview(UIView()); head.addArrangedSubview(val)
             let slider = UISlider(); slider.minimumValue = 0; slider.maximumValue = 100; slider.value = Float(value(k))
             slider.tag = LumenPenOption.allCases.firstIndex(of: k)!
             slider.addTarget(self, action: #selector(sliderChanged(_:)), for: .valueChanged)
-            let hint = UILabel(); hint.text = k.hint; hint.font = .systemFont(ofSize: 11); hint.textColor = .gray; hint.numberOfLines = 0
+            let hint = UILabel(); hint.text = k.hint; hint.font = .systemFont(ofSize: 12); hint.textColor = .secondaryLabel; hint.numberOfLines = 0
             let box = UIStackView(arrangedSubviews: [head, slider, hint]); box.axis = .vertical; box.spacing = 2
             stack.addArrangedSubview(box)
         }
@@ -817,7 +817,7 @@ final class LumenSizeSliderViewController: UIViewController {
         slider.minimumValue = Float(minV); slider.maximumValue = Float(maxV); slider.value = Float(value)
         slider.addTarget(self, action: #selector(changed), for: .valueChanged)
         slider.addTarget(self, action: #selector(done), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-        valueLabel.text = fmt(value); valueLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular); valueLabel.textColor = .secondaryLabel
+        valueLabel.text = fmt(value); valueLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium); valueLabel.textColor = .label
         valueLabel.widthAnchor.constraint(equalToConstant: 36).isActive = true
         valueLabel.textAlignment = .right
         let row = UIStackView(arrangedSubviews: [slider, valueLabel]); row.spacing = 12; row.alignment = .center

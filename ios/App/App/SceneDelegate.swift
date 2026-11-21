@@ -151,6 +151,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             pop.sourceView = web
             pop.sourceRect = rect
             pop.permittedArrowDirections = [.down, .up]
+            pop.backgroundColor = .systemBackground // 유리처럼 비치지 않게 (글자 대비)
         }
         present(vc, animated: true)
     }
@@ -218,6 +219,9 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     private func sendToWeb(_ kind: String, _ action: String) {
         guard action != "ignore" else { return }
+        // 펜 설정·굵기 창이 열린 채로 도구를 바꾸면 창은 닫아요
+        if presentedViewController != nil { dismiss(animated: true) }
+        js("window.lumenibCloseMenus && window.lumenibCloseMenus()")
         let js = """
         (function (k, a) {
           if (window.lumenibPencil) return window.lumenibPencil(k, a);
