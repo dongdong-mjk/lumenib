@@ -29,6 +29,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 /// 웹 쪽 함수는 js/app.js 의 window.lumenibPencil(kind, action).
 class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDelegate, WKScriptMessageHandler {
 
+    // 툴바가 화면 맨 위(제목줄)에 있어서, 위쪽 가장자리의 시스템 동작(알림 센터·메뉴 막대 내리기)이
+    // 손가락 터치를 먼저 가져가지 않게 해요. 시스템 동작은 한 번 더 끌어내리면 그대로 쓸 수 있어요.
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { [.top] }
+    // 상태 표시줄(시간·배터리) 영역은 iPad가 손가락 터치를 먼저 가져가서, 그 아래 제목줄 버튼이 손가락으로 안 눌렸어요(펜슬은 됨).
+    // 노트 앱처럼 상태 표시줄을 숨겨서 화면 맨 위까지 앱이 터치를 받게 해요.
+    override var prefersStatusBarHidden: Bool { true }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         let pencil = UIPencilInteraction()
@@ -273,7 +285,6 @@ final class InkWindow: UIWindow {
             }
             return // 이 펜슬 획은 웹으로 보내지 않아요
         }
-        if pencil.phase == .began { b.pencilNeverScrolls() }
         if pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
             tracked = pencil
             b.inkBegin(point(pencil, in: web))
