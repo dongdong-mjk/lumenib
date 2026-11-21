@@ -271,10 +271,15 @@ final class InkWindow: UIWindow {
         return SIMD3(Double(p.x), Double(p.y), min(1, max(0.05, f)))
     }
 
+    // 펜슬로 쓰는 동안 손바닥·손가락이 새로 닿으면, 그 터치의 시작은 웹에 안 갔어요.
+    // 그 뒤 움직임·떼기만 웹에 가면 웹이 터치 상태를 잘못 알아서 확대(두 손가락)가 멈췄어요. 그런 터치는 끝까지 웹에 안 보내요.
+    private var swallowed = Set<ObjectIdentifier>()
+
     override func sendEvent(_ event: UIEvent) {
-        guard event.type == .touches, let b = bridge, let web = b.webView,
-              let pencil = event.allTouches?.first(where: { $0.type == .pencil }) else { return super.sendEvent(event) }
-        if let t = tracked, t === pencil {
+        guard event.type == .touches, let b = bridge, let web = b.webView, let all = event.allTouches else { return super.sendEvent(event) }
+        let pencil = all.first(where: { $0.type == .pencil })
+        if let t = tracked, let pencil, t === pencil {
+            for f in all where f.type != .pencil && f.phase == .began { swallowed.insert(ObjectIdentifier(f)) }
             switch pencil.phase {
             case .moved, .stationary:
                 b.inkMove((event.coalescedTouches(for: pencil) ?? [pencil]).map { point($0, in: web) },
@@ -286,13 +291,25 @@ final class InkWindow: UIWindow {
                 b.inkCancel(); tracked = nil
             default: break
             }
+            forget(all)
             return // 이 펜슬 획은 웹으로 보내지 않아요
         }
-        if pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
+        if let pencil, pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
             tracked = pencil
+            for f in all where f.type != .pencil && f.phase == .began { swallowed.insert(ObjectIdentifier(f)) }
             b.inkBegin(point(pencil, in: web))
             return
         }
+        // 웹이 시작을 못 본 손가락 터치만 움직이는 이벤트면 그대로 삼켜요
+        if !swallowed.isEmpty {
+            let changing = all.filter { $0.phase != .stationary }
+            if !changing.isEmpty && changing.allSatisfy({ swallowed.contains(ObjectIdentifier($0)) }) { forget(all); return }
+        }
+        forget(all)
         super.sendEvent(event)
+    }
+
+    private func forget(_ all: Set<UITouch>) {
+        for t in all where t.phase == .ended || t.phase == .cancelled { swallowed.remove(ObjectIdentifier(t)) }
     }
 }
