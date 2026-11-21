@@ -75,6 +75,51 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         }
     }
 
+    // MARK: 펜 설정 · 굵기 창을 진짜 iPad 창(팝오버)으로
+
+    private static let styleKeys = ["ball", "fountain", "brush"]
+    private func anchorRect(_ b: [String: Any]) -> CGRect {
+        let a = (b["anchor"] as? [Any])?.map { ($0 as? NSNumber)?.doubleValue ?? 0 } ?? [0, 0, 1, 1]
+        return a.count == 4 ? CGRect(x: a[0], y: a[1], width: a[2], height: a[3]) : .zero
+    }
+    private func presentPopover(_ vc: UIViewController, _ rect: CGRect) {
+        guard presentedViewController == nil, let web = webView else { return }
+        vc.modalPresentationStyle = .popover
+        if let pop = vc.popoverPresentationController {
+            pop.sourceView = web
+            pop.sourceRect = rect
+            pop.permittedArrowDirections = [.down, .up]
+        }
+        present(vc, animated: true)
+    }
+    private func js(_ code: String) { webView?.evaluateJavaScript(code, completionHandler: nil) }
+
+    private func presentPenSettings(_ b: [String: Any]) {
+        let keys = Self.styleKeys
+        let style = LumenPenStyle(rawValue: keys.firstIndex(of: b["style"] as? String ?? "") ?? 0) ?? .ball
+        var opts: [LumenPenStyle: [String: Double]] = [:]
+        for (k, v) in (b["opts"] as? [String: Any] ?? [:]) {
+            guard let i = keys.firstIndex(of: k), let st = LumenPenStyle(rawValue: i) else { continue }
+            opts[st] = (v as? [String: Any])?.compactMapValues { ($0 as? NSNumber)?.doubleValue } ?? [:]
+        }
+        let vc = LumenPenSettingsViewController(style: style, opts: opts, color: b["color"] as? String ?? "#111111")
+        vc.onChange = { [weak self] st, o in
+            let dict = o[st] ?? [:]
+            guard let data = try? JSONSerialization.data(withJSONObject: dict), let json = String(data: data, encoding: .utf8) else { return }
+            self?.js("window.lumenibSetPen('\(keys[st.rawValue])', \(json))")
+        }
+        presentPopover(vc, anchorRect(b))
+    }
+
+    private func presentSizeSlider(_ b: [String: Any]) {
+        let t = b["tool"] as? String ?? "pen", idx = b["idx"] as? Int ?? 0
+        let vc = LumenSizeSliderViewController(title: t == "pen" ? "펜 굵기" : "형광펜 굵기",
+                                               value: b["value"] as? Double ?? 2.6, min: b["min"] as? Double ?? 0.6, max: b["max"] as? Double ?? 10,
+                                               step: t == "pen" ? 0.1 : 1, defaultValue: b["def"] as? Double ?? 2.6)
+        vc.onChange = { [weak self] v, done in self?.js("window.lumenibSetSize('\(t)', \(idx), \(v), \(done))") }
+        presentPopover(vc, anchorRect(b))
+    }
+
     // 웹앱의 화면 모드(라이트/다크)를 기억해서, 앱을 켤 때 웹이 뜨기 전 바탕색도 맞춰요
     private func applyTheme(_ t: String?) {
         let light = t == "light"
@@ -89,6 +134,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
+        if action == "penSettings" { presentPenSettings(body); return }
+        if action == "sizeSlider" { presentSizeSlider(body); return }
         if action == "inkConfig" {
             let c = WebInkConfig(body)
             inkConfig = c

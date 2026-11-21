@@ -502,8 +502,7 @@ final class LumenPenSettingsViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .white
-        overrideUserInterfaceStyle = .light
+        view.backgroundColor = .systemBackground // 앱의 라이트/다크를 따라가요
         stack.axis = .vertical
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -524,7 +523,7 @@ final class LumenPenSettingsViewController: UIViewController {
         let title = UILabel(); title.text = "펜 설정"; title.font = .systemFont(ofSize: 15, weight: .semibold)
         stack.addArrangedSubview(title)
 
-        previewBox.backgroundColor = UIColor(white: 0.97, alpha: 1)
+        previewBox.backgroundColor = .white // 미리보기는 종이처럼 흰 바탕
         previewBox.layer.cornerRadius = 10
         previewBox.heightAnchor.constraint(equalToConstant: 64).isActive = true
         previewBox.layer.addSublayer(preview)
@@ -544,7 +543,6 @@ final class LumenPenSettingsViewController: UIViewController {
             val.tag = 1000 + LumenPenOption.allCases.firstIndex(of: k)!
             head.addArrangedSubview(name); head.addArrangedSubview(UIView()); head.addArrangedSubview(val)
             let slider = UISlider(); slider.minimumValue = 0; slider.maximumValue = 100; slider.value = Float(value(k))
-            slider.minimumTrackTintColor = .black
             slider.tag = LumenPenOption.allCases.firstIndex(of: k)!
             slider.addTarget(self, action: #selector(sliderChanged(_:)), for: .valueChanged)
             let hint = UILabel(); hint.text = k.hint; hint.font = .systemFont(ofSize: 11); hint.textColor = .gray; hint.numberOfLines = 0
@@ -746,4 +744,53 @@ final class WebInkOverlay: UIView {
         }
         CATransaction.commit()
     }
+}
+
+// MARK: - 굵기 슬라이더 창 (웹 노트에서 고른 굵기를 한 번 더 누르면, 진짜 iPad 슬라이더로)
+
+final class LumenSizeSliderViewController: UIViewController {
+    private let titleText: String, minV: Double, maxV: Double, step: Double, defaultV: Double
+    private var value: Double
+    var onChange: ((Double, Bool) -> Void)?   // (값, 다 바꿨는지)
+    private let slider = UISlider()
+    private let valueLabel = UILabel()
+
+    init(title: String, value: Double, min: Double, max: Double, step: Double, defaultValue: Double) {
+        titleText = title; self.value = value; minV = min; maxV = max; self.step = step; defaultV = defaultValue
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func fmt(_ v: Double) -> String { step < 1 ? String(format: "%.1f", v) : String(Int(v.rounded())) }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        let title = UILabel(); title.text = titleText; title.font = .systemFont(ofSize: 15, weight: .semibold)
+        slider.minimumValue = Float(minV); slider.maximumValue = Float(maxV); slider.value = Float(value)
+        slider.addTarget(self, action: #selector(changed), for: .valueChanged)
+        slider.addTarget(self, action: #selector(done), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        valueLabel.text = fmt(value); valueLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular); valueLabel.textColor = .secondaryLabel
+        valueLabel.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        valueLabel.textAlignment = .right
+        let row = UIStackView(arrangedSubviews: [slider, valueLabel]); row.spacing = 12; row.alignment = .center
+        let reset = UIButton(type: .system); reset.setTitle("기본값으로", for: .normal); reset.contentHorizontalAlignment = .leading
+        reset.addTarget(self, action: #selector(resetTapped), for: .touchUpInside)
+        let stack = UIStackView(arrangedSubviews: [title, row, reset]); stack.axis = .vertical; stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+        ])
+        preferredContentSize = CGSize(width: 320, height: 140)
+    }
+    @objc private func changed() {
+        value = (Double(slider.value) / step).rounded() * step
+        valueLabel.text = fmt(value)
+        onChange?(value, false)
+    }
+    @objc private func done() { onChange?(value, true) }
+    @objc private func resetTapped() { value = defaultV; slider.setValue(Float(value), animated: true); valueLabel.text = fmt(value); onChange?(value, true) }
 }

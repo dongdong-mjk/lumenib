@@ -686,6 +686,13 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   let prevT;
   // 굵기 슬라이더 (굿노트처럼): 고른 칸의 굵기를 바꾸고, 종이 위에 실제 크기를 보여 줘요
   function openSizeSlider(t, idx) {
+    if (nativeInk) {
+      const b = toolbarEl.querySelector(`[data-size="${idx}"]`).getBoundingClientRect();
+      const [lo, hi] = SIZE_RANGE[t];
+      nativeInk.postMessage({ action: 'sizeSlider', tool: t, idx, value: (t === 'pen' ? PEN_SIZES : HL_SIZES)[idx], min: lo, max: hi,
+        def: (t === 'pen' ? [1.6, 2.6, 4] : [12, 18, 26])[idx], anchor: [b.left, b.top, b.width, b.height] });
+      return;
+    }
     const ex = toolbarEl.querySelector('.tb-menu');
     if (ex) { const same = ex.classList.contains('size-menu'); ex.remove(); if (same) return; }
     const arr = t === 'pen' ? PEN_SIZES : HL_SIZES, [lo, hi] = SIZE_RANGE[t];
@@ -820,6 +827,12 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     stab: ['손떨림 보정', '손 떨림을 덜 ↔ 많이 다듬어 줌'],
   };
   function openPenStyles() {
+    // iPad 앱에서는 진짜 iPad 창(네이티브 슬라이더)으로 열어요
+    if (nativeInk) {
+      const b = toolbarEl.querySelector('[data-tool="pen"]').getBoundingClientRect();
+      nativeInk.postMessage({ action: 'penSettings', style: S.settings.penStyle, opts: S.settings.penOpts, color: PEN_COLORS[tool.penColor], anchor: [b.left, b.top, b.width, b.height] });
+      return;
+    }
     const ex = toolbarEl.querySelector('.tb-menu');
     if (ex) { const same = ex.classList.contains('pen-styles'); ex.remove(); if (same) return; }
     const m = document.createElement('div');
@@ -890,6 +903,18 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(p?.lassoMenu)].filter(Boolean),
     });
   }
+  // 네이티브 펜 설정 · 굵기 창에서 바꾼 값을 받아요
+  window.lumenibSetPen = (style, opts) => {
+    S.settings.penStyle = style;
+    Object.assign(S.settings.penOpts, opts);
+    S.saveSettings(); track('pen_style_' + style);
+    renderToolbar(); sendInkConfig();
+  };
+  window.lumenibSetSize = (t, idx, v, done) => {
+    (t === 'pen' ? PEN_SIZES : HL_SIZES)[idx] = v;
+    if (done) { S.saveSettings(); track('size_custom_' + t); renderToolbar(); } else showSizePreview(t);
+    sendInkConfig();
+  };
   window.lumenibInk = (pts) => {
     const ok = !!ns.paper?.addExternalStroke(pts);
     if (ok) track('native_ink_stroke');
