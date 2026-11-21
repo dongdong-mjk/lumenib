@@ -19,6 +19,7 @@
   --border-card: transparent;
   --border-default: #555555;
   --border-strong: #6b6b6b;
+  --bg-preview: rgba(255, 255, 255, 0.94); /* 피그마 bg/preview (white-alpha/94) */
   --text-primary: #fafafa;
   --text-body: #f5f5f5;
   --text-secondary: #b5b5b5;
@@ -56,6 +57,7 @@
   --border-card: #e8e8e8;
   --border-default: #e8e8e8;
   --border-strong: #d4d4d4;
+  --bg-preview: rgba(255, 255, 255, 0.94);
   --text-primary: #111111;
   --text-body: #222222;
   --text-secondary: #555555;
@@ -526,7 +528,7 @@ button { touch-action: manipulation; }
 /* (툴바가 위로 올라가서 노트 화면에서도 토스트를 올리지 않아요. 화면을 옮겨도 토스트가 튀지 않게, 11/21) */
 
 /* 굵기 미리보기 */
-.size-preview { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 24px 14px; min-width: 120px; border-radius: 20px; background: rgba(255,255,255,.94); box-shadow: 0 4px 20px rgba(0,0,0,.18); opacity: 0; transition: opacity .18s, transform .18s; }
+.size-preview { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 24px 14px; min-width: 120px; border-radius: 20px; background: var(--bg-preview); box-shadow: 0 4px 20px rgba(0,0,0,.18); opacity: 0; transition: opacity .18s, transform .18s; }
 .size-preview.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .size-preview i { display: block; border-radius: 50%; }
 .size-preview i.eraser { border: 1.5px solid #111; background: rgba(0,0,0,.04); }
