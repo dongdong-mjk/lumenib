@@ -14,6 +14,7 @@ export const icon = {
   chevDown: s('<path d="m6 9 6 6 6-6"/>', 'class="chev"'),
   chevUp: s('<path d="m6 15 6-6 6 6"/>', 'class="chev"'),
   chevRight: s('<path d="m9 6 6 6-6 6"/>', 'class="chev"'),
+  back: s('<path d="m15 5-7 7 7 7"/>'),
   arrowLeft: s('<path d="M19 12H5M11 6l-6 6 6 6"/>'),
   arrowRight: s('<path d="M5 12h14M13 6l6 6-6 6"/>'),
   search: s('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'),

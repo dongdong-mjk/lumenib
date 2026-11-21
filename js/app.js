@@ -559,7 +559,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
 
   app.innerHTML = `<div class="screen">
     <header class="topbar">
-      <div class="left"><button class="icon-btn" data-act="side" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
+      <div class="left"><button class="icon-btn" data-act="back" aria-label="뒤로">${icon.back}</button><button class="icon-btn" data-act="side" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
       <div class="mid"><div class="tb-slot"></div><div class="title">${mainReadonly ? esc(main.title) : from === 'home' ? '노트' : '오늘 설교 기록하기'}</div></div>
       <div class="right">${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
     </header>
@@ -1181,6 +1181,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     ns.leftOpen = !ns.leftOpen;
     leftEl.classList.toggle('closed', !ns.leftOpen);
   });
+  // 왼쪽 위 뒤로 (피그마 Top Bar 화면=노트 쓰기, 11/21): 오른쪽 위 완료와 같은 방식으로 나가요 (저장 · 본문 확인)
+  app.querySelector('[data-act="back"]').addEventListener('click', () => { track('note_back'); app.querySelector('[data-act="done"]').click(); });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
     if (mainReadonly) return go('home');
     if (!main.passages.length) return askPassage();
