@@ -183,7 +183,7 @@ export class BiblePanel {
       return;
     }
     const pill = this.o.backPill?.(this.book, this.ch);
-    f.innerHTML = pill ? `<button class="back-today">${icon.back} ${esc(pill.label)}</button>` : '';
+    f.innerHTML = pill ? `<button class="back-today">${icon.backReturn} ${esc(pill.label)}</button>` : '';
     f.querySelector('.back-today')?.addEventListener('click', pill?.onClick);
   }
 
