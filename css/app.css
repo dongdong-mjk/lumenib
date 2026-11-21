@@ -627,7 +627,7 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
   height: 48px; background: transparent; border: 0; box-shadow: none; color: var(--icon-primary);
   transform: scale(var(--tb-z, 1)); transform-origin: 50% 50%;
 }
-.topbar .tb-slot .tb-btn.on::before, .topbar .tb-slot .size-dot.on::before { background: var(--bg-panel-inset); }
+.topbar .tb-slot .tb-btn.on::before, .topbar .tb-slot .size-dot.on::before { background: color-mix(in srgb, var(--icon-primary) 12%, transparent); } /* 제목줄 바탕(#F7F7F7/검정) 위에서도 고른 도구가 보이게 */
 .topbar .tb-slot .tb-sep { background: var(--border-panel); }
 .topbar .tb-slot .size-dot i { background: var(--icon-primary); }
 .topbar .tb-slot .size-dot i[style*="border"] { border-color: var(--icon-primary) !important; }
