@@ -443,7 +443,7 @@ export class Paper {
       return e.pointerType !== 'touch' || (this.fingerDraw && !this._pan);
     };
     // 두 손가락 스크롤이 시작되면 손가락으로 쓰던 획은 버려요
-    this._cancels.push(() => { if (cur && cur.touch && cur.kind !== 'erase') { cur = null; this.clearLive(page); } });
+    this._cancels.push(() => { if (cur && cur.touch && cur.kind !== 'erase') { const hl = cur.s?.tool === 'hl'; cur = null; if (hl) this.drawPage(page); else this.clearLive(page); } });
 
     c.addEventListener('pointerdown', (e) => {
       if (!accept(e) || e.button > 0) return;
@@ -589,6 +589,16 @@ export class Paper {
 
   drawLive(page, s) {
     const ctx = this.clearLive(page);
+    if (s.tool === 'hl') {
+      // 형광펜은 쓰는 중에도 완성본과 같은 캔버스(본문·펜 글씨 밑, 곱하기)에 그려요.
+      // 위에 덮는 캔버스에 그리면 쓰는 동안엔 글씨를 가렸다가 펜을 떼면 비쳐 보여서 색이 바뀌는 것처럼 보였어요
+      const b = this.ctxFor(page.base, page);
+      b.clearRect(0, 0, PAGE_W, PAGE_H);
+      const sel = this.selection && this.selection.page === page.i ? this.selection : null;
+      for (const q of this.note.pages[page.i].strokes) if (q.tool === 'hl' && q !== s && !(sel && sel.set.has(q))) drawStroke(b, q);
+      drawStroke(b, s, true);
+      return;
+    }
     drawStroke(ctx, s, true);
   }
 

@@ -640,7 +640,7 @@ struct WebInkConfig {
         enabled = b["enabled"] as? Bool ?? false
         let t = b["tool"] as? String ?? "pen"
         tool = t == "hl" ? .highlighter : .pen
-        relay = t == "eraser" || t == "lasso"
+        relay = t == "eraser" || t == "lasso" || t == "hl" // 형광펜도 웹이 직접 그려요: 본문 글씨 밑에 깔리는 모습이 처음부터 같게
         color = b["color"] as? String ?? color
         width = b["width"] as? Double ?? width
         style = LumenPenStyle.allCases.first { ["ball", "fountain", "brush"][$0.rawValue] == (b["style"] as? String) } ?? .ball
