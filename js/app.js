@@ -939,7 +939,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       width: pen ? PEN_SIZES[tool.penSize] : HL_SIZES[tool.hlSize],
       style: S.settings.penStyle, opts: S.settings.penOpts[S.settings.penStyle] || {},
       hlAlpha: S.settings.hlAlpha, scale: p?.scale || 1,
-      area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(p?.lassoMenu), ...btns].filter(Boolean),
+      area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(toolbarEl?.querySelector('.tb-menu')), rect(p?.lassoMenu), ...btns].filter(Boolean),
     });
   }
   // 지우개 · 올가미: 네이티브가 받은 펜슬 움직임을 종이에 포인터 이벤트로 그대로 전해요
@@ -980,6 +980,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     const mo = new MutationObserver(() => sendInkConfig());
     mo.observe(document.getElementById('overlay-root'), { childList: true });
     mo.observe(right, { childList: true, subtree: true, attributes: false });
+    mo.observe(app.querySelector('.topbar'), { childList: true, subtree: true }); // 툴바(제목줄)에서 창이 열리고 닫히는 것
     window.addEventListener('resize', sendInkConfig);
     // 스크롤하면 인용 손잡이 같은 버튼 위치가 바뀌니 다시 알려 줘요
     let sRaf = 0;
