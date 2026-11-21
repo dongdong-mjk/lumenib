@@ -52,6 +52,7 @@ let toastTimer;
 export function toast(msg, ms = 2200) {
   const el = document.getElementById('toast');
   el.textContent = msg;
+  el.classList.remove('leave');
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), ms);
