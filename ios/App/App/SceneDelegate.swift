@@ -113,7 +113,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     private func presentSizeSlider(_ b: [String: Any]) {
         let t = b["tool"] as? String ?? "pen", idx = b["idx"] as? Int ?? 0
-        let vc = LumenSizeSliderViewController(title: t == "pen" ? "펜 굵기" : "형광펜 굵기",
+        let vc = LumenSizeSliderViewController(title: t == "pen" ? "펜 굵기" : t == "hl" ? "형광펜 굵기" : "지우개 크기",
                                                value: b["value"] as? Double ?? 2.6, min: b["min"] as? Double ?? 0.6, max: b["max"] as? Double ?? 10,
                                                step: t == "pen" ? 0.1 : 1, defaultValue: b["def"] as? Double ?? 2.6)
         vc.onChange = { [weak self] v, done in self?.js("window.lumenibSetSize('\(t)', \(idx), \(v), \(done))") }
