@@ -1,4 +1,5 @@
 import UIKit
+import WebKit
 import Capacitor
 
 @UIApplicationMain
@@ -7,7 +8,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // 시험 기간: 앱을 켤 때마다 웹 파일 캐시를 비워서, 테스트 사이트를 고치면 기다리지 않고 바로 새 버전이 열리게 해요.
+        // (노트·설정이 들어 있는 저장 공간(localStorage)은 지우지 않아요)
+        WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache], modifiedSince: .distantPast) {}
         return true
     }
 
