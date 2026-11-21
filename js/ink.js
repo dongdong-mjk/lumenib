@@ -288,7 +288,11 @@ export class Paper {
         carry.push({ s: cl, ys: s.pts.filter((_, i) => i % 3 === 1) });
         return cl;
       });
-      d = { y0: e.clientY, lastY: e.clientY, cy: c.y, st0: this.scrollEl.scrollTop, snap: this.snapshot(), moved: false, carry };
+      const pr = page.el.getBoundingClientRect();
+      d = { id: e.pointerId, lastY: e.clientY, cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, snap: this.snapshot(), moved: false, carry };
+      window.addEventListener('pointermove', onMove, true);
+      window.addEventListener('pointerup', up, true);
+      window.addEventListener('pointercancel', up, true);
       if (carry.length) {
         // 끄는 동안엔 같이 갈 글씨를 따로 그린 판을 통째로 옮기기만 해요 (매번 페이지 전체를 다시 그리면 렉이 걸렸어요)
         this._hidden = new Set(carry.map((x) => x.s));
@@ -312,34 +316,61 @@ export class Paper {
       d.raf = requestAnimationFrame(tick);
     });
     const apply = () => {
-      const dy = (d.lastY - d.y0 + (this.scrollEl.scrollTop - d.st0)) / this.scale;
-      const ny = Math.max(10, Math.min(PAGE_H - el.offsetHeight - 10, d.cy + dy));
-      if (Math.abs(ny - d.cy) > 1) d.moved = true;
+      // 손가락이 있는 페이지로 인용을 옮겨요 (다음·이전 페이지로 넘기기, 11/21)
+      const h = el.offsetHeight;
+      let tp = this.pages.find((p) => { const r = p.el.getBoundingClientRect(); return d.lastY >= r.top && d.lastY <= r.bottom; });
+      if (!tp) {
+        const first = this.pages[0], last = this.pages[this.pages.length - 1];
+        tp = d.lastY < first.el.getBoundingClientRect().top ? first : d.lastY > last.el.getBoundingClientRect().bottom ? last : d.cur;
+      }
+      const top = tp.el.getBoundingClientRect().top;
+      const ny = Math.max(10, Math.min(PAGE_H - h - 10, (d.lastY - top) / this.scale - d.grab));
+      if (tp !== d.cur) {
+        // 블록·손잡이·같이 가는 글씨 판을 새 페이지로 옮겨 달아요
+        tp.inner.appendChild(el); tp.ui.appendChild(u);
+        if (d.layers) { tp.base.after(d.layers[0]); tp.ink.after(d.layers[1]); }
+        d.cur = tp; c.page = tp.i; d.moved = true;
+      }
+      if (Math.abs(ny - d.cy) > 1 || c.page !== d.page0) d.moved = true;
       c.y = Math.round(ny);
       el.style.top = u.style.top = c.y + 'px';
       if (d.layers) { const px = (c.y - d.cy) * this.scale; for (const l of d.layers) l.style.transform = `translateY(${px}px)`; }
     };
-    grip.addEventListener('pointermove', (e) => {
-      if (!d) return;
+    const onMove = (e) => {
+      if (!d || e.pointerId !== d.id) return;
       d.lastY = e.clientY;
       apply();
-    });
-    const up = () => {
-      if (!d) return;
+    };
+    const up = (e) => {
+      if (!d || (e && e.pointerId !== d.id)) return;
       cancelAnimationFrame(d.raf);
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
       el.classList.remove('moving');
+      const from = this.pages[d.page0], to = d.cur;
       if (d.carry.length) {
         const delta = c.y - d.cy;
         for (const { s, ys } of d.carry) { _dense.delete(s); for (let i = 1, j = 0; i < s.pts.length; i += 3, j++) s.pts[i] = round(ys[j] + delta); }
+        if (to !== from) {
+          // 같이 가는 글씨도 새 페이지의 글씨로 옮겨요
+          const set = new Set(d.carry.map((x) => x.s));
+          this.note.pages[from.i].strokes = this.note.pages[from.i].strokes.filter((q) => !set.has(q));
+          this.note.pages[to.i].strokes.push(...set);
+        }
         this._hidden = null;
-        this.drawPage(page);
         d.layers?.forEach((l) => l.remove());
+        this.drawPage(from); if (to !== from) this.drawPage(to);
       }
-      if (d.moved) { this._push({ t: 'full', json: d.snap }); this.onChange({}); this.onHistory(); }
+      const moved = d.moved, snap = d.snap;
       d = null;
+      if (to !== from) {
+        this.renderCitations(from); this.renderCitations(to);
+        // 마지막 페이지로 옮겼으면 뒤에 빈 페이지를 하나 더 둬요
+        if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
+      }
+      if (moved) { this._push({ t: 'full', json: snap }); this.onChange({}); this.onHistory(); }
     };
-    grip.addEventListener('pointerup', up);
-    grip.addEventListener('pointercancel', up);
     u.querySelector('.cite-x').addEventListener('click', () => {
       this.pushHistory();
       // 인용 안에 쓴 밑줄·메모(획의 대부분이 인용 상자 안)도 같이 지워요 (11/21)
