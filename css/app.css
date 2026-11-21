@@ -157,7 +157,7 @@ svg { display: block; }
 
 .workspace { container-type: inline-size; flex: 1; min-height: 0; display: flex; gap: 12px; padding: 4px 12px 12px; padding-bottom: calc(12px + var(--safe-bottom)); }
 .panel { background: var(--bg-panel); border: 1px solid var(--border-panel); border-radius: var(--radius-panel); box-shadow: var(--shadow-panel); }
-.bible-panel { width: var(--bp-w); flex: none; display: flex; flex-direction: column; min-height: 0; overflow: hidden; position: relative; transition: width .25s ease, opacity .2s; }
+.bible-panel { width: var(--bp-w); flex: none; display: flex; flex-direction: column; min-height: 0; overflow: hidden; position: relative; transition: width .28s cubic-bezier(.2, 0, 0, 1), opacity .2s; } /* iOS처럼 빠르게 시작해 부드럽게 멈춤 */
 .bible-panel.closed { width: 0; opacity: 0; border-width: 0; margin-right: -12px; }
 /* 접히는 동안 안쪽 글자가 다시 줄바꿈되지 않도록 폭 고정 */
 /* 왼쪽 성경 : 오른쪽 노트 = 시안 376 : 782 비율. 접힐 때 안 내용은 그대로 두려고 폭을 컨테이너 기준으로 고정해요 */

@@ -67,7 +67,11 @@ export class Paper {
     scrollEl.innerHTML = '';
     scrollEl.appendChild(this.pagesEl);
     scrollEl.className = 'paper-scroll' + (this.fingerDraw && !this.readonly ? ' finger' : '');
-    this._ro = new ResizeObserver(() => { cancelAnimationFrame(this._raf); this._raf = requestAnimationFrame(() => this.layout()); });
+    this._ro = new ResizeObserver(() => {
+      // 패널 접기·펴기 애니메이션 중에는 종이를 매 프레임 다시 그리지 않고 크기만 늘리고 줄여요 (끊김 방지). 끝나면 한 번만 다시 그려요
+      if (this._animW0) { this.pagesEl.style.transform = `scale(${this.targetWidth() / this._animW0})`; return; }
+      cancelAnimationFrame(this._raf); this._raf = requestAnimationFrame(() => this.layout());
+    });
     this._ro.observe(scrollEl);
     // Apple Pencil로 쓸 때 화면이 같이 스크롤되지 않게 (손가락 스크롤은 그대로)
     // 손가락 필기를 켜면: 한 손가락 = 쓰기, 두 손가락 = 스크롤
@@ -329,6 +333,23 @@ export class Paper {
       el.innerHTML = html;
       page.inner.appendChild(el);
     }
+  }
+
+  targetWidth() {
+    const avail = this.scrollEl.clientWidth - 40;
+    return Math.round(Math.max(320, Math.min(avail, 1100)) * (this.zoom || 1));
+  }
+  beginResizeAnim() {
+    if (this._animW0) return;
+    this._animW0 = parseFloat(this.pagesEl.style.width) || this.targetWidth();
+    this.pagesEl.style.transformOrigin = 'top center';
+    this.pagesEl.style.willChange = 'transform';
+  }
+  endResizeAnim() {
+    if (!this._animW0) return;
+    this._animW0 = 0;
+    this.pagesEl.style.transform = ''; this.pagesEl.style.willChange = '';
+    this.layout();
   }
 
   layout() {

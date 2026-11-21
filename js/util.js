@@ -3,6 +3,10 @@
 const s = (d, extra = '') =>
   `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d}</svg>`;
 
+// 형광펜: 펜과 헷갈리지 않게 굵은 몸통 + 납작한 펜촉 + 지금 색 띠 (11/21, 피그마 반영 전 제안)
+export const hlIcon = (color) =>
+  `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"><path d="M14.5 3 20 8.5 12.5 16 7 10.5z"/><path d="m7 10.5-2.5 4.5 1.5 1.5 4.5-2.5"/><rect x="3" y="19" width="18" height="3.2" rx="1.6" fill="${color}" stroke="none" opacity=".75"/></svg>`;
+
 export const icon = {
   home: s('<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z" fill="currentColor" stroke="none"/>'),
   homeLine: s('<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>'),

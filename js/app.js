@@ -1,6 +1,6 @@
 // lumenib 1차 테스트 앱: 화면 흐름
 // T1 홈 → T2·T3 본문 고르기 → T4 노트 쓰기 (T5 인용 · T6 이 장 노트 · T7 예전 노트 탭) → 완료 → 홈
-import { icon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
+import { icon, hlIcon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
 import { Paper, tool, SIZE_RANGE, SIZE_DEFAULT, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
@@ -674,7 +674,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     } else opts = '<span class="tb-hint">옮기거나 지울 글씨를 둘러 그려요</span>';
     const p = ns.paper;
     slot.innerHTML = `<div class="toolbar">
-      ${tb('pen', icon.pen, '펜')}${tb('hl', icon.highlighter, '형광펜')}${tb('eraser', icon.eraser, '지우개')}${tb('lasso', icon.lasso, '올가미')}
+      ${tb('pen', icon.pen, '펜')}${tb('hl', hlIcon(HL_COLORS[tool.hlColor]), '형광펜')}${tb('eraser', icon.eraser, '지우개')}${tb('lasso', icon.lasso, '올가미')}
       <span class="tb-sep"></span><div class="tb-opts">${opts}</div><span class="tb-sep"></span>
       <button class="tb-btn" data-act="undo" ${p?.undoStack.length ? '' : 'disabled'} aria-label="되돌리기">${icon.undo}</button>
       <button class="tb-btn" data-act="redo" ${p?.redoStack.length ? '' : 'disabled'} aria-label="다시 하기">${icon.redo}</button>
@@ -1210,7 +1210,11 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   // ----- 위쪽 버튼 -----
   app.querySelector('[data-act="side"]').addEventListener('click', () => {
     ns.leftOpen = !ns.leftOpen;
+    const p = ns.paper;
+    p?.beginResizeAnim();
     leftEl.classList.toggle('closed', !ns.leftOpen);
+    clearTimeout(ns.sideT);
+    ns.sideT = setTimeout(() => p?.endResizeAnim(), 300); // 패널 애니메이션(.25초)이 끝나면 종이를 한 번 다시 그려요
   });
   // 왼쪽 위 뒤로 (피그마 Top Bar 화면=노트 쓰기, 11/21): 오른쪽 위 완료와 같은 방식으로 나가요 (저장 · 본문 확인)
   app.querySelector('[data-act="back"]').addEventListener('click', () => { track('note_back'); app.querySelector('[data-act="done"]').click(); });
