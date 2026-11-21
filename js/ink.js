@@ -236,6 +236,7 @@ export class Paper {
       const el = document.createElement('div');
       el.className = 'cite-block';
       el.style.top = c.y + 'px';
+      citeEls.set(c, el);
       el.innerHTML = `<h5>${esc(refText(c))}</h5>${(c.text || []).map((v) => `<div class="row"><span class="vn">${v.n}</span><span>${esc(v.t)}</span></div>`).join('')}`;
       page.inner.appendChild(el);
       if (!this.readonly) this.addCiteHandle(page, c, el);
@@ -396,7 +397,7 @@ export class Paper {
       // 선택 상자 네 모서리 손잡이: 반대쪽 모서리를 고정하고 비율 유지하며 크기 조절
       if (this.selection && t === 'lasso' && this.selection.page === page.i) {
         const hr = 22 / this.scale;
-        const h = selHandles(this.selection.box).find((q) => Math.hypot(x - q.x, y - q.y) <= hr);
+        const h = this.selection.cites?.size ? null : selHandles(this.selection.box).find((q) => Math.hypot(x - q.x, y - q.y) <= hr); // 인용이 섞이면 크기 조절은 없어요
         if (h) {
           cur = { kind: 'scale', h, kx: 1, ky: 1 };
           this.hideLassoMenu();
@@ -482,12 +483,19 @@ export class Paper {
         this.finishLasso(page, k.pts);
       } else if (k.kind === 'move') {
         if (Math.abs(k.dx) + Math.abs(k.dy) > 1) {
-          this.pagePush(this.selection.page);
+          const sel = this.selection;
+          if (sel.cites?.size) this.pushHistory(); else this.pagePush(sel.page); // 인용이 섞이면 노트 전체로 기억
           this.cloneSelection();
-          for (const s of this.selection.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + k.dy); } }
-          this.selection.box = moveBox(this.selection.box, k.dx, k.dy);
+          for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + k.dy); } }
+          if (sel.cites?.size) {
+            for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + k.dy))); }
+            this.renderCitations(page);
+            this.onChange({});
+          }
+          sel.box = moveBox(sel.box, sel.cites?.size ? 0 : k.dx, k.dy);
           this.changed(page, false);
         }
+        for (const c of this.selection.cites || []) { const el = citeEls.get(c); if (el) el.style.transform = ''; }
         this.drawSelection(page);
         this.showLassoMenu();
       } else if (k.kind === 'scale') {
@@ -570,23 +578,46 @@ export class Paper {
   finishLasso(page, pts) {
     const poly = [];
     for (let i = 0; i < pts.length; i += 2) poly.push([pts[i], pts[i + 1]]);
-    const set = new Set();
+    const set = new Set(), cites = new Set();
     if (poly.length > 4) {
       for (const s of this.note.pages[page.i].strokes) {
         let inside = 0, total = 0;
         for (let j = 0; j < s.pts.length; j += 3) { total++; if (pip(poly, s.pts[j], s.pts[j + 1])) inside++; }
         if (total && inside / total >= 0.5) set.add(s);
       }
+      // 인용 블록: 일부만 둘러도 블록 전체가 같이 골라져요 (굿노트처럼)
+      for (const c of this.note.citations) {
+        if (c.page !== page.i) continue;
+        const b = this.citeBox(c);
+        if (!b) continue;
+        const hit = poly.some(([x, y]) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3])
+          || [0, 0.25, 0.5, 0.75, 1].some((fx) => [0, 0.5, 1].some((fy) => pip(poly, b[0] + (b[2] - b[0]) * fx, b[1] + (b[3] - b[1]) * fy)));
+        if (hit) cites.add(c);
+      }
     }
-    if (!set.size) { this.clearLive(page); return; }
-    this.selection = { page: page.i, set, box: bbox([...set]) };
+    if (!set.size && !cites.size) { this.clearLive(page); return; }
+    let box = set.size ? bbox([...set]) : null;
+    for (const c of cites) { const b = this.citeBox(c); box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b; }
+    this.selection = { page: page.i, set, cites, box };
     this.drawPage(page);
     this.showLassoMenu();
+  }
+
+  // 인용 블록이 종이에서 차지하는 상자 (종이 단위)
+  citeBox(c) {
+    const el = citeEls.get(c);
+    if (!el || !el.isConnected) return null;
+    return [20, c.y, PAGE_W - 20, c.y + el.offsetHeight];
   }
 
   drawSelection(page, dx = 0, dy = 0, sc = null) {
     const sel = this.selection;
     const ctx = this.clearLive(page);
+    // 고른 인용 블록은 옮기는 동안 위아래로 같이 따라와요 (인용은 가로로는 안 움직여요)
+    for (const c of sel.cites || []) {
+      const el = citeEls.get(c);
+      if (el) el.style.transform = dy ? `translateY(${dy}px)` : '';
+    }
     const b = sel.box;
     const ox = sc ? sc.h.ax : 0, oy = sc ? sc.h.ay : 0, kx = sc ? sc.kx : 1, ky = sc ? sc.ky : 1;
     ctx.save(); ctx.translate(dx, dy);
@@ -600,12 +631,13 @@ export class Paper {
     ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u;
     ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]);
     ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.lineWidth = 2 * u;
-    for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    if (!sel.cites?.size) for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     ctx.restore();
   }
 
   clearSelection() {
     const sel = this.selection;
+    for (const c of sel?.cites || []) { const el = citeEls.get(c); if (el) el.style.transform = ''; }
     this.selection = null;
     this.hideLassoMenu();
     if (sel) this.drawPage(this.pages[sel.page]);
@@ -623,9 +655,14 @@ export class Paper {
       const a = e.target.closest('button')?.dataset.a;
       if (a === 'del') {
         const sel = this.selection;
-        this.pagePush(sel.page);
+        if (sel.cites?.size) this.pushHistory(); else this.pagePush(sel.page);
         const arr = this.note.pages[sel.page].strokes;
         this.note.pages[sel.page].strokes = arr.filter((s) => !sel.set.has(s));
+        if (sel.cites?.size) {
+          this.note.citations = this.note.citations.filter((c) => !sel.cites.has(c));
+          this.renderCitations(this.pages[sel.page]);
+          this.onChange({});
+        }
         this.selection = null; this.hideLassoMenu();
         this.drawPage(this.pages[sel.page]);
         this.changed(this.pages[sel.page]);
@@ -1105,6 +1142,7 @@ function pip(poly, x, y) {
   }
   return inside;
 }
+const citeEls = new WeakMap(); // 인용 → 화면의 블록
 function bbox(strokes) {
   let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
   for (const s of strokes) for (let i = 0; i < s.pts.length; i += 3) {

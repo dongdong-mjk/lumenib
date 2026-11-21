@@ -43,6 +43,10 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibNative")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
+        // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
+        webView?.scrollView.isScrollEnabled = false
+        webView?.scrollView.bounces = false
+        webView?.scrollView.alwaysBounceVertical = false
     }
 
     // MARK: 필기만 네이티브 (웹 노트 위에서 애플펜슬 펜·형광펜)
