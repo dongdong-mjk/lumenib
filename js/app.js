@@ -173,11 +173,11 @@ function fitHome() {
   document.body.appendChild(probe);
   const sb = probe.offsetWidth;
   probe.remove();
-  // 위쪽 상태 표시줄 자리는 CSS(.home padding-top = safe-area)가 잡아요. 그 높이가 피그마의 상태 표시줄(32)과 같아서
-  // 상태 표시줄이 있으면 내비게이션을 바로 그 아래에 붙여요 (피그마: 상태 표시줄 32 → 내비게이션). 없으면(사파리) 16 띄워요.
+  // 위쪽 상태 표시줄 자리는 CSS(.home padding-top = safe-area, iPad 앱에서 24)가 잡고, 그 아래로 8 더 띄워요.
+  // 피그마는 상태 표시줄을 32로 그려서 그 아래 내비게이션 → 실제 화면에서도 같은 위치가 돼요. 상태 표시줄이 없으면(사파리) 16.
   const pt = parseFloat(getComputedStyle(home).paddingTop) || 0;
-  const nat = { ...GAP_NAT, S: pt ? 0 : GAP_NAT.S, F: Math.max(GAP_NAT.F, sb + 12) };
-  const min = { ...GAP_MIN, S: pt ? 0 : GAP_MIN.S, F: Math.max(GAP_MIN.F, sb + 8) };
+  const nat = { ...GAP_NAT, S: pt ? 8 : GAP_NAT.S, F: Math.max(GAP_NAT.F, sb + 12) };
+  const min = { ...GAP_MIN, S: pt ? 8 : GAP_MIN.S, F: Math.max(GAP_MIN.F, sb + 8) };
   const fixed = [...inner.children].reduce((a, el) => a + el.offsetHeight, 0);
   const W = home.clientWidth;
   // 너비가 시안보다 좁으면(아이패드 미니 등) 먼저 전체를 그 폭에 맞게 줄여요
