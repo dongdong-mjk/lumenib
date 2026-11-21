@@ -20,8 +20,12 @@ if (!settings.penColors) settings.penColors = ['#111111', '#004ce5', '#dc3333'];
 if (!settings.hlColors || settings.hlColors.join() === '#ffd84d,#ff8fa3,#8cbfff') settings.hlColors = ['#e8b517', '#1c9c6b', '#d94f9a'];
 export const PEN_COLORS = settings.penColors;
 export const HL_COLORS = settings.hlColors;
-export const PEN_SIZES = [1.6, 2.6, 4];
-export const HL_SIZES = [12, 18, 26];
+// 굵기 3칸 (굿노트처럼 고른 칸을 한 번 더 누르면 슬라이더로 바꿀 수 있어요). 칸마다 바꾼 값을 기억해요.
+if (!Array.isArray(settings.penSizes) || settings.penSizes.length !== 3) settings.penSizes = [1.6, 2.6, 4];
+if (!Array.isArray(settings.hlSizes) || settings.hlSizes.length !== 3) settings.hlSizes = [12, 18, 26];
+export const PEN_SIZES = settings.penSizes;
+export const HL_SIZES = settings.hlSizes;
+export const SIZE_RANGE = { pen: [0.6, 10], hl: [4, 48] };
 export const ERASER_SIZES = [8, 18, 32];
 // 형광펜 진하기 (0.2 연하게 ~ 0.8 진하게). 새로 긋는 획부터 적용돼요.
 export const HL_ALPHA_DEFAULT = 0.42;

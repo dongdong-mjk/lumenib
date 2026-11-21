@@ -3,7 +3,7 @@
 import { icon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
-import { Paper, tool, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
+import { Paper, tool, SIZE_RANGE, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
 import { screen as trackScreen, track, isTracking } from './analytics.js';
 import * as C from './cloud.js';
@@ -646,7 +646,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       const ci = t === 'pen' ? tool.penColor : tool.hlColor, si = t === 'pen' ? tool.penSize : tool.hlSize;
       opts = colors.map((c, i) => `<button class="swatch ${i === ci ? 'on' : ''}" data-color="${i}"><i style="background:${c}"></i></button>`).join('')
         + '<span class="tb-sep"></span>'
-        + sizes.map((_, i) => `<button class="size-dot ${i === si ? 'on' : ''}" data-size="${i}"><i style="width:${[4, 6, 9][i]}px;height:${[4, 6, 9][i]}px"></i></button>`).join('');
+        + sizes.map((w, i) => { const [lo, hi] = SIZE_RANGE[t], d = Math.round(3 + ((w - lo) / (hi - lo)) * 11); return `<button class="size-dot ${i === si ? 'on' : ''}" data-size="${i}"><i style="width:${d}px;height:${d}px"></i></button>`; }).join('');
     } else if (t === 'eraser') {
       opts = `<div class="mode2"><button data-em="stroke" class="${tool.eraserMode === 'stroke' ? 'on' : ''}">획 전체</button><button data-em="partial" class="${tool.eraserMode === 'partial' ? 'on' : ''}">부분</button></div><span class="tb-sep"></span>` + ERASER_SIZES.map((_, i) => `<button class="size-dot ${i === tool.eraserSize ? 'on' : ''}" data-size="${i}"><i style="width:${[5, 8, 12][i]}px;height:${[5, 8, 12][i]}px;background:none;border:1.5px solid #111"></i></button>`).join('');
     } else opts = '<span class="tb-hint">옮기거나 지울 글씨를 둘러 그려요</span>';
@@ -667,7 +667,11 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       tool[key] = i; renderToolbar();
     }));
     slot.querySelectorAll('[data-em]').forEach((b) => b.addEventListener('pointerdown', () => { tool.eraserMode = b.dataset.em; renderToolbar(); }));
-    slot.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('pointerdown', () => { tool[t === 'pen' ? 'penSize' : t === 'hl' ? 'hlSize' : 'eraserSize'] = +b.dataset.size; renderToolbar(); showSizePreview(t); }));
+    slot.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('pointerdown', () => {
+      const key = t === 'pen' ? 'penSize' : t === 'hl' ? 'hlSize' : 'eraserSize';
+      if ((t === 'pen' || t === 'hl') && tool[key] === +b.dataset.size) return openSizeSlider(t, +b.dataset.size); // 고른 굵기를 한 번 더 누르면 세밀하게
+      tool[key] = +b.dataset.size; renderToolbar(); showSizePreview(t);
+    }));
     slot.querySelector('[data-act="undo"]').addEventListener('click', () => ns.paper.undo());
     slot.querySelector('[data-act="redo"]').addEventListener('click', () => ns.paper.redo());
     slot.querySelector('[data-act="more"]').addEventListener('click', toggleMore);
@@ -675,6 +679,35 @@ async function NoteScreen({ noteId, start, openOld, from }) {
 
   // 굵기를 고르면 종이 위 실제 크기를 잠깐 보여 줘요
   let prevT;
+  // 굵기 슬라이더 (굿노트처럼): 고른 칸의 굵기를 바꾸고, 종이 위에 실제 크기를 보여 줘요
+  function openSizeSlider(t, idx) {
+    const ex = toolbarEl.querySelector('.tb-menu');
+    if (ex) { const same = ex.classList.contains('size-menu'); ex.remove(); if (same) return; }
+    const arr = t === 'pen' ? PEN_SIZES : HL_SIZES, [lo, hi] = SIZE_RANGE[t];
+    const def = (t === 'pen' ? [1.6, 2.6, 4] : [12, 18, 26])[idx];
+    const step = t === 'pen' ? 0.1 : 1;
+    const m = document.createElement('div');
+    m.className = 'tb-menu size-menu';
+    const fmt = (v) => (t === 'pen' ? v.toFixed(1) : String(Math.round(v)));
+    m.innerHTML = `<div class="pal-head"><b>${t === 'pen' ? '펜' : '형광펜'} 굵기</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>
+      <div class="sz-row"><input type="range" min="${lo}" max="${hi}" step="${step}" value="${arr[idx]}" aria-label="굵기"><span class="sz-v">${fmt(arr[idx])}</span></div>
+      <button class="ps-reset" data-act="reset">기본값으로</button>`;
+    toolbarEl.appendChild(m);
+    const r = m.querySelector('input'), v = m.querySelector('.sz-v');
+    const set = (val) => { arr[idx] = Math.round(val / step) * step; v.textContent = fmt(arr[idx]); showSizePreview(t); };
+    r.addEventListener('input', () => set(+r.value));
+    r.addEventListener('change', () => { S.saveSettings(); track('size_custom_' + t); renderToolbarKeepMenu(); });
+    m.querySelector('[data-act="reset"]').addEventListener('click', () => { r.value = def; set(def); S.saveSettings(); renderToolbarKeepMenu(); });
+    m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
+    // 툴바 점 크기만 다시 (메뉴는 그대로 둬요)
+    function renderToolbarKeepMenu() {
+      const dot = toolbarEl.querySelector(`[data-size="${idx}"] i`);
+      const d = Math.round(3 + ((arr[idx] - lo) / (hi - lo)) * 11);
+      if (dot) { dot.style.width = d + 'px'; dot.style.height = d + 'px'; }
+      sendInkConfig();
+    }
+  }
+
   function showSizePreview(t) {
     const host = ns.paper?.scrollEl?.parentElement;
     if (!host) return;

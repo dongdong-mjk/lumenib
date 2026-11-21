@@ -596,3 +596,10 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 .login .email-link { align-self: center; color: var(--text-secondary); font-weight: 600; font-size: 15px; min-height: 44px; }
 .login .email-link[disabled] { opacity: .4; }
 .login-row .lg { position: static; flex: none; }
+
+/* 굵기 슬라이더 (고른 굵기를 한 번 더 누르면) */
+.tb-menu.size-menu { left: 50%; right: auto; transform: translateX(-50%); width: 280px; padding: 8px 12px 10px; }
+.tb-menu.size-menu .pal-head { margin: 0 -4px 4px; padding-left: 4px; }
+.sz-row { display: flex; align-items: center; gap: 12px; padding: 4px 2px; }
+.sz-row input { flex: 1; accent-color: #111; }
+.sz-v { width: 32px; text-align: right; font-size: 13px; color: #555; font-variant-numeric: tabular-nums; }
