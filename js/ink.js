@@ -280,8 +280,12 @@ export class Paper {
     grip.addEventListener('pointercancel', up);
     u.querySelector('.cite-x').addEventListener('click', () => {
       this.pushHistory();
+      // 인용 안에 쓴 밑줄·메모(획의 대부분이 인용 상자 안)도 같이 지워요 (11/21)
+      const inside = this.strokesInCite(page.i, c);
+      if (inside.size) this.note.pages[page.i].strokes = this.note.pages[page.i].strokes.filter((s) => !inside.has(s));
       this.note.citations = this.note.citations.filter((x) => x !== c);
       this.renderCitations(page);
+      if (inside.size) this.drawPage(page);
       this.onChange({}); this.onHistory();
     });
   }
@@ -636,6 +640,18 @@ export class Paper {
     this._sbT = setTimeout(() => host.classList.remove('sb-on'), 900);
   }
 
+  // 인용 상자 안에 쓴 획 (점의 60% 이상이 상자 안)
+  strokesInCite(pageI, c) {
+    const b = this.citeBox(c), out = new Set();
+    if (!b) return out;
+    for (const s of this.note.pages[pageI].strokes) {
+      let n = 0, inn = 0;
+      for (let i = 0; i < s.pts.length; i += 3) { n++; if (s.pts[i] >= b[0] - 4 && s.pts[i] <= b[2] + 4 && s.pts[i + 1] >= b[1] - 4 && s.pts[i + 1] <= b[3] + 4) inn++; }
+      if (n && inn / n >= 0.6) out.add(s);
+    }
+    return out;
+  }
+
   // 인용 블록이 종이에서 차지하는 상자 (종이 단위)
   citeBox(c) {
     const el = citeEls.get(c);
@@ -689,7 +705,9 @@ export class Paper {
         const sel = this.selection;
         if (sel.cites?.size) this.pushHistory(); else this.pagePush(sel.page);
         const arr = this.note.pages[sel.page].strokes;
-        this.note.pages[sel.page].strokes = arr.filter((s) => !sel.set.has(s));
+        const inCites = new Set();
+        for (const c of sel.cites || []) for (const s of this.strokesInCite(sel.page, c)) inCites.add(s); // 지우는 인용 안의 획도 같이
+        this.note.pages[sel.page].strokes = arr.filter((s) => !sel.set.has(s) && !inCites.has(s));
         if (sel.cites?.size) {
           this.note.citations = this.note.citations.filter((c) => !sel.cites.has(c));
           this.renderCitations(this.pages[sel.page]);
