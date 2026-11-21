@@ -178,8 +178,10 @@ export class BiblePanel {
     const sel = this.selection;
     if (sel && this.o.actions) {
       const acts = this.o.actions(sel);
-      f.innerHTML = acts.length ? `<div class="bp-action">${acts.map((a, i) => `<button class="btn ${a.kind === 'outline' ? 'btn-outline' : 'btn-primary'}" data-a="${i}">${esc(a.label)}</button>`).join('')}</div>` : '';
+      // 선택 취소: 생각과 다르게 골라졌을 때 한 번에 풀어요 (11/21)
+      f.innerHTML = acts.length ? `<div class="bp-action"><button class="btn btn-outline bp-cancel" aria-label="선택 취소">${icon.x}</button>${acts.map((a, i) => `<button class="btn ${a.kind === 'outline' ? 'btn-outline' : 'btn-primary'}" data-a="${i}">${esc(a.label)}</button>`).join('')}</div>` : '';
       f.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => acts[+b.dataset.a].onClick(sel)));
+      f.querySelector('.bp-cancel')?.addEventListener('click', () => this.clearSel());
       return;
     }
     const pill = this.o.backPill?.(this.book, this.ch);
@@ -245,7 +247,10 @@ export class BiblePanel {
     const move = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
       if (!drag.started) {
-        if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 10) return;
+        const dx = Math.abs(e.clientX - drag.x0), dy = Math.abs(e.clientY - drag.y0);
+        if (Math.hypot(dx, dy) < 10) return;
+        // 세로로 움직이면 끌기가 아니라 말씀 목록 스크롤이에요 (가로로 움직일 때만 노트로 끌어 옮기기)
+        if (dy > dx) { drag = null; return; }
         drag.started = true;
         try { body.setPointerCapture(e.pointerId); } catch {}
         this.o.onDrag.start?.(this.selection);
