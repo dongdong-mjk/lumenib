@@ -503,6 +503,7 @@ final class LumenPenSettingsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground // 앱의 라이트/다크를 따라가요
+        view.tintColor = .label // 디자인 규칙: 포인트 색 없이 검정(다크는 흰색)
         stack.axis = .vertical
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -766,6 +767,7 @@ final class LumenSizeSliderViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+        view.tintColor = .label // 디자인 규칙: 포인트 색 없이 검정(다크는 흰색)
         let title = UILabel(); title.text = titleText; title.font = .systemFont(ofSize: 15, weight: .semibold)
         slider.minimumValue = Float(minV); slider.maximumValue = Float(maxV); slider.value = Float(value)
         slider.addTarget(self, action: #selector(changed), for: .valueChanged)
