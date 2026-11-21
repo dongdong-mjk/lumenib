@@ -170,8 +170,10 @@ function fitHome() {
   document.body.appendChild(probe);
   const st = probe.offsetHeight, sb = probe.offsetWidth;
   probe.remove();
-  const nat = { ...GAP_NAT, S: Math.max(GAP_NAT.S, st), F: Math.max(GAP_NAT.F, sb + 12) };
-  const min = { ...GAP_MIN, S: Math.max(GAP_MIN.S, st), F: Math.max(GAP_MIN.F, sb + 8) };
+  // 위쪽 상태 표시줄(앱에서는 화면 맨 위 24pt)이 있으면 피그마처럼 그 아래 8 더 띄워요 (피그마: 상태 표시줄 32 → 내비게이션)
+  const topGap = st ? st + 8 : 0;
+  const nat = { ...GAP_NAT, S: Math.max(GAP_NAT.S, topGap), F: Math.max(GAP_NAT.F, sb + 12) };
+  const min = { ...GAP_MIN, S: Math.max(GAP_MIN.S, topGap), F: Math.max(GAP_MIN.F, sb + 8) };
   const fixed = [...inner.children].reduce((a, el) => a + el.offsetHeight, 0);
   const W = home.clientWidth;
   // 너비가 시안보다 좁으면(아이패드 미니 등) 먼저 전체를 그 폭에 맞게 줄여요
