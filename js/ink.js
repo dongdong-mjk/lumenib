@@ -395,7 +395,7 @@ export class Paper {
     ictx.clearRect(0, 0, PAGE_W, PAGE_H);
     const strokes = this.note.pages[page.i].strokes;
     const sel = this.selection && this.selection.page === page.i ? this.selection : null;
-    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s))) drawStroke(ctx, s);
+    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s)) drawStroke(ctx, s);
     for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s))) drawStroke(ictx, s);
     this.clearLive(page);
     if (sel) this.drawSelection(page);
@@ -888,7 +888,7 @@ export class Paper {
 
   // iPad 앱의 네이티브 필기 엔진이 그린 획을 받아 노트에 넣어요. pts = [[clientX, clientY, 누르는 힘], ...]
   // 지금 고른 도구(펜·형광펜)와 펜 설정으로 만들고, 되돌리기·저장은 웹에서 그린 것과 똑같이 처리해요.
-  addExternalStroke(pts) {
+  addExternalStroke(pts, opts) {
     if (this.readonly || !pts?.length || (tool.type !== 'pen' && tool.type !== 'hl')) return false;
     const hit = this.hitTest(pts[0][0], pts[0][1]);
     if (!hit) return false;
@@ -909,9 +909,31 @@ export class Paper {
     if (s.pts.length === 3) s.pts.push(s.pts[0] + 0.3, s.pts[1] + 0.3, s.pts[2]);
     this.pagePush(page.i);
     this.note.pages[page.i].strokes.push(s);
-    this.drawPage(page);
+    if (s.tool === 'hl' && opts?.fadeIn) this.fadeInHl(page, s, opts.fadeIn);
+    else this.drawPage(page);
     this.changed(page);
     return true;
+  }
+
+  // 형광펜은 반투명이라 네이티브 임시 획과 겹치거나 비는 순간이 티가 났어요.
+  // 새 획을 따로 깐 캔버스에서 서서히 나타나게 하고(네이티브는 같은 시간 동안 서서히 사라짐), 다 나타나면 원래 캔버스로 합쳐요.
+  fadeInHl(page, s, onStart) {
+    this._hlFading ||= new WeakSet();
+    this._hlFading.add(s);
+    this.drawPage(page);
+    const c = document.createElement('canvas');
+    c.className = 'hlfade';
+    c.width = page.base.width; c.height = page.base.height;
+    c.style.width = page.base.style.width; c.style.height = page.base.style.height;
+    c.style.opacity = '0';
+    page.base.after(c);
+    void c.offsetWidth; // 투명한 상태를 먼저 확정해야 서서히 나타나요
+    drawStroke(this.ctxFor(c, page), s);
+    requestAnimationFrame(() => {
+      c.style.opacity = '1';
+      onStart();
+      setTimeout(() => { this._hlFading.delete(s); if (this.pages[page.i] === page) this.drawPage(page); c.remove(); }, 200);
+    });
   }
 
   hitTest(clientX, clientY) {

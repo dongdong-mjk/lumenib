@@ -338,6 +338,7 @@ button { touch-action: manipulation; }
 .pk-hex { font-family: var(--font-num); font-size: 14px; color: #555; flex: 1; letter-spacing: 0; }
 .pk-ok { height: 36px; padding: 0 14px; font-size: 14px; border-radius: 10px; background: #111; color: #fff; }
 .page canvas.live { pointer-events: none; }
+.page canvas.hlfade { pointer-events: none; transition: opacity .16s linear; }
 .passage-block { position: absolute; left: 18.7px; right: 18.7px; top: 11.2px; }
 .passage-block h4 { margin: 0 0 8px; font-size: 17px; line-height: 26px; font-weight: 600; color: #111; }
 .passage-verses { background: var(--paper-block); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 18px; color: #222; display: flex; flex-direction: column; gap: 4px; }

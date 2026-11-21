@@ -762,10 +762,10 @@ final class WebInkOverlay: UIView {
         guard !pending.isEmpty else { return }
         let l = pending.removeFirst()
         // 형광펜은 반투명이라 웹 획과 겹치는 순간 진해졌다 옅어져서 깜빡여 보였어요. 아주 짧게 흐려지며 사라지게 해요
-        if l.compositingFilter != nil {
+        if l.compositingFilter != nil { // 웹 획이 서서히 나타나는 동안(0.16초) 같이 서서히 사라져요
             CATransaction.begin()
             CATransaction.setCompletionBlock { l.removeFromSuperlayer() }
-            let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = 1; a.toValue = 0; a.duration = 0.12
+            let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = 1; a.toValue = 0; a.duration = 0.16
             l.opacity = 0; l.add(a, forKey: "fade")
             CATransaction.commit()
         } else { remove(l) }

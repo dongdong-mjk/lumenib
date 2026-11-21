@@ -984,12 +984,13 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     sendInkConfig();
   };
   window.lumenibInk = (pts) => {
-    const ok = !!ns.paper?.addExternalStroke(pts);
-    if (ok) track('native_ink_stroke');
-    // 웹이 새 획을 실제로 화면에 그린 다음(두 프레임 뒤)에 네이티브가 임시 선을 지우게 알려요. 바로 지우면 한 번 깜빡였어요
-    // 형광펜은 겹치면 진해 보여서 한 프레임만 기다려요 (네이티브가 짧게 흐려지며 지워요)
     const post = () => nativeInk?.postMessage({ action: 'inkDrawn' });
-    if (ok) requestAnimationFrame(() => (tool.type === 'hl' ? post() : requestAnimationFrame(post)));
+    const hl = tool.type === 'hl';
+    // 형광펜: 웹 획이 서서히 나타나기 시작할 때 네이티브도 서서히 지워요 (겹쳐 진해지거나 비어 깜빡이지 않게)
+    const ok = !!ns.paper?.addExternalStroke(pts, hl ? { fadeIn: post } : null);
+    if (ok) track('native_ink_stroke');
+    // 펜: 웹이 새 획을 실제로 화면에 그린 다음(두 프레임 뒤)에 네이티브가 임시 선을 지워요. 바로 지우면 한 번 깜빡였어요
+    if (ok && !hl) requestAnimationFrame(() => requestAnimationFrame(post));
     return ok;
   };
   if (nativeInk) {
