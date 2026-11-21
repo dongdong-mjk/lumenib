@@ -720,6 +720,28 @@ final class WebInkOverlay: UIView {
         }
         redraw(predicted: predicted)
     }
+    // 펜을 뗀 획은 웹이 노트에 그릴 때까지 잠깐 남겨 둬요 (바로 지우면 한 번 깜빡였어요)
+    private var pending: [CAShapeLayer] = []
+    @discardableResult func commit() -> CAShapeLayer {
+        let l = CAShapeLayer()
+        l.frame = live.frame
+        l.path = live.path; l.fillColor = live.fillColor; l.strokeColor = live.strokeColor
+        l.lineWidth = live.lineWidth; l.lineCap = live.lineCap; l.lineJoin = live.lineJoin
+        l.compositingFilter = live.compositingFilter
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        layer.insertSublayer(l, below: live)
+        live.path = nil
+        CATransaction.commit()
+        pending.append(l)
+        pts = []
+        return l
+    }
+    /// 웹이 다 그렸다고 알려 주면 가장 오래된 남겨 둔 획을 지워요
+    func dropOldestPending() { if !pending.isEmpty { remove(pending.removeFirst()) } }
+    func drop(_ l: CAShapeLayer) { if let i = pending.firstIndex(of: l) { pending.remove(at: i); remove(l) } }
+    private func remove(_ l: CAShapeLayer) {
+        CATransaction.begin(); CATransaction.setDisableActions(true); l.removeFromSuperlayer(); CATransaction.commit()
+    }
     func clear() {
         pts = []
         CATransaction.begin(); CATransaction.setDisableActions(true); live.path = nil; CATransaction.commit()

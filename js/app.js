@@ -980,6 +980,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   window.lumenibInk = (pts) => {
     const ok = !!ns.paper?.addExternalStroke(pts);
     if (ok) track('native_ink_stroke');
+    // 웹이 새 획을 실제로 화면에 그린 다음(두 프레임 뒤)에 네이티브가 임시 선을 지우게 알려요. 바로 지우면 한 번 깜빡였어요
+    if (ok) requestAnimationFrame(() => requestAnimationFrame(() => nativeInk?.postMessage({ action: 'inkDrawn' })));
     return ok;
   };
   if (nativeInk) {

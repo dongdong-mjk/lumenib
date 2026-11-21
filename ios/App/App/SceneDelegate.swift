@@ -118,9 +118,13 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             let pts = inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
             guard let data = try? JSONSerialization.data(withJSONObject: pts), let json = String(data: data, encoding: .utf8) else { inkOverlay.clear(); return }
             // 웹이 노트에 넣어 다시 그린 다음에 지워서 깜빡이지 않게
-            webView?.evaluateJavaScript("window.lumenibInk && window.lumenibInk(\(json))") { [weak self] _, _ in
-                DispatchQueue.main.async { self?.inkOverlay.clear() }
+            let kept = inkOverlay.commit()
+            webView?.evaluateJavaScript("window.lumenibInk && window.lumenibInk(\(json))") { [weak self] r, _ in
+                // 웹이 획을 못 받았으면(예: 종이 밖) 바로 지워요
+                if (r as? Bool) == false { self?.inkOverlay.drop(kept) }
             }
+            // 웹이 "다 그렸어요"(inkDrawn)를 보내면 지워요. 소식이 없어도 0.6초 뒤엔 지워요
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.inkOverlay.drop(kept) }
         }
     }
 
@@ -185,6 +189,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
+        if action == "inkDrawn" { inkOverlay.dropOldestPending(); return }
         if action == "inkConfig" {
             let c = WebInkConfig(body)
             inkConfig = c
@@ -267,7 +272,6 @@ final class InkWindow: UIWindow {
     }
 
     override func sendEvent(_ event: UIEvent) {
-        if event.type == .touches, let t = event.allTouches?.first(where: { $0.type == .direct && $0.phase == .began }) { print("[finger] began at", t.location(in: self)) }
         guard event.type == .touches, let b = bridge, let web = b.webView,
               let pencil = event.allTouches?.first(where: { $0.type == .pencil }) else { return super.sendEvent(event) }
         if let t = tracked, t === pencil {
