@@ -39,7 +39,14 @@ export class BiblePanel {
 
   render({ scrollTo, keepScroll } = {}) {
     const prevScroll = this.el.querySelector('.bp-body')?.scrollTop || 0;
-    if (this.view === 'books') this.renderBooks();
+    if (this.view === 'books') {
+      this.renderBooks();
+      // 권 목록을 열면 보고 있던 권이 보이는 자리로 (맨 위가 아니라)
+      if (!keepScroll) requestAnimationFrame(() => {
+        const body = this.el.querySelector('.bp-body'), cur = body?.querySelector('.book-btn.cur');
+        if (body && cur) body.scrollTop = Math.max(0, cur.offsetTop - body.clientHeight / 2 + cur.offsetHeight / 2);
+      });
+    }
     else if (this.view === 'chapters') this.renderChapters();
     else return this.renderVerses(scrollTo, keepScroll ? prevScroll : null);
     // 권 · 장 목록도 다시 그릴 때 보던 위치를 그대로 둬요
@@ -84,13 +91,13 @@ export class BiblePanel {
     let grid;
     if (this.sort === 'toc') {
       grid = ['old', 'new'].map((t) => `<div class="group-label">${t === 'old' ? '구약' : '신약'}</div>
-        <div class="book-grid">${all.filter((b) => b.testament === t).map((b) => `<button class="book-btn" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
+        <div class="book-grid">${all.filter((b) => b.testament === t).map((b) => `<button class="book-btn${b.id === this.book ? ' cur' : ''}" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
     } else {
       const sorted = [...all].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       const groups = {};
       sorted.forEach((b) => (groups[firstCho(b.name)] ||= []).push(b));
       grid = Object.entries(groups).map(([k, list]) => `<div class="group-label">${k}</div>
-        <div class="book-grid">${list.map((b) => `<button class="book-btn" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
+        <div class="book-grid">${list.map((b) => `<button class="book-btn${b.id === this.book ? ' cur' : ''}" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
     }
     body.innerHTML = `<div class="recent">최근 ${recent}</div>
       <div class="seg"><button data-sort="toc" class="${this.sort === 'toc' ? 'on' : ''}">목차순</button><button data-sort="abc" class="${this.sort === 'abc' ? 'on' : ''}">가나다순</button></div>
