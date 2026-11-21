@@ -480,8 +480,6 @@ button { touch-action: manipulation; }
 /* ---------- 토스트 · 모달 · 시트 ---------- */
 .toast { position: fixed; left: 50%; bottom: calc(24px + var(--safe-bottom)); transform: translate(-50%, 20px); z-index: 80; background: var(--toast-bg); color: var(--toast-text); font-size: 15px; font-weight: 600; padding: 13px 20px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; box-shadow: var(--shadow-floating); white-space: nowrap; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
-/* 화면을 옮기면 떠 있던 토스트는 위로 올라가며 사라져요 (11/21) */
-.toast.leave { opacity: 0; transform: translate(-50%, -28px); transition: opacity .25s ease, transform .25s ease; }
 .dim { position: fixed; inset: 0; z-index: 60; background: var(--bg-dim); display: grid; place-items: center; animation: fade .15s ease; }
 @keyframes fade { from { opacity: 0; } }
 .modal { width: 480px; max-width: calc(100vw - 32px); background: var(--bg-panel); border: 1px solid var(--border-panel); border-radius: 20px; padding: 24px; }
@@ -521,7 +519,7 @@ button { touch-action: manipulation; }
   .info-fields { grid-template-columns: 1fr 1fr; }
 }
 
-body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
+/* (툴바가 위로 올라가서 노트 화면에서도 토스트를 올리지 않아요. 화면을 옮겨도 토스트가 튀지 않게, 11/21) */
 
 /* 굵기 미리보기 */
 .size-preview { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 24px 14px; min-width: 120px; border-radius: 20px; background: rgba(255,255,255,.94); box-shadow: 0 4px 20px rgba(0,0,0,.18); opacity: 0; transition: opacity .18s, transform .18s; }
