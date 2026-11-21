@@ -554,12 +554,12 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   app.innerHTML = `<div class="screen">
     <header class="topbar">
       <div class="left"><button class="icon-btn" data-act="side" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
-      <div class="title">${mainReadonly ? esc(main.title) : from === 'home' ? '노트' : '오늘 설교 기록하기'}</div>
-      <div class="right">${!mainReadonly && window.webkit?.messageHandlers?.lumenibNative ? '<button class="btn btn-outline" data-act="native-ink">네이티브 필기</button>' : ''}${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
+      <div class="mid"><div class="tb-slot"></div><div class="title">${mainReadonly ? esc(main.title) : from === 'home' ? '노트' : '오늘 설교 기록하기'}</div></div>
+      <div class="right">${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
     </header>
     <div class="workspace">
       <section class="panel bible-panel"></section>
-      <section class="panel right-panel note"><div class="tabs-slot"></div><div class="info-slot"></div><div class="tb-slot"></div><div class="paper-scroll"></div></section>
+      <section class="panel right-panel note"><div class="tabs-slot"></div><div class="info-slot"></div><div class="paper-scroll"></div></section>
     </div></div>`;
   const right = app.querySelector('.right-panel');
   const scrollEl = right.querySelector('.paper-scroll');
@@ -633,18 +633,23 @@ async function NoteScreen({ noteId, start, openOld, from }) {
 
   let toolbarEl = null;
   // 노트 영역이 툴바보다 좁으면(아이패드 미니 등) 툴바를 그 폭에 맞게 살짝 줄여요
+  // 툴바는 맨 위 제목줄 가운데 (굿노트처럼). 양옆 버튼과 겹치지 않게 넓이가 모자라면 살짝 줄여요
   function fitToolbar() {
     if (!toolbarEl) return;
-    const z = Math.min(1, (right.clientWidth - 24) / toolbarEl.offsetWidth);
-    right.style.setProperty('--tb-z', z.toFixed(3));
+    const bar = app.querySelector('.topbar');
+    const side = Math.max(bar.querySelector('.left').offsetWidth, bar.querySelector('.right').offsetWidth);
+    const room = bar.clientWidth - 32 - side * 2 - 24;
+    const z = Math.min(1, room / toolbarEl.offsetWidth);
+    app.querySelector('.screen').style.setProperty('--tb-z', z.toFixed(3));
   }
   const tbRO = new ResizeObserver(() => fitToolbar());
   tbRO.observe(right);
+  tbRO.observe(app.querySelector('.topbar'));
   function renderToolbar() {
     // 툴바를 누르고 있는 동안에는 툴바를 다시 만들지 않고, 손을 뗀 뒤에 만들어요.
     // 누른 버튼이 손가락·펜 아래에서 사라지면 iPad가 다음 펜슬 획을 스크롤로 착각했어요.
     if (tbPressing) { tbPending = true; sendInkConfig(); return; }
-    const slot = right.querySelector('.tb-slot');
+    const slot = app.querySelector('.topbar .tb-slot');
     if (isReadonly()) { slot.innerHTML = ''; return; }
     const t = tool.type;
     const tb = (k, ic, label) => `<button class="tb-btn ${t === k ? 'on' : ''}" data-tool="${k}" aria-label="${label}">${ic}</button>`;
@@ -690,7 +695,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   const sizeArr = (t) => (t === 'pen' ? PEN_SIZES : t === 'hl' ? HL_SIZES : ERASER_SIZES);
 
   let tbPressing = false, tbPending = false;
-  const tbSlot = right.querySelector('.tb-slot');
+  const tbSlot = app.querySelector('.topbar .tb-slot');
   tbSlot.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.tb-menu')) return; // 펼친 창 안(슬라이더 등)은 그대로
     tbPressing = true;
@@ -905,8 +910,10 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     const m = document.createElement('div');
     m.className = 'tb-menu';
     m.innerHTML = `<h6>종이 종류</h6><div class="row">${PAPERS.map(([k, l]) => `<button class="paper-opt ${k === main.paper ? 'on' : ''}" data-p="${k}"><span class="paper-thumb ${k}"></span>${l.replace(' 종이', '')}</button>`).join('')}</div>
-      <button class="menu-item" data-act="pdf">${icon.download || ''}<span>PDF로 내보내기</span></button>`;
+      <button class="menu-item" data-act="pdf">${icon.download || ''}<span>PDF로 내보내기</span></button>
+      ${window.webkit?.messageHandlers?.lumenibNative ? '<button class="menu-item" data-act="native-ink"><span>네이티브 필기 비교</span></button>' : ''}`;
     toolbarEl.appendChild(m);
+    m.querySelector('[data-act="native-ink"]')?.addEventListener('click', () => { m.remove(); track('native_ink_open'); window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' }); });
     m.querySelector('[data-act="pdf"]').addEventListener('click', () => { m.remove(); exportPdf(); });
     m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.touch(main); ns.paper.render(); m.remove(); }));
   }
@@ -1166,10 +1173,6 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   app.querySelector('[data-act="side"]').addEventListener('click', () => {
     ns.leftOpen = !ns.leftOpen;
     leftEl.classList.toggle('closed', !ns.leftOpen);
-  });
-  app.querySelector('[data-act="native-ink"]')?.addEventListener('click', () => {
-    track('native_ink_open');
-    window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' });
   });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
     if (mainReadonly) return go('home');
