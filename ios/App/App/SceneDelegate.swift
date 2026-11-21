@@ -163,6 +163,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         if let (t, r) = panelClosedAt, Date().timeIntervalSince(t) < 0.7, rect.insetBy(dx: -8, dy: -8).contains(r.origin) { panelClosedAt = nil; return }
         closePanel()
         vc.overrideUserInterfaceStyle = .light
+        vc.loadViewIfNeeded() // 창 크기(preferredContentSize)는 화면을 만들 때 정해져요
         let W = vc.preferredContentSize.width, H0 = vc.preferredContentSize.height
         let box = UIView()
         box.layer.cornerRadius = 14
