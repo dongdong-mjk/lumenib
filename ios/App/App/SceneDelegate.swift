@@ -76,8 +76,20 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         return true
     }
     private var relaying = false
+    // 굿노트처럼: 종이가 미끄러지듯 스크롤되는 중에 펜슬을 대면 스크롤을 그 자리에서 멈춰요
+    private func stopScrolling(at p: CGPoint) {
+        guard let web = webView else { return }
+        var v = web.hitTest(p, with: nil)
+        while let cur = v, cur !== web {
+            if let sv = cur as? UIScrollView, sv.isDecelerating || sv.isDragging {
+                sv.setContentOffset(sv.contentOffset, animated: false)
+            }
+            v = cur.superview
+        }
+    }
     private var inkLastPoint: SIMD3<Double>?
     func inkBegin(_ p: SIMD3<Double>) {
+        stopScrolling(at: CGPoint(x: p.x, y: p.y))
         relaying = inkConfig.relay
         inkLastPoint = p
         if relaying { relay("down", [p]) } else { inkOverlay.begin(p) }
