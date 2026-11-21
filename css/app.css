@@ -641,3 +641,9 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 
 /* 툴바에서 여는 창은 툴바 아래로 (종이 종류 팝업처럼 따로 띄우는 창은 각자 위치) */
 .toolbar > .tb-menu { top: 60px; }
+
+/* 노트 종이 스크롤 막대: 기본 막대는 숨기고 종이 위에 직접 그린 막대를 써요 (11/21) */
+.paper-scroll { scrollbar-width: none; }
+.paper-scroll::-webkit-scrollbar { display: none; }
+.sb { position: absolute; z-index: 5; width: 5px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.45); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.sb-on .sb { opacity: 1; transition: opacity .1s; }

@@ -107,7 +107,7 @@ export class Paper {
         }
       }
     };
-    this._onScroll = () => { cancelAnimationFrame(this._citeRaf); this._citeRaf = requestAnimationFrame(() => this.placeCiteUis()); };
+    this._onScroll = () => { cancelAnimationFrame(this._sbRaf); this._sbRaf = requestAnimationFrame(() => this.updateBars()); };
     scrollEl.addEventListener('scroll', this._onScroll, { passive: true });
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchmove', this._touchBlock, { passive: false });
@@ -119,6 +119,7 @@ export class Paper {
     this._ro.disconnect();
     this.scrollEl.removeEventListener('touchstart', this._touchBlock);
     this.scrollEl.removeEventListener('scroll', this._onScroll);
+    this._bars?.v.remove(); this._bars?.h.remove();
     this.scrollEl.removeEventListener('touchmove', this._touchBlock);
     this.scrollEl.removeEventListener('touchend', this._touchEnd);
     this.scrollEl.removeEventListener('touchcancel', this._touchEnd);
@@ -235,7 +236,6 @@ export class Paper {
   renderCitations(page) {
     page.inner.querySelectorAll('.cite-block').forEach((e) => e.remove());
     page.ui.querySelectorAll('.cite-ui').forEach((e) => e.remove());
-    requestAnimationFrame(() => this.placeCiteUis());
     this.note.citations.filter((c) => c.page === page.i).forEach((c) => {
       const el = document.createElement('div');
       el.className = 'cite-block';
@@ -301,7 +301,7 @@ export class Paper {
 
   layout() {
     if (!this.pages) return;
-    queueMicrotask(() => { this.onLayout?.(); this.placeCiteUis(); });
+    queueMicrotask(() => this.onLayout?.());
     const avail = this.scrollEl.clientWidth - 40;
     const w = Math.round(Math.max(320, Math.min(avail, 1100)) * (this.zoom || 1));
     this.scale = w / PAGE_W;
@@ -608,17 +608,32 @@ export class Paper {
     this.showLassoMenu();
   }
 
-  // 인용 옮기기·빼기 아이콘은 화면에 보이는 오른쪽 끝에 붙여요 (확대해서 인용 오른쪽이 화면 밖이어도 보이게)
-  placeCiteUis() {
-    const sr = this.scrollEl.getBoundingClientRect();
-    for (const p of this.pages || []) {
-      if (!p) continue;
-      const pr = p.el.getBoundingClientRect();
-      if (pr.bottom < sr.top || pr.top > sr.bottom) continue;
-      const visRight = Math.min(pr.right, sr.right - 8);
-      const right = Math.max(22, PAGE_W - (visRight - pr.left) / this.scale + 22);
-      for (const u of p.ui.querySelectorAll('.cite-ui')) u.style.right = right + 'px';
+  // 스크롤 막대: iPad 기본 막대는 종이(필기 층) 밑에 깔려 보여서, 종이 위에 얇은 막대를 직접 그려요.
+  // 스크롤하는 동안만 보이고 잠시 뒤 사라져요.
+  updateBars() {
+    const el = this.scrollEl, host = el.parentElement;
+    if (!host) return;
+    if (!this._bars) {
+      const v = document.createElement('div'), h = document.createElement('div');
+      v.className = 'sb sb-v'; h.className = 'sb sb-h';
+      host.append(v, h);
+      this._bars = { v, h };
     }
+    const { v, h } = this._bars;
+    const top = el.offsetTop, left = el.offsetLeft, W = el.clientWidth, H = el.clientHeight, sh = el.scrollHeight, sw = el.scrollWidth;
+    if (sh > H + 1) {
+      const len = Math.max(36, (H * H) / sh), pos = (H - len - 6) * (el.scrollTop / (sh - H));
+      v.style.cssText = `top:${top + 3 + pos}px;left:${left + W - 8}px;height:${len}px`;
+      v.hidden = false;
+    } else v.hidden = true;
+    if (sw > W + 1) {
+      const len = Math.max(36, (W * W) / sw), pos = (W - len - 12) * (el.scrollLeft / (sw - W));
+      h.style.cssText = `left:${left + 3 + pos}px;top:${top + H - 8}px;width:${len}px`;
+      h.hidden = false;
+    } else h.hidden = true;
+    host.classList.add('sb-on');
+    clearTimeout(this._sbT);
+    this._sbT = setTimeout(() => host.classList.remove('sb-on'), 900);
   }
 
   // 인용 블록이 종이에서 차지하는 상자 (종이 단위)
