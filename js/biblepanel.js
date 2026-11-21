@@ -217,11 +217,15 @@ export class BiblePanel {
       const v = e.target.closest('.verse');
       if (!v) return;
       const n = +v.dataset.n;
+      // 누르는 대로 이어서 골라요 (11/21): 9 → 10 → 11 을 누르면 9–11.
+      //  고른 범위 밖 절 = 그 절까지 넓히기, 끝 절을 다시 누르면 그 절만 빼기, 가운데 절 = 그 절까지로 줄이기, 하나만 고른 절을 다시 누르면 해제
       const s = this.sel;
       if (!s) this.sel = { from: n, to: n };
-      else if (s.from === s.to && s.from === n) this.sel = null;
-      else if (s.from === s.to) this.sel = { from: Math.min(s.from, n), to: Math.max(s.from, n) };
-      else this.sel = { from: n, to: n };
+      else if (n < s.from || n > s.to) this.sel = { from: Math.min(s.from, n), to: Math.max(s.to, n) };
+      else if (s.from === s.to) this.sel = null;
+      else if (n === s.to) this.sel = { from: s.from, to: n - 1 };
+      else if (n === s.from) this.sel = { from: n + 1, to: s.to };
+      else this.sel = { from: s.from, to: n };
       this.render({ keepScroll: true });
       this.o.onChange?.();
     });

@@ -49,6 +49,11 @@ function modal(html, bind) {
   return close;
 }
 
+// 임시 기록(11/21): 앱에서 손가락 탭이 안 먹는 원인 찾기
+if (window.webkit?.messageHandlers?.lumenibNative) {
+  const d = (e) => { const t = e.target; return (t.closest?.('button,[data-act],.info-toggle,.info-head') || t).outerHTML?.slice(0, 70); };
+  for (const ty of ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'pointercancel', 'click']) document.addEventListener(ty, (e) => { if (e.pointerType === 'pen' || [...(e.touches || e.changedTouches || [])].some((t) => t.touchType === 'stylus')) return; console.log('[tap] ' + ty + ' ' + (e.defaultPrevented ? 'PREVENTED ' : '') + d(e)); }, true);
+}
 // 슬라이더 채워진 부분 표시 (CSS --p)
 const fillRange = (r) => r.style.setProperty('--p', ((r.value - r.min) / (r.max - r.min || 1)) * 100 + '%');
 document.addEventListener('input', (e) => { if (e.target.matches?.('input[type=range]')) fillRange(e.target); });
