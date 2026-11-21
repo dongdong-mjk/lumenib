@@ -69,7 +69,15 @@ export class Paper {
     scrollEl.className = 'paper-scroll' + (this.fingerDraw && !this.readonly ? ' finger' : '');
     this._ro = new ResizeObserver(() => {
       // 패널 접기·펴기 애니메이션 중에는 종이를 매 프레임 다시 그리지 않고 크기만 늘리고 줄여요 (끊김 방지). 끝나면 한 번만 다시 그려요
-      if (this._animW0) { this.pagesEl.style.transform = `scale(${this.targetWidth() / this._animW0})`; return; }
+      if (this._animW0) {
+        // 종이 가운데가 보이는 칸 가운데에 오도록 옮기면서 크기를 바꿔요 (열 때 오른쪽으로 밀렸다 줄어들던 것)
+        const pe = this.pagesEl, se = this.scrollEl;
+        pe.style.transform = 'none';
+        const r = pe.getBoundingClientRect(), sr = se.getBoundingClientRect();
+        const dx = (sr.left + se.clientWidth / 2) - (r.left + r.width / 2);
+        pe.style.transform = `translateX(${dx}px) scale(${this.targetWidth() / this._animW0})`;
+        return;
+      }
       cancelAnimationFrame(this._raf); this._raf = requestAnimationFrame(() => this.layout());
     });
     this._ro.observe(scrollEl);
@@ -166,6 +174,14 @@ export class Paper {
   }
 
   // ---------- 그리기 준비 ----------
+  // 종이 종류만 바꿀 때: 페이지를 새로 만들지 않고 배경만 다시 그려요 (확대·스크롤 위치 그대로)
+  setPaper(type) {
+    this.note.paper = type;
+    this.scrollEl.classList.remove('paper-lined', 'paper-grid', 'paper-dot', 'paper-blank');
+    this.scrollEl.classList.add('paper-' + (type || 'lined'));
+    for (const p of this.pages) if (p && p.dpr) this.drawBackground(p);
+  }
+
   async render() {
     const n = this.note;
     this.pagesEl.innerHTML = '';

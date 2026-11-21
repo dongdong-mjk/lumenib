@@ -925,7 +925,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     toolbarEl.appendChild(m);
     m.querySelector('[data-act="native-ink"]')?.addEventListener('click', () => { m.remove(); track('native_ink_open'); window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' }); });
     m.querySelector('[data-act="pdf"]').addEventListener('click', () => { m.remove(); exportPdf(); });
-    m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.settings.lastPaper = main.paper; S.saveSettings(); S.touch(main); ns.paper.render(); m.remove(); }));
+    m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.settings.lastPaper = main.paper; S.saveSettings(); if (ns.paper.note === main) ns.paper.setPaper(main.paper); else ns.paper.render(); S.touch(main); m.remove(); }));
   }
 
   // ---------- iPad 앱: 필기만 네이티브 엔진으로 ----------
