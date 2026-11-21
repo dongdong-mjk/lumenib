@@ -502,7 +502,7 @@ final class LumenPenSettingsViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .lumenPanel // 앱의 라이트/다크를 따라가요
+        view.backgroundColor = .white // 앱의 라이트/다크를 따라가요
         view.tintColor = .label // 디자인 규칙: 포인트 색 없이 검정(다크는 흰색)
         stack.axis = .vertical
         stack.spacing = 10
@@ -514,8 +514,8 @@ final class LumenPenSettingsViewController: UIViewController {
         view.addSubview(scroll)
         scroll.addSubview(stack)
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            scroll.topAnchor.constraint(equalTo: view.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 20), // 위 여백
@@ -523,7 +523,7 @@ final class LumenPenSettingsViewController: UIViewController {
             stack.leadingAnchor.constraint(equalTo: scroll.frameLayoutGuide.leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: scroll.frameLayoutGuide.trailingAnchor, constant: -16),
         ])
-        preferredContentSize = CGSize(width: 320, height: 480)
+        preferredContentSize = CGSize(width: 296, height: 480)
         build()
     }
 
@@ -811,7 +811,7 @@ final class LumenSizeSliderViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .lumenPanel
+        view.backgroundColor = .white
         view.tintColor = .label // 디자인 규칙: 포인트 색 없이 검정(다크는 흰색)
         let title = UILabel(); title.text = titleText; title.font = .systemFont(ofSize: 15, weight: .semibold); title.textColor = .lumenTextPrimary
         slider.minimumValue = Float(minV); slider.maximumValue = Float(maxV); slider.value = Float(value)
@@ -827,11 +827,11 @@ final class LumenSizeSliderViewController: UIViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
             stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
         ])
-        preferredContentSize = CGSize(width: 320, height: 140)
+        preferredContentSize = CGSize(width: 280, height: 140)
     }
     @objc private func changed() {
         value = (Double(slider.value) / step).rounded() * step

@@ -68,9 +68,9 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     func inkShouldTake(_ p: CGPoint) -> Bool {
         guard inkConfig.allows(p) else { return false }
         // 펜 설정·굵기 창이 열려 있어도, 창 밖 종이에 펜슬을 대면 창을 닫고 바로 써요 (굿노트처럼)
-        if let pv = presentedViewController {
-            if let v = pv.view, let web = webView, v.convert(v.bounds, to: web).contains(p) { return false }
-            pv.dismiss(animated: true)
+        if let box = panelBox, let web = webView {
+            if box.convert(box.bounds, to: web).contains(p) { return false }
+            closePanel()
         }
         webView?.evaluateJavaScript("window.lumenibCloseMenus && window.lumenibCloseMenus()", completionHandler: nil)
         return true
@@ -144,16 +144,46 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         let a = (b["anchor"] as? [Any])?.map { ($0 as? NSNumber)?.doubleValue ?? 0 } ?? [0, 0, 1, 1]
         return a.count == 4 ? CGRect(x: a[0], y: a[1], width: a[2], height: a[3]) : .zero
     }
+    // 툴바의 '더 보기' 창(.tb-menu)과 같은 모양: 흰 바탕, 연한 테두리, 둥근 모서리 14, 그림자. 라이트/다크 상관없이 같아요.
+    private var panel: UIViewController?
+    private var panelBox: UIView?
+    private var panelClosedAt: (Date, CGRect)?
+    var panelFrameInWindow: CGRect? { panelBox.map { $0.convert($0.bounds, to: nil) } }
+
+    func closePanel(touchAt p: CGPoint? = nil) {
+        guard let vc = panel, let box = panelBox else { return }
+        // 툴바 버튼을 다시 눌러 닫은 경우, 곧바로 오는 '열기' 요청은 무시하려고 기억해요
+        if let p, let web = webView { panelClosedAt = (Date(), CGRect(origin: web.convert(p, from: nil), size: .zero)) } else { panelClosedAt = nil }
+        vc.willMove(toParent: nil); box.removeFromSuperview(); vc.removeFromParent()
+        panel = nil; panelBox = nil
+    }
+
     private func presentPopover(_ vc: UIViewController, _ rect: CGRect) {
-        guard presentedViewController == nil, let web = webView else { return }
-        vc.modalPresentationStyle = .popover
-        if let pop = vc.popoverPresentationController {
-            pop.sourceView = web
-            pop.sourceRect = rect
-            pop.permittedArrowDirections = [.down, .up]
-            pop.backgroundColor = .lumenPanel // 유리처럼 비치지 않게 (글자 대비)
-        }
-        present(vc, animated: true)
+        guard let web = webView else { return }
+        if let (t, r) = panelClosedAt, Date().timeIntervalSince(t) < 0.7, rect.insetBy(dx: -8, dy: -8).contains(r.origin) { panelClosedAt = nil; return }
+        closePanel()
+        vc.overrideUserInterfaceStyle = .light
+        let W = vc.preferredContentSize.width, H0 = vc.preferredContentSize.height
+        let box = UIView()
+        box.layer.cornerRadius = 14
+        box.layer.borderWidth = 1
+        box.layer.borderColor = UIColor(hexString: "#e8e8e8").cgColor
+        box.layer.shadowColor = UIColor.black.cgColor
+        box.layer.shadowOpacity = 0.12; box.layer.shadowRadius = 8; box.layer.shadowOffset = CGSize(width: 0, height: 4)
+        box.backgroundColor = .white
+        let host = web.bounds
+        let top = rect.maxY + 8
+        let H = min(H0, host.height - top - 16)
+        let x = min(max(16, rect.midX - W / 2), host.width - W - 16)
+        box.frame = CGRect(x: x, y: top, width: W, height: H)
+        addChild(vc)
+        vc.view.frame = box.bounds
+        vc.view.layer.cornerRadius = 14; vc.view.clipsToBounds = true
+        box.addSubview(vc.view)
+        web.addSubview(box)
+        vc.didMove(toParent: self)
+        panel = vc; panelBox = box
+        box.alpha = 0; UIView.animate(withDuration: 0.15) { box.alpha = 1 }
     }
     private func js(_ code: String) { webView?.evaluateJavaScript(code, completionHandler: nil) }
 
@@ -220,7 +250,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     private func sendToWeb(_ kind: String, _ action: String) {
         guard action != "ignore" else { return }
         // 펜 설정·굵기 창이 열린 채로 도구를 바꾸면 창은 닫아요
-        if presentedViewController != nil { dismiss(animated: true) }
+        closePanel()
         js("window.lumenibCloseMenus && window.lumenibCloseMenus()")
         let js = """
         (function (k, a) {
@@ -288,6 +318,11 @@ final class InkWindow: UIWindow {
     // (예전엔 웹에 안 보냈더니 웹이 터치 상태를 잘못 기억해서 손가락 확대·버튼이 멈췄어요.
     //  웹은 네이티브가 그리는 동안 진짜 펜슬 입력을 무시해요: js/ink.js accept)
     override func sendEvent(_ event: UIEvent) {
+        // 펜 설정·굵기 창 밖을 누르면 창을 닫아요 (손가락·펜슬 모두)
+        if event.type == .touches, let b = bridge, let f = b.panelFrameInWindow, let all = event.allTouches,
+           let t = all.first(where: { $0.phase == .began && !f.contains($0.location(in: nil)) }) {
+            b.closePanel(touchAt: t.location(in: nil))
+        }
         if event.type == .touches, let b = bridge, let web = b.webView, let all = event.allTouches,
            let pencil = all.first(where: { $0.type == .pencil }) {
             if let t = tracked, t === pencil {
