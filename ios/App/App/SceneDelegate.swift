@@ -44,7 +44,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
-        webView?.scrollView.isScrollEnabled = false
+        // (isScrollEnabled = false 는 쓰면 안 돼요: 웹 안 스크롤 영역(노트 종이·성경 목록)과 확대까지 같이 멈춰요)
         webView?.scrollView.bounces = false
         webView?.scrollView.alwaysBounceVertical = false
     }
