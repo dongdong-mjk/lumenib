@@ -1030,15 +1030,28 @@ function drawStroke(ctx, s, live = false) {
   ctx.setLineDash([]);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (s.tool === 'hl') {
+    // 형광펜: 획을 따로 불투명하게 그린 뒤 한 번에 반투명·곱하기로 얹어요.
+    // 돼지꼬리처럼 스스로 겹치는 곳이 더 진해지지 않게 (쓰는 중 모습과도 같아요)
+    const q = hlPoints(p, s.w);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < q.length; i += 2) { x0 = Math.min(x0, q[i]); x1 = Math.max(x1, q[i]); y0 = Math.min(y0, q[i + 1]); y1 = Math.max(y1, q[i + 1]); }
+    const m = ctx.getTransform(), k = m.a, pad = s.w / 2 + 2;
+    const bx = Math.floor((x0 - pad) * k + m.e), by = Math.floor((y0 - pad) * k + m.f);
+    const bw = Math.ceil((x1 - x0 + pad * 2) * k) + 2, bh = Math.ceil((y1 - y0 + pad * 2) * k) + 2;
+    if (bw <= 0 || bh <= 0) return;
+    const off = hlScratch(bw, bh), o = off.getContext('2d');
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, bw, bh);
+    o.setTransform(k, 0, 0, k, m.e - bx, m.f - by);
+    o.strokeStyle = s.color; o.lineWidth = s.w; o.lineCap = 'round'; o.lineJoin = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
+    o.beginPath(); o.moveTo(q[0], q[1]);
+    for (let i = 2; i < q.length; i += 2) o.lineTo(q[i], q[i + 1]);
+    if (q.length === 2) o.lineTo(q[0] + 0.01, q[1]);
+    o.stroke();
     ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT;
     ctx.globalCompositeOperation = 'multiply';
-    ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
-    const q = hlPoints(p, s.w);
-    // 곡선(quadratic)으로 이으면 급하게 꺾이는 곳에서 굵은 선 안쪽에 구멍이 뚫렸어요. 촘촘한 점을 직선 + 둥근 이음으로 이어요
-    ctx.beginPath(); ctx.moveTo(q[0], q[1]);
-    for (let i = 2; i < q.length; i += 2) ctx.lineTo(q[i], q[i + 1]);
-    ctx.stroke();
+    ctx.drawImage(off, 0, 0, bw, bh, bx, by, bw, bh);
     ctx.restore();
     return;
   }
@@ -1280,6 +1293,13 @@ export function penSamplePath(style, w = 84, h = 22, po = settings.penOpts[style
 // 형광펜은 끝이 납작해서(butt) 첫·마지막 짧은 구간의 방향이 끝 모양을 정해요.
 // 펜슬은 대고 뗄 때 펜촉이 아주 조금씩 흔들린 점을 많이 보내서, 그 방향대로 끝이 비뚤게 잘렸어요.
 // 시작점·끝점 근처(굵기의 절반 안쪽)의 흔들린 점과 너무 촘촘한 점을 빼고 그려요. 저장된 점은 그대로예요.
+let _hlOff = null;
+function hlScratch(w, h) {
+  if (!_hlOff) _hlOff = document.createElement('canvas');
+  if (_hlOff.width < w) _hlOff.width = w;
+  if (_hlOff.height < h) _hlOff.height = h;
+  return _hlOff;
+}
 function hlPoints(p, w) {
   const n = p.length / 3;
   if (n < 3) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
