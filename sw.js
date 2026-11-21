@@ -9,6 +9,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.hostname.includes('clarity.ms') || url.hostname.includes('bing.com')) return; // 사용 기록 수집은 건드리지 않아요
+  if (url.hostname.endsWith('supabase.co') || url.search.includes('code=')) return; // 로그인·노트 서버는 캐시하지 않아요
   const cacheFirst = url.pathname.includes('/data/') || url.pathname.includes('/fonts/') || url.hostname.includes('gstatic') || url.pathname.includes('/icons/');
   if (cacheFirst) {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {

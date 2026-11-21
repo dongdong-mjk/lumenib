@@ -549,3 +549,50 @@ body.noting .toast { bottom: calc(92px + var(--safe-bottom)); }
 /* 더 보기 메뉴 항목 (PDF로 내보내기) */
 .tb-menu .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 8px; border-top: 1px solid #f0f0f0; font-size: 14px; color: #111; text-align: left; }
 .tb-menu .menu-item svg { width: 20px; height: 20px; }
+
+/* ---------- 로그인 · 노트 보관 (11/20) ---------- */
+.sheet .acct { gap: 12px; }
+.sheet .acct > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sheet .acct .btn { height: 36px; flex: none; font-size: 14px; }
+.sheet [data-act="logout"] { flex-direction: column; align-items: flex-start; }
+.sheet [data-act="login"] .chev { flex: none; color: var(--icon-secondary, var(--text-secondary)); }
+.modal.login { position: relative; width: 440px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.consent { margin: 20px 0 0; padding: 0 0 0 18px; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
+.consent li + li { margin-top: 6px; }
+.modal .sub { margin: 4px 0 0; font-size: 15px; color: var(--text-secondary); }
+.agree { display: flex; align-items: center; gap: 12px; margin: 12px 0 0; font-size: 16px; font-weight: 600; min-height: 44px; cursor: pointer; }
+/* 체크박스 (피그마 Design System > Checkbox 520:8362): 20×20 r6, 테두리 1.5 icon/secondary, 체크하면 action/primary + 흰 체크, 누르는 동안 36 원 */
+.cbx { appearance: none; -webkit-appearance: none; margin: 0; padding: 0; border: 0; width: 20px; height: 20px; flex: none; position: relative; border-radius: 6px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--icon-secondary); cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
+/* 상태 원: 가운데에서 커지며 나타나요 (구글 폼처럼) */
+.cbx::before { content: ""; position: absolute; left: -8px; top: -8px; width: 36px; height: 36px; border-radius: 50%; background: var(--text-primary); opacity: 0; transform: scale(0); transition: transform .22s cubic-bezier(.2, 0, 0, 1), opacity .22s; pointer-events: none; }
+@media (hover: hover) { .cbx:hover::before, .agree:hover .cbx::before { opacity: .08; transform: scale(1); } }
+.cbx:focus-visible::before { opacity: .12; transform: scale(1); }
+.cbx:active::before { opacity: .16; transform: scale(1); }
+.cbx:checked { background: var(--action-primary); box-shadow: none; }
+/* 체크 표시: 피그마 벡터 그대로 (M5.5 10.5 L8.5 13.5 L14.5 7, 굵기 2, 둥근 끝) */
+.cbx::after { content: ""; position: absolute; inset: 0; background: var(--text-on-primary); opacity: 0;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5 8.5 13.5 14.5 7' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px 20px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5 8.5 13.5 14.5 7' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px 20px no-repeat; }
+.cbx:checked::after { opacity: 1; }
+.cbx:disabled { opacity: .4; }
+@media (prefers-reduced-motion: reduce) { .cbx::before { transition: none; } }
+.modal-col { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.modal-col .btn, .login .later { width: 100%; border-radius: 12px; }
+.login .later { margin-top: 8px; }
+.login-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.login-btns .btn { width: 100%; position: relative; }
+.login-btns .lg { position: absolute; left: 18px; width: 20px; height: 20px; background-position: center; background-size: contain; background-repeat: no-repeat; }
+/* 브랜드 규칙: 구글은 'G' 로고, 카카오는 노란 버튼(#FEE500) + 검정 말풍선 (라이트 모드 '포인트 색 없음' 규칙의 예외) */
+.lg-google { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%23FFC107' d='M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z'/%3E%3Cpath fill='%23FF3D00' d='m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z'/%3E%3Cpath fill='%234CAF50' d='M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z'/%3E%3Cpath fill='%231976D2' d='M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z'/%3E%3C/svg%3E"); }
+.login-btns [data-p="kakao"] { background: #FEE500; color: rgba(0, 0, 0, .85); border-color: #FEE500; }
+.lg-kakao { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 3C6.5 3 2 6.5 2 10.8c0 2.8 1.9 5.2 4.7 6.6l-1 3.6c-.1.3.3.6.6.4l4.3-2.8c.5.1 1 .1 1.4.1 5.5 0 10-3.5 10-7.9S17.5 3 12 3z'/%3E%3C/svg%3E"); }
+.email-box { display: flex; flex-direction: column; gap: 8px; }
+.email-box[hidden], .email-box .field[hidden] { display: none; }
+.login-note { margin: 10px 0 0; font-size: 12px; color: var(--text-tertiary); }
+.login-btns [hidden] { display: none; }
+.login-row { display: flex; gap: 8px; }
+.login-row .btn { flex: 1; min-width: 0; }
+.login-row:empty { display: none; }
+.login .email-link { align-self: center; color: var(--text-secondary); font-weight: 600; font-size: 15px; min-height: 44px; }
+.login .email-link[disabled] { opacity: .4; }
+.login-row .lg { position: static; flex: none; }

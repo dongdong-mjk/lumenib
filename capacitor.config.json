@@ -4,7 +4,13 @@
   "webDir": "www",
   "server": {
     "url": "https://dongdong-mjk.github.io/lumenib/",
-    "errorPath": "index.html"
+    "errorPath": "index.html",
+    "allowNavigation": [
+      "*.supabase.co",
+      "kauth.kakao.com",
+      "accounts.kakao.com",
+      "*.kakao.com"
+    ]
   },
   "ios": {
     "contentInset": "never",
