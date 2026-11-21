@@ -812,8 +812,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       if (ar) {
         const paint = () => { const i = m.querySelector('.pa-sample i'); i.style.background = cur(); i.style.opacity = ar.value / 100; };
         ar.addEventListener('input', () => { S.settings.hlAlpha = ar.value / 100; paint(); });
-        ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); });
+        ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); sendInkConfig(); });
         paint();
+        nativeRange(ar);
       }
       m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
       m.querySelectorAll('[data-c]').forEach((b) => {
@@ -970,6 +971,25 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     }
     return true;
   };
+  // iPad 앱: 웹 창 안의 슬라이더 자리에 진짜 iOS 슬라이더를 겹쳐 놓아요. 값이 바뀌면 웹 슬라이더에 input/change를 보내요
+  function nativeRange(input) {
+    if (!nativeInk) return;
+    const id = 'r' + Date.now();
+    input.style.visibility = 'hidden';
+    const send = () => {
+      const b = input.getBoundingClientRect();
+      nativeInk.postMessage({ action: 'slider', id, min: +input.min, max: +input.max, step: +input.step || 1, value: +input.value, anchor: [b.left, b.top, b.width, b.height] });
+    };
+    requestAnimationFrame(send);
+    window.lumenibSlider = (sid, v, done) => {
+      if (sid !== id || !input.isConnected) return;
+      input.value = v;
+      input.dispatchEvent(new Event(done ? 'change' : 'input', { bubbles: true }));
+    };
+    const watch = setInterval(() => {
+      if (!input.isConnected) { clearInterval(watch); nativeInk.postMessage({ action: 'sliderRemove' }); }
+    }, 150);
+  }
   // 네이티브 펜 설정 · 굵기 창에서 바꾼 값을 받아요
   window.lumenibSetPen = (style, opts) => {
     S.settings.penStyle = style;

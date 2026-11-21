@@ -186,6 +186,29 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         panel = vc; panelBox = box
         box.alpha = 0; UIView.animate(withDuration: 0.15) { box.alpha = 1 }
     }
+    // 웹 창 안의 슬라이더 자리에 진짜 iOS 슬라이더를 겹쳐 놓아요 (형광펜 투명도 등)
+    private var webSlider: UISlider?
+    private var webSliderInfo: (id: String, step: Double) = ("", 1)
+    private func showWebSlider(_ b: [String: Any]) {
+        guard let web = webView else { return }
+        let r = anchorRect(b)
+        let sl = webSlider ?? UISlider()
+        sl.minimumValue = Float(b["min"] as? Double ?? 0); sl.maximumValue = Float(b["max"] as? Double ?? 100)
+        sl.value = Float(b["value"] as? Double ?? 0)
+        sl.tintColor = .lumenTextPrimary
+        sl.overrideUserInterfaceStyle = .light // '더 보기' 계열 창은 늘 흰 바탕
+        sl.frame = CGRect(x: r.minX, y: r.midY - 15, width: r.width, height: 30)
+        webSliderInfo = (b["id"] as? String ?? "", b["step"] as? Double ?? 1)
+        if webSlider == nil {
+            sl.addTarget(self, action: #selector(webSliderChanged(_:)), for: .valueChanged)
+            sl.addTarget(self, action: #selector(webSliderDone(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+            web.addSubview(sl); webSlider = sl
+        }
+    }
+    private func webSliderValue(_ s: UISlider) -> Double { let st = webSliderInfo.step; return (Double(s.value) / st).rounded() * st }
+    @objc private func webSliderChanged(_ s: UISlider) { js("window.lumenibSlider && window.lumenibSlider('\(webSliderInfo.id)', \(webSliderValue(s)), false)") }
+    @objc private func webSliderDone(_ s: UISlider) { js("window.lumenibSlider && window.lumenibSlider('\(webSliderInfo.id)', \(webSliderValue(s)), true)") }
+
     private func js(_ code: String) { webView?.evaluateJavaScript(code, completionHandler: nil) }
 
     private func presentPenSettings(_ b: [String: Any]) {
@@ -230,6 +253,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
+        if action == "slider" { showWebSlider(body); return }
+        if action == "sliderRemove" { webSlider?.removeFromSuperview(); webSlider = nil; return }
         if action == "inkDrawn" { inkOverlay.dropOldestPending(); return }
         if action == "inkConfig" {
             let c = WebInkConfig(body)
