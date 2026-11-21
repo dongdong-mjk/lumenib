@@ -51,6 +51,7 @@ export class Paper {
     this.readonly = !!opts.readonly;
     this.onChange = opts.onChange || (() => {});
     this.onHistory = opts.onHistory || (() => {});
+    this.onLayout = opts.onLayout;
     this.fingerDraw = !!opts.fingerDraw;
     this.undoStack = [];
     this.redoStack = [];
@@ -284,6 +285,7 @@ export class Paper {
 
   layout() {
     if (!this.pages) return;
+    queueMicrotask(() => this.onLayout?.());
     const avail = this.scrollEl.clientWidth - 40;
     const w = Math.round(Math.max(320, Math.min(avail, 1100)) * (this.zoom || 1));
     this.scale = w / PAGE_W;
@@ -365,7 +367,11 @@ export class Paper {
   bindPointer(page) {
     const c = page.base;
     let cur = null; // 진행 중인 동작
-    const accept = (e) => e.pointerType !== 'touch' || (this.fingerDraw && !this._pan);
+    const accept = (e) => {
+      // iPad 앱에서 네이티브 필기를 켜 두면 애플펜슬 펜·형광펜은 네이티브가 그려서 넘겨줘요 (addExternalStroke)
+      if (window.__nativeInk && e.pointerType === 'pen' && (tool.type === 'pen' || tool.type === 'hl')) return false;
+      return e.pointerType !== 'touch' || (this.fingerDraw && !this._pan);
+    };
     // 두 손가락 스크롤이 시작되면 손가락으로 쓰던 획은 버려요
     this._cancels.push(() => { if (cur && cur.touch && cur.kind !== 'erase') { cur = null; this.clearLive(page); } });
 
@@ -752,6 +758,34 @@ export class Paper {
     this.renderCitations(page);
     this.changed(page);
     return c;
+  }
+
+  // iPad 앱의 네이티브 필기 엔진이 그린 획을 받아 노트에 넣어요. pts = [[clientX, clientY, 누르는 힘], ...]
+  // 지금 고른 도구(펜·형광펜)와 펜 설정으로 만들고, 되돌리기·저장은 웹에서 그린 것과 똑같이 처리해요.
+  addExternalStroke(pts) {
+    if (this.readonly || !pts?.length || (tool.type !== 'pen' && tool.type !== 'hl')) return false;
+    const hit = this.hitTest(pts[0][0], pts[0][1]);
+    if (!hit) return false;
+    const page = this.pages[hit.page];
+    if (this.selection) this.clearSelection();
+    const r = page.base.getBoundingClientRect();
+    const loc = ([cx, cy, pr]) => [round((cx - r.left) / this.scale), round((cy - r.top) / this.scale), Math.round(pr * 100) / 100];
+    const [x0, y0, p0] = loc(pts[0]);
+    const s = tool.type === 'pen'
+      ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, pts: [x0, y0, p0] }
+      : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x0, y0, 0.5] };
+    for (let i = 1; i < pts.length; i++) {
+      const [x, y, pr] = loc(pts[i]);
+      const p = s.pts;
+      if ((x - p[p.length - 3]) ** 2 + (y - p[p.length - 2]) ** 2 < 0.6) continue;
+      p.push(x, y, s.tool === 'hl' ? 0.5 : pr);
+    }
+    if (s.pts.length === 3) s.pts.push(s.pts[0] + 0.3, s.pts[1] + 0.3, s.pts[2]);
+    this.pagePush(page.i);
+    this.note.pages[page.i].strokes.push(s);
+    this.drawPage(page);
+    this.changed(page);
+    return true;
   }
 
   hitTest(clientX, clientY) {

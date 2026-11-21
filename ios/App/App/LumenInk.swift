@@ -597,3 +597,147 @@ final class LumenPenSettingsViewController: UIViewController {
         onChange?(style, opts); build()
     }
 }
+
+// MARK: - 웹 노트 위에서 쓰는 네이티브 필기 (필기만 네이티브)
+// 웹 노트 화면은 그대로 두고, 애플펜슬로 펜·형광펜을 쓸 때만 이 레이어가 바로 그려요.
+// 펜을 떼면 점들(웹 화면 좌표)을 웹으로 넘기고(window.lumenibInk), 웹이 노트에 넣어 그리면 이 레이어를 지워요.
+
+struct WebInkConfig {
+    var enabled = false
+    var tool: LumenStroke.Tool = .pen
+    var color = "#111111"
+    var width = 2.6            // 종이 단위
+    var style: LumenPenStyle = .ball
+    var opts: [String: Double] = [:]
+    var hlAlpha: CGFloat = 0.42
+    var scale: CGFloat = 1     // 웹 종이 배율 (종이 단위 → 화면)
+    var area: CGRect = .zero   // 필기할 수 있는 곳 (웹 화면 좌표)
+    var exclude: [CGRect] = [] // 툴바처럼 필기하면 안 되는 곳
+
+    init() {}
+    init(_ b: [String: Any]) {
+        enabled = b["enabled"] as? Bool ?? false
+        tool = (b["tool"] as? String) == "hl" ? .highlighter : .pen
+        color = b["color"] as? String ?? color
+        width = b["width"] as? Double ?? width
+        style = LumenPenStyle.allCases.first { ["ball", "fountain", "brush"][$0.rawValue] == (b["style"] as? String) } ?? .ball
+        opts = (b["opts"] as? [String: Any])?.compactMapValues { ($0 as? NSNumber)?.doubleValue } ?? [:]
+        hlAlpha = CGFloat(b["hlAlpha"] as? Double ?? 0.42)
+        scale = CGFloat(b["scale"] as? Double ?? 1)
+        let r = { (a: Any?) -> CGRect? in
+            guard let a = a as? [Any], a.count == 4 else { return nil }
+            let v = a.map { ($0 as? NSNumber)?.doubleValue ?? 0 }
+            return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+        }
+        area = r(b["area"]) ?? .zero
+        exclude = (b["exclude"] as? [Any] ?? []).compactMap(r)
+    }
+    func allows(_ p: CGPoint) -> Bool { enabled && area.contains(p) && !exclude.contains { $0.contains(p) } }
+}
+
+/// 애플펜슬 터치만 받는 제스처. 펜·형광펜일 때 종이 위에서 시작한 획을 가져가고(웹에는 안 보냄), 아니면 바로 포기해서 웹이 받게 해요.
+final class PencilInkGestureRecognizer: UIGestureRecognizer {
+    var config = WebInkConfig()
+    var onBegin: ((SIMD3<Double>) -> Void)?
+    var onMove: (([SIMD3<Double>], [SIMD3<Double>]) -> Void)?
+    var onEnd: (() -> Void)?
+    var onCancel: (() -> Void)?
+    private var touch: UITouch?
+
+    override init(target: Any?, action: Selector?) {
+        super.init(target: target, action: action)
+        allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        cancelsTouchesInView = true
+        delaysTouchesBegan = true
+    }
+
+    private func point(_ t: UITouch) -> SIMD3<Double> {
+        let p = t.preciseLocation(in: view)
+        let f = t.maximumPossibleForce > 0 ? Double(t.force / t.maximumPossibleForce) : 0.5
+        return SIMD3(Double(p.x), Double(p.y), min(1, max(0.05, f)))
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard touch == nil, let t = touches.first, config.allows(t.location(in: view)) else {
+            if touch == nil { state = .failed }
+            return
+        }
+        touch = t
+        state = .began
+        onBegin?(point(t))
+    }
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let t = touch, touches.contains(t) else { return }
+        let pts = (event.coalescedTouches(for: t) ?? [t]).map(point)
+        let pred = (event.predictedTouches(for: t) ?? []).map(point)
+        onMove?(pts, pred)
+        state = .changed
+    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let t = touch, touches.contains(t) else { return }
+        onMove?([point(t)], [])
+        onEnd?()
+        state = .ended
+    }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let t = touch, touches.contains(t) else { return }
+        onCancel?()
+        state = .cancelled
+    }
+    override func reset() { super.reset(); touch = nil }
+    // 웹뷰의 스크롤·제스처와 함께 인식 (손가락 스크롤은 그대로)
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+}
+
+/// 웹뷰 위에 얹는 투명한 그림 레이어 (진행 중인 한 획만)
+final class WebInkOverlay: UIView {
+    private let live = CAShapeLayer()
+    var config = WebInkConfig()
+    private(set) var pts: [SIMD3<Double>] = []
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        layer.addSublayer(live)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() { super.layoutSubviews(); live.frame = bounds }
+
+    func begin(_ p: SIMD3<Double>) { pts = [p]; redraw(predicted: []) }
+    func add(_ list: [SIMD3<Double>], predicted: [SIMD3<Double>]) {
+        for p in list {
+            if let l = pts.last { let dx = p.x - l.x, dy = p.y - l.y; if dx * dx + dy * dy < 0.25 { continue } }
+            pts.append(p)
+        }
+        redraw(predicted: predicted)
+    }
+    func clear() {
+        pts = []
+        CATransaction.begin(); CATransaction.setDisableActions(true); live.path = nil; CATransaction.commit()
+    }
+
+    private func redraw(predicted: [SIMD3<Double>]) {
+        // 화면 좌표 그대로 그려요: 굵기만 종이 배율을 곱하면 웹에서 그린 것과 같은 모양
+        var flat: [Double] = []
+        for p in pts + predicted { flat += [p.x, p.y, config.tool == .highlighter ? 0.5 : p.z] }
+        let s = LumenStroke(tool: config.tool, style: config.style, opts: config.opts, color: config.color,
+                            width: config.width * Double(config.scale), pts: flat)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        let color = UIColor(hexString: config.color)
+        if config.tool == .highlighter {
+            live.path = lumenHighlighterPath(s)
+            live.fillColor = nil
+            live.strokeColor = color.withAlphaComponent(config.hlAlpha).cgColor
+            live.lineWidth = CGFloat(s.width)
+            live.lineCap = .round; live.lineJoin = .round
+            live.compositingFilter = "multiplyBlendMode"
+        } else {
+            live.path = lumenPenPath(s, live: true)
+            live.fillColor = color.cgColor
+            live.strokeColor = nil
+            live.compositingFilter = nil
+        }
+        CATransaction.commit()
+    }
+}

@@ -42,6 +42,32 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         super.capacitorDidLoad()
         webView?.configuration.userContentController.add(self, name: "lumenibNative")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
+        setupInk()
+    }
+
+    // MARK: 필기만 네이티브 (웹 노트 위에서 애플펜슬 펜·형광펜)
+    private let inkOverlay = WebInkOverlay()
+    private let inkGesture = PencilInkGestureRecognizer(target: nil, action: nil)
+
+    private func setupInk() {
+        guard let web = webView else { return }
+        // 웹뷰 위에 고정 (웹뷰 안 스크롤과 상관없이 화면 좌표 그대로)
+        inkOverlay.frame = web.bounds
+        inkOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        web.addSubview(inkOverlay)
+        web.addGestureRecognizer(inkGesture)
+        inkGesture.onBegin = { [weak self] p in self?.inkOverlay.begin(p) }
+        inkGesture.onMove = { [weak self] pts, pred in self?.inkOverlay.add(pts, predicted: pred) }
+        inkGesture.onCancel = { [weak self] in self?.inkOverlay.clear() }
+        inkGesture.onEnd = { [weak self] in
+            guard let self else { return }
+            let pts = self.inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
+            guard let data = try? JSONSerialization.data(withJSONObject: pts), let json = String(data: data, encoding: .utf8) else { self.inkOverlay.clear(); return }
+            // 웹이 노트에 넣어 다시 그린 다음에 지워서 깜빡이지 않게
+            self.webView?.evaluateJavaScript("window.lumenibInk && window.lumenibInk(\(json))") { [weak self] _, _ in
+                DispatchQueue.main.async { self?.inkOverlay.clear() }
+            }
+        }
     }
 
     // 웹앱의 화면 모드(라이트/다크)를 기억해서, 앱을 켤 때 웹이 뜨기 전 바탕색도 맞춰요
@@ -58,6 +84,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
+        if action == "inkConfig" {
+            let c = WebInkConfig(body)
+            inkGesture.config = c
+            inkOverlay.config = c
+            return
+        }
         if action == "theme", let t = body["value"] as? String {
             UserDefaults.standard.set(t, forKey: "theme")
             applyTheme(t)

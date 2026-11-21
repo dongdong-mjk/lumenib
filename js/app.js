@@ -830,6 +830,41 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.touch(main); ns.paper.render(); m.remove(); }));
   }
 
+  // ---------- iPad 앱: 필기만 네이티브 엔진으로 ----------
+  // 펜·형광펜을 고르면 애플펜슬 획은 네이티브(ios/App/App/LumenInk.swift)가 바로 그리고, 펜을 떼면 점들을 넘겨줘요(addExternalStroke).
+  // 툴바·메뉴·지우개·올가미·스크롤은 모두 지금 웹 그대로. 네이티브가 알아야 할 것(도구·색·굵기·펜 설정·배율·종이 영역)을 보내요.
+  const nativeInk = window.webkit?.messageHandlers?.lumenibNative;
+  window.__nativeInk = !!nativeInk;
+  function sendInkConfig() {
+    if (!nativeInk) return;
+    const p = ns.paper;
+    const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; };
+    const blocked = !!(toolbarEl?.querySelector('.tb-menu') || document.querySelector('#overlay-root .dim') || p?.selection);
+    const on = !!p && !p.readonly && p.scrollEl?.isConnected && (tool.type === 'pen' || tool.type === 'hl') && !blocked;
+    const pen = tool.type === 'pen';
+    nativeInk.postMessage({
+      action: 'inkConfig', enabled: on,
+      tool: pen ? 'pen' : 'hl',
+      color: pen ? PEN_COLORS[tool.penColor] : HL_COLORS[tool.hlColor],
+      width: pen ? PEN_SIZES[tool.penSize] : HL_SIZES[tool.hlSize],
+      style: S.settings.penStyle, opts: S.settings.penOpts[S.settings.penStyle] || {},
+      hlAlpha: S.settings.hlAlpha, scale: p?.scale || 1,
+      area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(p?.lassoMenu)].filter(Boolean),
+    });
+  }
+  window.lumenibInk = (pts) => {
+    const ok = !!ns.paper?.addExternalStroke(pts);
+    if (ok) track('native_ink_stroke');
+    return ok;
+  };
+  if (nativeInk) {
+    const mo = new MutationObserver(() => sendInkConfig());
+    mo.observe(document.getElementById('overlay-root'), { childList: true });
+    mo.observe(right, { childList: true, subtree: true, attributes: false });
+    window.addEventListener('resize', sendInkConfig);
+    ns.offInk = () => { mo.disconnect(); window.removeEventListener('resize', sendInkConfig); nativeInk.postMessage({ action: 'inkConfig', enabled: false }); };
+  }
+
   // ---------- PDF 내보내기 ----------
   // 지금 열린 노트를 쪽마다 그림으로 찍어(본문 · 인용 · 손글씨 그대로) A4 PDF로 만들어요. 기기 밖으로 보내지 않고 기기 안에서 만들어요.
   let pdfBusy = false;
@@ -901,6 +936,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       fingerDraw: S.settings.fingerDraw,
       onChange: () => { S.touch(n); flashSaved(); if (n === main) bp.render({ keepScroll: true }); },
       onHistory: () => renderToolbar(),
+      onLayout: () => sendInkConfig(),
     });
     if (ns.undo[n.id]) [p.undoStack, p.redoStack] = ns.undo[n.id];
     ns.paper = p;
@@ -1075,7 +1111,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     });
   }
 
-  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); };
+  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); ns.offInk?.(); };
 
   renderTabs();
   renderInfo();
