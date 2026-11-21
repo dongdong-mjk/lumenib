@@ -301,6 +301,7 @@ final class InkWindow: UIWindow {
                 b.inkCancel(); tracked = nil
             default: break
             }
+            passFingers(event, all)
             forget(all)
             return // 이 펜슬 획은 웹으로 보내지 않아요
         }
@@ -308,6 +309,7 @@ final class InkWindow: UIWindow {
             tracked = pencil
             for f in all where f.type != .pencil && f.phase == .began { swallowed.insert(f) }
             b.inkBegin(point(pencil, in: web))
+            passFingers(event, all)
             return
         }
         // 웹이 시작을 못 본 손가락 터치만 움직이는 이벤트면 그대로 삼켜요
@@ -317,6 +319,13 @@ final class InkWindow: UIWindow {
         }
         forget(all)
         super.sendEvent(event)
+    }
+
+    // 펜슬보다 먼저 닿아 있던 손가락(손바닥)은 웹이 시작을 이미 봤어요. 그 손가락이 떼어질 때 웹에 꼭 알려야
+    // 웹이 "손가락이 아직 있다"고 착각하지 않아요(그러면 다음 두 손가락 확대가 막혔어요). 그래서 이벤트를 웹에도 보내요.
+    // (펜슬 획은 웹이 시작을 못 봐서 웹은 무시해요)
+    private func passFingers(_ event: UIEvent, _ all: Set<UITouch>) {
+        if all.contains(where: { $0.type != .pencil && !swallowed.contains($0) }) { super.sendEvent(event) }
     }
 
     private func forget(_ all: Set<UITouch>) {
