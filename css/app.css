@@ -306,7 +306,8 @@ button { touch-action: manipulation; }
 .cite-ui button { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; touch-action: none; }
 .cite-ui button:active { background: #eee; }
 .cite-grip { cursor: grab; }
-.cite-block.moving { box-shadow: 0 6px 20px rgba(0,0,0,.18); border-color: #111; }
+.cite-moving .cite-ui:not(.moving) { visibility: hidden; }
+.cite-block.moving { z-index: 1; box-shadow: 0 6px 20px rgba(0,0,0,.18); border-color: #111; }
 .cite-block h5 { padding-right: 70px; }
 .mode2 { display: flex; background: #f0f0f0; border-radius: 10px; padding: 3px; }
 .mode2 button { height: 34px; padding: 0 12px; border-radius: 8px; font-size: 13px; color: #555; }

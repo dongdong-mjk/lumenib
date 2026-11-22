@@ -305,7 +305,8 @@ export class Paper {
         for (const { s } of carry) drawStroke(s.tool === 'hl' ? hx : ix, s);
         d.layers = [hc, ic];
       }
-      el.classList.add('moving');
+      el.classList.add('moving'); u.classList.add('moving');
+      this.scrollEl.classList.add('cite-moving'); // 끄는 동안 다른 인용의 아이콘은 숨겨요 (옮기는 인용 위로 보이던 것)
       // 종이 위·아래 끝 가까이 끌고 가면 종이가 저절로 따라 스크롤돼요
       const tick = () => {
         if (!d) return;
@@ -348,7 +349,8 @@ export class Paper {
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
-      el.classList.remove('moving');
+      el.classList.remove('moving'); u.classList.remove('moving');
+      this.scrollEl.classList.remove('cite-moving');
       const from = this.pages[d.page0], to = d.cur;
       if (d.carry.length) {
         const delta = c.y - d.cy;
@@ -651,6 +653,7 @@ export class Paper {
     if (!pts) return;
     k.snapped = true;
     k.s.pts = pts;
+    if (k.s.tool === 'hl') k.s.sh = 1; // 도형은 다듬지 않고 꼭짓점 그대로
     page._hlS = null; // 형광펜 도형: 처음부터 다시 그려요
     this.drawLive(page, k.s);
   }
@@ -680,9 +683,14 @@ export class Paper {
     const ctx = this.ctxFor(c, page), p = s.pts, n = p.length / 3;
     ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath();
-    const from = Math.max(0, page._hlN - 1);
-    ctx.moveTo(p[from * 3], p[from * 3 + 1]);
-    for (let k = from + 1; k < n; k++) ctx.lineTo(p[k * 3], p[k * 3 + 1]);
+    // 완성본(hlSmooth)과 같은 방식으로 새 점만 이어서 다듬어요
+    if (page._hlN === 0) { page._hlX = p[0]; page._hlY = p[1]; }
+    ctx.moveTo(page._hlX, page._hlY);
+    const ease = s.sh ? 1 : HL_EASE;
+    for (let k = Math.max(1, page._hlN); k < n; k++) {
+      page._hlX += (p[k * 3] - page._hlX) * ease; page._hlY += (p[k * 3 + 1] - page._hlY) * ease;
+      ctx.lineTo(page._hlX, page._hlY);
+    }
     if (n === 1) ctx.lineTo(p[0] + 0.01, p[1]);
     ctx.stroke();
     page._hlN = n;
@@ -1103,7 +1111,7 @@ function drawStroke(ctx, s, live = false) {
   if (s.tool === 'hl') {
     // 형광펜: 획을 따로 불투명하게 그린 뒤 한 번에 반투명·곱하기로 얹어요.
     // 돼지꼬리처럼 스스로 겹치는 곳이 더 진해지지 않게 (쓰는 중 모습과도 같아요)
-    const q = hlPoints(p, s.w);
+    const q = s.sh ? hlRaw(p) : hlSmooth(p);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (let i = 0; i < q.length; i += 2) { x0 = Math.min(x0, q[i]); x1 = Math.max(x1, q[i]); y0 = Math.min(y0, q[i + 1]); y1 = Math.max(y1, q[i + 1]); }
     const m = ctx.getTransform(), k = m.a, pad = s.w / 2 + 2;
@@ -1370,6 +1378,18 @@ function hlScratch(w, h) {
   if (_hlOff.width < w) _hlOff.width = w;
   if (_hlOff.height < h) _hlOff.height = h;
   return _hlOff;
+}
+// 형광펜 선: 들어온 점을 살짝 늦게 따라가게 다듬어요 (굿노트처럼 부드럽게). 쓰는 중과 뗀 뒤가 같은 선이에요
+const HL_EASE = 0.35;
+function hlRaw(p) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
+function hlSmooth(p) {
+  const n = p.length / 3;
+  if (!n) return [];
+  let x = p[0], y = p[1];
+  const q = [x, y];
+  for (let i = 1; i < n; i++) { x += (p[i * 3] - x) * HL_EASE; y += (p[i * 3 + 1] - y) * HL_EASE; q.push(x, y); }
+  q.push(p[(n - 1) * 3], p[(n - 1) * 3 + 1]); // 끝은 펜을 뗀 자리까지
+  return q;
 }
 function hlPoints(p, w) {
   const n = p.length / 3;
