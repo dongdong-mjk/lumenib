@@ -601,6 +601,27 @@ export class Paper {
           cur.pts.push(x, y);
         } else if (cur.kind === 'move') {
           cur.dx = this.selection?.cites?.size ? 0 : x - cur.x0; cur.dy = y - cur.y0; // 인용이 섞이면 위아래로만 (인용은 가로로 안 움직여요)
+          cur.cx = ev.clientX; cur.cy = ev.clientY;
+          if (!cur.raf) {
+            // 화면 위·아래 끝 가까이 끌면 종이가 따라 스크롤돼요 (올가미로 옮길 때도, 11/22)
+            const k = cur;
+            const tick = () => {
+              if (cur !== k) return;
+              const r = this.scrollEl.getBoundingClientRect(), edge = 70;
+              const v = k.cy > r.bottom - edge ? Math.min(18, (k.cy - (r.bottom - edge)) / 3) : k.cy < r.top + edge ? -Math.min(18, ((r.top + edge) - k.cy) / 3) : 0;
+              if (v) {
+                const before = this.scrollEl.scrollTop;
+                this.scrollEl.scrollTop += v;
+                if (this.scrollEl.scrollTop !== before) {
+                  const [mx, my] = this.toLocal(page, { clientX: k.cx, clientY: k.cy });
+                  k.dx = this.selection?.cites?.size ? 0 : mx - k.x0; k.dy = my - k.y0;
+                  this.drawSelection(page, k.dx, k.dy);
+                }
+              }
+              k.raf = requestAnimationFrame(tick);
+            };
+            cur.raf = requestAnimationFrame(tick);
+          }
         } else if (cur.kind === 'scale') {
           const h = cur.h, clamp = (v) => Math.max(0.2, Math.min(5, v));
           const fx = h.dx ? clamp((x - h.ax) / (h.x - h.ax)) : 1;
@@ -619,6 +640,7 @@ export class Paper {
       const k = cur;
       cur = null;
       if (k.hold) clearTimeout(k.hold.t);
+      if (k.raf) cancelAnimationFrame(k.raf);
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
         this.pagePush(page.i);
