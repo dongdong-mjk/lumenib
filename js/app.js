@@ -681,7 +681,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
     fitToolbar();
-    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { if (b.dataset.tool === 'pen' && tool.type === 'pen') return openPenStyles(); setTool(b.dataset.tool); track('task2_tool_' + b.dataset.tool); }));
+    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { if (b.dataset.tool === 'pen' && tool.type === 'pen') return openPenStyles(); slot.querySelectorAll('[data-tool]').forEach((x) => x.classList.toggle('on', x === b)); /* 누르는 순간 표시부터 바꿔요 (툴바 전체는 손을 뗀 뒤 다시 그려요) */ setTool(b.dataset.tool); track('task2_tool_' + b.dataset.tool); }));
     slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('pointerdown', () => {
       const key = t === 'pen' ? 'penColor' : 'hlColor';
       const i = +b.dataset.color;
