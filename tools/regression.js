@@ -159,7 +159,7 @@ export async function run() {
     undo(); await settle();
     return w > 20 || '도형 크기가 이상해요 ' + w;
   });
-  await check('도형은 그린 모양대로 · 덜 닫힌 원도 원 · 꺾은선 끝을 시작점에 대면 붙음', async () => {
+  await check('도형: 그린 모양대로 · 대충 그린 네모 인식 · 덜 닫힌 원도 원(매끄럽게) · 꺾은선 끝을 시작점에 대면 붙음', async () => {
     tool('pen'); await settle();
     const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
     const drawHold = async (pts, after) => {
@@ -178,12 +178,23 @@ export async function run() {
     undo(); await settle();
     if (!tri?.sh) return '세모가 도형으로 안 바뀜';
     if ([A, B, C].some((q) => near(q) > 12)) return '세모가 그린 모양과 달라요';
+    // 1-2) 손으로 대충 그린 네모 (떨림 있음) → 곧은 네 변, 닫힘
+    const jit = (pts) => pts.map(([x, y], i) => [x + Math.sin(i * 1.7) * 2, y + Math.cos(i * 1.3) * 2]);
+    const sq = await drawHold(jit([...line(560, 420, 680, 424, 14), ...line(680, 424, 676, 530, 14), ...line(676, 530, 562, 526, 14), ...line(562, 526, 562, 428, 14)]));
+    undo(); await settle();
+    if (!sq?.sh) return '네모가 도형으로 안 바뀜';
+    const sqx = sq.pts.filter((_, i) => i % 3 === 0), sqy = sq.pts.filter((_, i) => i % 3 === 1);
+    const corners = new Set(sq.pts.length ? [] : []);
+    if (Math.hypot(sqx.at(-1) - sqx[0], sqy.at(-1) - sqy[0]) > 0.5) return '네모가 안 닫혀요';
     // 2) 4분의 3쯤만 그린 원 → 원
     const arc = Array.from({ length: 50 }, (_, i) => { const t = (i / 49) * Math.PI * 1.8; return [450 + Math.cos(t) * 60, 260 + Math.sin(t) * 60]; });
     const circ = await drawHold(arc);
     undo(); await settle();
     if (!circ?.sh) return '덜 닫힌 원이 도형으로 안 바뀜';
-    if (circ.pts.length / 3 < 40) return '원이 다각형으로 나와요 (' + circ.pts.length / 3 + '점)';
+    if (circ.pts.length / 3 < 100) return '원이 다각형으로 나와요 (' + circ.pts.length / 3 + '점)';
+    // 원은 촘촘해야 확대해도 매끄러워요 (점 사이 1 이하)
+    let gap = 0; for (let i = 3; i < circ.pts.length; i += 3) gap = Math.max(gap, Math.hypot(circ.pts[i] - circ.pts[i - 3], circ.pts[i + 1] - circ.pts[i - 2]));
+    if (gap > 1) return '원 점 사이가 넓어요 ' + gap.toFixed(2);
     // 3) ㄷ 모양 꺾은선 → 멈춘 뒤 끝을 시작점에 대면 붙어서 닫힘
     const S = [150, 450];
     const open = [...line(S[0], S[1], 300, 450, 10), ...line(300, 450, 300, 560, 10), ...line(300, 560, 150, 560, 10)];
