@@ -1112,7 +1112,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     const p = new Paper(scrollEl, n, {
       readonly: isReadonly(),
       fingerDraw: S.settings.fingerDraw,
-      onChange: () => { S.touch(n); flashSaved(); if (n === main) bp.render({ keepScroll: true }); },
+      // 글씨만 바뀐 경우엔 성경 패널을 다시 그리지 않아요 (가볍게). 노트 구조가 바뀐 경우만
+      onChange: (info) => { S.touch(n); flashSaved(); if (n === main && info?.structure) bp.render({ keepScroll: true }); },
       onHistory: () => renderToolbar(),
       onLayout: () => sendInkConfig(),
     });

@@ -103,10 +103,24 @@ export function newNote({ date, title, preacher, passages, paper }) {
 }
 
 let saveTimer;
+// 저장은 노트 전체를 글자로 바꿔 쓰는 무거운 일이라, 쓰는 도중에 하면 그동안 툴바 누름 등이 늦게 먹혔어요.
+// 손을 대고 있지 않을 때까지 기다렸다가(마지막 터치 뒤 0.8초) 저장해요. 앱을 닫거나 화면을 떠날 땐 바로 저장해요.
+let lastTouchAt = 0, savePending = false;
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerdown', () => { lastTouchAt = performance.now(); }, true);
+  document.addEventListener('pointerup', () => { lastTouchAt = performance.now(); }, true);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && savePending) saveNotes(true); });
+  window.addEventListener('pagehide', () => { if (savePending) saveNotes(true); });
+}
 export function saveNotes(now = false) {
   clearTimeout(saveTimer);
-  const run = () => { if (!write(KEY_NOTES, userNotes)) console.warn('저장 공간이 부족해요'); };
-  if (now) run(); else saveTimer = setTimeout(run, 400);
+  savePending = true;
+  const run = () => { savePending = false; if (!write(KEY_NOTES, userNotes)) console.warn('저장 공간이 부족해요'); };
+  const later = () => {
+    const quiet = performance.now() - lastTouchAt;
+    if (quiet < 800) saveTimer = setTimeout(later, 800 - quiet); else run();
+  };
+  if (now) run(); else saveTimer = setTimeout(later, 800);
 }
 export function touch(note) {
   if (note.seed) return;
