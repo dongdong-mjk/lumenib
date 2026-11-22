@@ -785,6 +785,8 @@ export class Paper {
           || [0, 0.25, 0.5, 0.75, 1].some((fx) => [0, 0.5, 1].some((fy) => pip(poly, b[0] + (b[2] - b[0]) * fx, b[1] + (b[3] - b[1]) * fy)));
         if (hit) cites.add(c);
       }
+      // 고른 인용 위에 쓴 글씨(인용 넣은 뒤에 쓴 것)도 같이 골라서 함께 움직여요
+      for (const c of cites) for (const q of this.strokesInCite(page.i, c)) set.add(q);
     }
     if (!set.size && !cites.size) { this.clearLive(page); return; }
     let box = set.size ? bbox([...set]) : null;
