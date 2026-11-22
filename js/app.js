@@ -721,6 +721,25 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (tbPending) { tbPending = false; requestAnimationFrame(renderToolbar); }
   };
   // 툴바 밖을 새로 누르면 툴바 누름은 끝난 거예요
+  // 펜슬 탭이 터치로는 오는데 포인터(pointerdown)로 안 오는 때가 있어서(올가미로 옮긴 직후 등), 그때는 터치로 대신 눌러요
+  let tbLastDown = 0;
+  tbSlot.addEventListener('pointerdown', () => { tbLastDown = performance.now(); }, true);
+  tbSlot.addEventListener('touchstart', (e) => {
+    const t = [...e.changedTouches].find((q) => q.touchType === 'stylus');
+    console.log('[dbg] tb touchstart ' + (t ? 'stylus' : 'finger') + ' sinceDown=' + Math.round(performance.now() - tbLastDown)); // 임시 기록
+    if (!t) return;
+    const target = document.elementFromPoint(t.clientX, t.clientY)?.closest('[data-tool], [data-color], [data-size], [data-em], [data-act]');
+    if (!target || !tbSlot.contains(target)) return;
+    const at = performance.now();
+    setTimeout(() => {
+      if (tbLastDown >= at - 5) return; // 포인터로 정상 처리됨
+      console.log('[dbg] tb fallback ' + (target.dataset.tool || target.dataset.act || '')); // 임시 기록
+      if (target.matches('[data-act]')) target.click();
+      else target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'pen' }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'pen' }));
+    }, 60);
+  }, { capture: true, passive: true });
+  tbSlot.addEventListener('pointerdown', (e) => console.log('[dbg] tb pointerdown ' + e.pointerType), true); // 임시 기록
   const tbOutside = (e) => { if (tbPressing && !tbSlot.contains(e.target)) tbRelease(); };
   document.addEventListener('pointerdown', tbOutside, true);
   window.addEventListener('pointerup', tbRelease, true);
