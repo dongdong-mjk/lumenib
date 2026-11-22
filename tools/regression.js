@@ -93,6 +93,23 @@ export async function run() {
     await settle(); undo(); await settle(); if (pixels(ink()) > p0 + 10) return '되돌리기 안 됨';
     redo(); await settle(); return Math.abs(pixels(ink()) - p1) < p1 * 0.05 || '다시 하기 안 됨';
   });
+  await check('글씨 많은 장: 한 획 쓰기·되돌리기가 가벼움', async () => {
+    tool('pen'); await settle();
+    for (let i = 0; i < 120; i++) { const y = 560 + (i % 20) * 12, x = 60 + Math.floor(i / 20) * 100; stroke(line(x, y, x + 80, y + 4, 25)); }
+    await settle();
+    const t0 = performance.now(); stroke(line(60, 820, 300, 830, 25)); const add = performance.now() - t0;
+    await settle();
+    const t1 = performance.now(); undo(); const un = performance.now() - t1;
+    await settle(); redo(); await settle();
+    // 쓴 획이 다시 그려도 그대로인지 (기억해 둔 모양이 맞는지)
+    const before = pixels(ink());
+    window.__lumenibPaper.drawPage($$('.page').length ? window.__lumenibPaper.pages[0] : null);
+    const after = pixels(ink());
+    for (let i = 0; i < 121; i++) undo();
+    await settle();
+    if (Math.abs(after - before) > before * 0.01) return '다시 그린 그림이 달라요 ' + [before, after];
+    return add < 25 || '한 획 추가가 무거워요 ' + Math.round(add) + 'ms (되돌리기 ' + Math.round(un) + 'ms)';
+  });
   await check('형광펜: 글씨 밑 캔버스에 그려짐 · 돼지꼬리 겹침 고르게', async () => {
     tool('hl'); await settle();
     const pts = Array.from({ length: 120 }, (_, i) => { const t = (i / 120) * Math.PI * 4; return [120 + i * 2 + Math.cos(t) * 30, 420 + Math.sin(t) * 30]; });

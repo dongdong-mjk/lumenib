@@ -528,6 +528,15 @@ export class Paper {
     if (sel) this.drawSelection(page);
   }
 
+  // 새 획 하나만 덧그려요. 장 전체를 다시 그리면 글씨가 많을수록 무거워졌어요 (새 획은 맨 위에 그려지니 결과는 같아요)
+  drawAdded(page, s) {
+    const sel = this.selection && this.selection.page === page.i;
+    if (page.dirty || sel || this._hidden || this._hlFading?.size) return this.drawPage(page);
+    drawStroke(this.ctxFor(s.tool === 'hl' ? page.base : page.ink, page), s);
+    this.clearLive(page);
+    this.clearHlLive(page);
+  }
+
   clearLive(page) {
     const ctx = this.ctxFor(page.live, page);
     ctx.clearRect(0, 0, PAGE_W, PAGE_H);
@@ -662,7 +671,7 @@ export class Paper {
         this.pagePush(page.i);
         k.s.t = Date.now(); // 쓴 시각: 인용보다 나중에 쓴 글씨만 인용과 같이 움직여요
         this.note.pages[page.i].strokes.push(k.s);
-        this.drawPage(page);
+        this.drawAdded(page, k.s);
         this.changed(page);
       } else if (k.kind === 'erase') {
         this.clearLive(page);
@@ -1206,7 +1215,7 @@ export class Paper {
     s.t = Date.now();
     this.note.pages[page.i].strokes.push(s);
     if (s.tool === 'hl' && opts?.fadeIn) this.fadeInHl(page, s, opts.fadeIn);
-    else this.drawPage(page);
+    else this.drawAdded(page, s);
     this.changed(page);
     return true;
   }
@@ -1280,6 +1289,9 @@ function drawStroke(ctx, s, live = false) {
   }
   // 펜: 필압을 부드럽게 다듬은 외곽선을 만들어 면으로 채워요 (선 가장자리가 매끈하게)
   // 굵기마다 다듬는 정도가 달라지지 않게, 가운데 굵기 기준으로 좌표를 키웠다 줄여서 계산해요
+  // 다 쓴 획은 모양(외곽선) 계산을 기억해 두고 다시 그릴 때 그대로 써요 (장 전체를 다시 그릴 때 가장 무거운 부분)
+  const key = live ? null : penKey(s);
+  if (key) { const c = _penPath.get(s); if (c && c.key === key) { ctx.fillStyle = s.color; ctx.fill(c.path); return; } }
   const st = penStyleOf(s), o = styleOpts(st, s.po, !s.sv);
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   const pts = [];
@@ -1290,15 +1302,22 @@ function drawStroke(ctx, s, live = false) {
   const raw = getStroke(pts, strokeOpts(o, live));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
   if (!outline.length) return;
-  ctx.fillStyle = s.color;
-  ctx.beginPath();
-  ctx.moveTo(outline[0][0], outline[0][1]);
+  const path = new Path2D();
+  path.moveTo(outline[0][0], outline[0][1]);
   for (let i = 1; i < outline.length; i++) {
     const [x0, y0] = outline[i], [x1, y1] = outline[(i + 1) % outline.length];
-    ctx.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+    path.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
   }
-  ctx.closePath();
-  ctx.fill();
+  path.closePath();
+  if (key) _penPath.set(s, { key, path });
+  ctx.fillStyle = s.color;
+  ctx.fill(path);
+}
+// 획이 바뀌면(옮기기·크기 바꾸기 등) 다시 계산하도록, 모양을 정하는 값들로 열쇠를 만들어요
+const _penPath = new WeakMap();
+function penKey(s) {
+  const p = s.pts, n = p.length;
+  return n + '|' + p[0] + ',' + p[1] + '|' + p[n - 3] + ',' + p[n - 2] + '|' + p[n >> 1] + '|' + s.w + '|' + (s.ps || '') + '|' + (s.po ? JSON.stringify(s.po) : '') + '|' + (s.sv || 0) + '|' + (s.np ? 1 : 0);
 }
 const round = (v) => Math.round(v * 10) / 10;
 
