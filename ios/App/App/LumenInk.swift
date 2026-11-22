@@ -643,6 +643,7 @@ struct WebInkConfig {
     var scale: CGFloat = 1     // 웹 종이 배율 (종이 단위 → 화면)
     var area: CGRect = .zero   // 필기할 수 있는 곳 (웹 화면 좌표)
     var exclude: [CGRect] = [] // 툴바처럼 필기하면 안 되는 곳
+    var pages: [CGRect] = []   // 종이 한 장씩의 자리 (임시 선을 이 안으로 잘라요)
 
     init() {}
     init(_ b: [String: Any]) {
@@ -663,6 +664,7 @@ struct WebInkConfig {
         }
         area = r(b["area"]) ?? .zero
         exclude = (b["exclude"] as? [Any] ?? []).compactMap(r)
+        pages = (b["pages"] as? [Any] ?? []).compactMap(r)
     }
     func allows(_ p: CGPoint) -> Bool { enabled && area.contains(p) && !exclude.contains { $0.contains(p) } }
 }
@@ -742,7 +744,20 @@ final class WebInkOverlay: UIView {
     required init?(coder: NSCoder) { fatalError() }
     override func layoutSubviews() { super.layoutSubviews(); live.frame = bounds }
 
-    func begin(_ p: SIMD3<Double>) { pts = [p]; redraw(predicted: []) }
+    func begin(_ p: SIMD3<Double>) {
+        // 쓰기 시작한 종이 밖으로 나간 부분은 웹처럼 잘라서 안 보이게 해요 (노트 밖까지 선이 보였다 사라지던 것)
+        let pt = CGPoint(x: p.x, y: p.y)
+        let page = config.pages.first { $0.contains(pt) }
+        clipRect = (page ?? config.area).intersection(config.area.isEmpty ? (page ?? .infinite) : config.area)
+        live.mask = clipMask()
+        pts = [p]; redraw(predicted: [])
+    }
+    private var clipRect: CGRect = .null
+    private func clipMask() -> CALayer? {
+        guard !clipRect.isNull, !clipRect.isInfinite, !clipRect.isEmpty else { return nil }
+        let m = CALayer(); m.backgroundColor = UIColor.black.cgColor; m.frame = clipRect
+        return m
+    }
     func add(_ list: [SIMD3<Double>], predicted: [SIMD3<Double>]) {
         for p in list {
             if let l = pts.last { let dx = p.x - l.x, dy = p.y - l.y; if dx * dx + dy * dy < 0.25 { continue } }
@@ -758,6 +773,7 @@ final class WebInkOverlay: UIView {
         l.path = live.path; l.fillColor = live.fillColor; l.strokeColor = live.strokeColor
         l.lineWidth = live.lineWidth; l.lineCap = live.lineCap; l.lineJoin = live.lineJoin
         l.compositingFilter = live.compositingFilter
+        l.mask = clipMask()
         CATransaction.begin(); CATransaction.setDisableActions(true)
         layer.insertSublayer(l, below: live)
         live.path = nil

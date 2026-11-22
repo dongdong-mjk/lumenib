@@ -949,9 +949,12 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       width: pen ? PEN_SIZES[tool.penSize] : HL_SIZES[tool.hlSize],
       style: S.settings.penStyle, opts: S.settings.penOpts[S.settings.penStyle] || {},
       hlAlpha: S.settings.hlAlpha, scale: p?.scale || 1,
+      pages: [...(p?.scrollEl?.querySelectorAll('.page') || [])].map(rect), // 종이 한 장씩의 자리: 네이티브 임시 선을 종이 안으로 잘라요
       area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(toolbarEl?.querySelector('.tb-menu')), rect(p?.lassoMenu), ...btns].filter(Boolean),
     });
   }
+  // 스크롤하면 종이·버튼 자리가 바뀌니 네이티브에 다시 알려요 (한 프레임에 한 번)
+  if (nativeInk) { let q = 0; scrollEl.addEventListener('scroll', () => { if (q) return; q = requestAnimationFrame(() => { q = 0; sendInkConfig(); }); }, { passive: true }); }
   // 펜슬로 종이에 쓰기 시작하면 열려 있던 툴바 창을 닫아요 (굿노트처럼 바로 써지게)
   window.lumenibCloseMenus = () => { toolbarEl?.querySelector('.tb-menu')?.remove(); };
   // 지우개 · 올가미: 네이티브가 받은 펜슬 움직임을 종이에 포인터 이벤트로 그대로 전해요
