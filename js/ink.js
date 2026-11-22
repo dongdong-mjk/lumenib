@@ -1054,7 +1054,8 @@ export class Paper {
     for (let i = 1; i < pts.length; i++) {
       const [x, y, pr] = loc(pts[i]);
       const p = s.pts;
-      if ((x - p[p.length - 3]) ** 2 + (y - p[p.length - 2]) ** 2 < 0.6) continue;
+      // 네이티브가 그린 점을 하나도 빼지 않아요. 점을 솎으면 손떨림 보정 결과가 쓰는 중에 본 선과 달라졌어요
+      if (x === p[p.length - 3] && y === p[p.length - 2]) continue;
       p.push(x, y, s.tool === 'hl' ? 0.5 : pr);
     }
     if (s.pts.length === 3) s.pts.push(s.pts[0] + 0.3, s.pts[1] + 0.3, s.pts[2]);
