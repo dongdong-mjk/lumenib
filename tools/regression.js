@@ -303,7 +303,7 @@ export async function run() {
     undo(); await settle();
     return !!$$('.page')[0].querySelector('.cite-block') && !$$('.page')[1].querySelector('.cite-block') || '되돌리기 안 됨';
   });
-  await check('인용 상자 너비 조절 (오른쪽 아래 손잡이) · 되돌리기', async () => {
+  await check('인용 상자 너비 조절 · 가로로도 옮기기 · 되돌리기', async () => {
     se.scrollTop = 0; await wait(100);
     const cb = $('.cite-block'), rs = $('.cite-rs');
     if (!cb || !rs) return '손잡이 없음';
@@ -311,6 +311,13 @@ export async function run() {
     pe(rs, 'pointerdown', g.left + 10, g.top + 10, 970); pe(rs, 'pointermove', g.left - 150, g.top + 10, 970); pe(rs, 'pointerup', g.left - 150, g.top + 10, 970); await settle();
     const w1 = cb.getBoundingClientRect().width;
     if (w1 > w0 - 100) return '너비가 안 줄었어요 ' + [w0, w1];
+    // 좁힌 상자를 손잡이로 오른쪽 아래로 옮기기 (가로로도 자유롭게)
+    const grip = $('.cite-grip'), gg = grip.getBoundingClientRect(), l0 = $('.cite-block').getBoundingClientRect().left;
+    pe(grip, 'pointerdown', gg.left + 5, gg.top + 5, 971); pe(window, 'pointermove', gg.left + 105, gg.top + 25, 971); pe(window, 'pointerup', gg.left + 105, gg.top + 25, 971); await settle();
+    const l1 = $('.cite-block').getBoundingClientRect().left;
+    if (l1 < l0 + 50) return '가로로 안 움직여요 ' + [l0, l1];
+    undo(); await settle();
+    if (Math.abs($('.cite-block').getBoundingClientRect().left - l0) > 2) return '가로 이동 되돌리기 안 됨';
     undo(); await settle();
     const w2 = $('.cite-block').getBoundingClientRect().width;
     return Math.abs(w2 - w0) < 2 || '되돌리기 안 됨 ' + [w0, w2];

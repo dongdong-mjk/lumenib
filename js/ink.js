@@ -280,6 +280,7 @@ export class Paper {
       el.className = 'cite-block';
       el.style.top = c.y + 'px';
       if (c.w) { el.style.right = 'auto'; el.style.width = c.w + 'px'; } // 너비를 바꾼 인용 (세로는 내용만큼)
+      if (c.x != null) el.style.left = c.x + 'px';
       citeEls.set(c, el);
       el.innerHTML = `<h5>${esc(refText(c))}</h5>${(c.text || []).map((v) => `<div class="row"><span class="vn">${v.n}</span><span>${esc(v.t)}</span></div>`).join('')}`;
       page.inner.appendChild(el);
@@ -293,14 +294,14 @@ export class Paper {
     u.className = 'cite-ui';
     citeUis.set(c, u);
     u.style.top = c.y + 'px';
-    u.style.right = (PAGE_W - 20 - citeW(c) + 2) + 'px';
+    u.style.right = (PAGE_W - citeX(c) - citeW(c) + 2) + 'px';
     u.innerHTML = `<button class="cite-grip" aria-label="옮기기"><svg width="18" height="18" viewBox="0 0 24 24" fill="#555"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button><button class="cite-x" aria-label="빼기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
     page.ui.appendChild(u);
     // 오른쪽 아래 손잡이로 인용 상자 너비 조절 (높이는 내용만큼 따라와요)
     const rs = document.createElement('div');
     rs.className = 'cite-rs';
     rs.setAttribute('aria-label', '너비 조절');
-    const placeRs = () => { rs.style.top = (c.y + el.offsetHeight - 22) + 'px'; rs.style.left = (20 + citeW(c) - 22) + 'px'; };
+    const placeRs = () => { rs.style.top = (c.y + el.offsetHeight - 22) + 'px'; rs.style.left = (citeX(c) + citeW(c) - 22) + 'px'; };
     placeRs();
     requestAnimationFrame(placeRs);
     page.ui.appendChild(rs);
@@ -313,10 +314,10 @@ export class Paper {
     });
     rs.addEventListener('pointermove', (e) => {
       if (!rz || e.pointerId !== rz.id) return;
-      const w = Math.round(Math.max(220, Math.min(PAGE_W - 40, rz.w0 + (e.clientX - rz.x0) / this.scale)));
-      c.w = w >= PAGE_W - 41 ? undefined : w; // 끝까지 늘리면 원래대로(가로 전체)
+      const w = Math.round(Math.max(220, Math.min(PAGE_W - 20 - citeX(c), rz.w0 + (e.clientX - rz.x0) / this.scale)));
+      c.w = w >= PAGE_W - 41 && citeX(c) <= 20 ? undefined : w; // 끝까지 늘리면 원래대로(가로 전체)
       el.style.right = c.w ? 'auto' : ''; el.style.width = c.w ? c.w + 'px' : '';
-      u.style.right = (PAGE_W - 20 - citeW(c) + 2) + 'px';
+      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 2) + 'px';
       placeRs();
     });
     const rsEnd = (e) => {
@@ -336,12 +337,12 @@ export class Paper {
       if (inside.size) pg.strokes = pg.strokes.map((s) => {
         if (!inside.has(s)) return s;
         const cl = { ...s, pts: s.pts.slice() };
-        carry.push({ s: cl, ys: s.pts.filter((_, i) => i % 3 === 1) });
+        carry.push({ s: cl, ys: s.pts.filter((_, i) => i % 3 === 1), xs: s.pts.filter((_, i) => i % 3 === 0) });
         return cl;
       });
       const pr = page.el.getBoundingClientRect();
       // 되돌리기용으로 노트 전체를 저장하면 누르는 순간이 느려서, 이 인용 자리와 그 장 획 목록만 기억해요
-      d = { id: e.pointerId, lastY: e.clientY, cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
+      d = { id: e.pointerId, lastY: e.clientY, lastX: e.clientX, x0: e.clientX, cx: citeX(c), cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', up, true);
       window.addEventListener('pointercancel', up, true);
@@ -386,13 +387,19 @@ export class Paper {
       }
       if (Math.abs(ny - d.cy) > 1 || c.page !== d.page0) d.moved = true;
       c.y = Math.round(ny);
+      // 가로로도 자유롭게 (종이 밖으로는 안 나가요)
+      const nx = Math.round(Math.max(20, Math.min(citeMaxX(c), d.cx + (d.lastX - d.x0) / this.scale)));
+      if (nx !== d.cx || c.x != null) c.x = nx;
+      if (Math.abs(nx - d.cx) > 1) d.moved = true;
+      el.style.left = citeX(c) + 'px';
+      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 2) + 'px';
       el.style.top = u.style.top = c.y + 'px';
-      const rsEl = citeRs.get(c); if (rsEl) rsEl.style.top = (c.y + el.offsetHeight - 22) + 'px';
-      if (d.layers) { const px = (c.y - d.cy) * this.scale; for (const l of d.layers) l.style.transform = `translateY(${px}px)`; }
+      const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.top = (c.y + el.offsetHeight - 22) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 22) + 'px'; }
+      if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
     };
     const onMove = (e) => {
       if (!d || e.pointerId !== d.id) return;
-      d.lastY = e.clientY;
+      d.lastY = e.clientY; d.lastX = e.clientX;
       apply();
     };
     const up = (e) => {
@@ -406,7 +413,8 @@ export class Paper {
       const from = this.pages[d.page0], to = d.cur;
       if (d.carry.length) {
         const delta = c.y - d.cy;
-        for (const { s, ys } of d.carry) { _dense.delete(s); for (let i = 1, j = 0; i < s.pts.length; i += 3, j++) s.pts[i] = round(ys[j] + delta); }
+        const deltaX = citeX(c) - d.cx;
+        for (const { s, ys, xs } of d.carry) { _dense.delete(s); for (let i = 1, j = 0; i < s.pts.length; i += 3, j++) { s.pts[i] = round(ys[j] + delta); s.pts[i - 1] = round(xs[j] + deltaX); } }
         if (to !== from) {
           d.before[to.i] = this.note.pages[to.i].strokes.slice();
           // 같이 가는 글씨도 새 페이지의 글씨로 옮겨요
@@ -419,7 +427,7 @@ export class Paper {
         this.drawPage(from); if (to !== from) this.drawPage(to);
       }
       if (to !== from && !d.before[to.i]) d.before[to.i] = this.note.pages[to.i].strokes.slice();
-      const moved = d.moved, entry = { t: 'cite', ci: this.note.citations.indexOf(c), page: d.page0, y: d.cy, strokes: d.before };
+      const moved = d.moved, entry = { t: 'cite', ci: this.note.citations.indexOf(c), page: d.page0, y: d.cy, x: d.cx, strokes: d.before };
       d = null;
       if (to !== from) {
         this.renderCitations(from); this.renderCitations(to);
@@ -657,7 +665,7 @@ export class Paper {
         } else if (cur.kind === 'lasso') {
           cur.pts.push(x, y);
         } else if (cur.kind === 'move') {
-          cur.dx = this.selection?.cites?.size ? 0 : x - cur.x0; cur.dy = y - cur.y0; // 인용이 섞이면 위아래로만 (인용은 가로로 안 움직여요)
+          cur.dx = x - cur.x0; cur.dy = y - cur.y0; // 인용도 가로·세로 자유롭게
           cur.cx = ev.clientX; cur.cy = ev.clientY;
           if (!cur.raf) {
             // 화면 위·아래 끝 가까이 끌면 종이가 따라 스크롤돼요 (올가미로 옮길 때도, 11/22)
@@ -671,7 +679,7 @@ export class Paper {
                 this.scrollEl.scrollTop += v;
                 if (this.scrollEl.scrollTop !== before) {
                   const [mx, my] = this.toLocal(page, { clientX: k.cx, clientY: k.cy });
-                  k.dx = this.selection?.cites?.size ? 0 : mx - k.x0; k.dy = my - k.y0;
+                  k.dx = mx - k.x0; k.dy = my - k.y0;
                   this.moveGhost(page, k);
                 }
               }
@@ -724,7 +732,7 @@ export class Paper {
           // 되돌리기 기록: 인용 자리와 관련된 장의 획 목록만 (노트 전체를 저장하면 손을 뗀 뒤 버벅여요)
           const strokesBefore = { [sel.page]: this.note.pages[sel.page].strokes.slice() };
           if (to !== page) strokesBefore[to.i] = this.note.pages[to.i].strokes.slice();
-          if (sel.cites?.size || to !== page) this._push({ t: 'cites', items: [...(sel.cites || [])].map((c) => ({ ci: this.note.citations.indexOf(c), page: c.page, y: c.y })), strokes: strokesBefore });
+          if (sel.cites?.size || to !== page) this._push({ t: 'cites', items: [...(sel.cites || [])].map((c) => ({ ci: this.note.citations.indexOf(c), page: c.page, y: c.y, x: c.x })), strokes: strokesBefore });
           else this.pagePush(sel.page);
           this.cloneSelection();
           for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + dy); } }
@@ -733,7 +741,7 @@ export class Paper {
             this.note.pages[to.i].strokes.push(...sel.set);
           }
           if (sel.cites?.size) {
-            for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.page = to.i; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + dy))); }
+            for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.page = to.i; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + dy))); const nx = Math.round(Math.max(20, Math.min(citeMaxX(c), citeX(c) + k.dx))); if (nx !== 20 || c.x != null) c.x = nx; }
             this.renderCitations(page); if (to !== page) this.renderCitations(to);
             this.onChange({});
           }
@@ -744,7 +752,7 @@ export class Paper {
             if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
             return;
           }
-          sel.box = moveBox(sel.box, sel.cites?.size ? 0 : k.dx, k.dy);
+          sel.box = moveBox(sel.box, k.dx, k.dy);
           this.changed(page, false);
         }
         for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = '';
@@ -946,7 +954,7 @@ export class Paper {
   citeBox(c) {
     const el = citeEls.get(c);
     if (!el || !el.isConnected) return null;
-    return [20, c.y, 20 + citeW(c), c.y + el.offsetHeight];
+    return [citeX(c), c.y, citeX(c) + citeW(c), c.y + el.offsetHeight];
   }
 
   drawSelection(page, dx = 0, dy = 0, sc = null) {
@@ -954,7 +962,7 @@ export class Paper {
     const ctx = this.clearLive(page);
     // 고른 인용 블록은 옮기는 동안 위아래로 같이 따라와요 (인용은 가로로는 안 움직여요)
     for (const c of sel.cites || []) {
-      for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = dy ? `translateY(${dy}px)` : '';
+      for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
     }
     const b = sel.box;
     const ox = sc ? sc.h.ax : 0, oy = sc ? sc.h.ay : 0, kx = sc ? sc.kx : 1, ky = sc ? sc.ky : 1;
@@ -1077,11 +1085,11 @@ export class Paper {
   }
   _now(e) {
     if (e.t === 'cites') {
-      return { t: 'cites', items: e.items.map(({ ci }) => { const c = this.note.citations[ci]; return { ci, page: c?.page, y: c?.y }; }), strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
+      return { t: 'cites', items: e.items.map(({ ci }) => { const c = this.note.citations[ci]; return { ci, page: c?.page, y: c?.y, x: c?.x }; }), strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
     }
     if (e.t === 'cite') {
       const c = this.note.citations[e.ci];
-      return { t: 'cite', ci: e.ci, page: c?.page, y: c?.y, strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
+      return { t: 'cite', ci: e.ci, page: c?.page, y: c?.y, x: c?.x, strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
     }
     return e.t === 'page'
       ? { t: 'page', i: e.i, strokes: (this.note.pages[e.i]?.strokes || []).slice() }
@@ -1092,7 +1100,7 @@ export class Paper {
     if (e.t === 'cites') {
       // 올가미로 인용 여러 개 옮기기를 되돌려요 (빠름)
       const touched = new Set(Object.keys(e.strokes).map(Number));
-      for (const it of e.items) { const c = this.note.citations[it.ci]; if (!c) continue; touched.add(c.page); c.page = it.page; c.y = it.y; touched.add(it.page); }
+      for (const it of e.items) { const c = this.note.citations[it.ci]; if (!c) continue; touched.add(c.page); c.page = it.page; c.y = it.y; if (it.x == null) delete c.x; else c.x = it.x; touched.add(it.page); }
       for (const k of Object.keys(e.strokes)) if (this.note.pages[k]) this.note.pages[k].strokes = e.strokes[k].slice();
       if (this.selection) { this.selection = null; this.hideLassoMenu(); }
       for (const i of touched) { const pg = this.pages[i]; if (pg) { this.renderCitations(pg); this.drawPage(pg); } }
@@ -1104,7 +1112,7 @@ export class Paper {
       const c = this.note.citations[e.ci];
       if (!c) return;
       const touched = new Set([c.page, e.page, ...Object.keys(e.strokes).map(Number)]);
-      c.page = e.page; c.y = e.y;
+      c.page = e.page; c.y = e.y; if (e.x == null) delete c.x; else c.x = e.x;
       for (const k of Object.keys(e.strokes)) if (this.note.pages[k]) this.note.pages[k].strokes = e.strokes[k].slice();
       if (this.selection) { this.selection = null; this.hideLassoMenu(); }
       for (const i of touched) { const pg = this.pages[i]; if (pg) { this.renderCitations(pg); this.drawPage(pg); } }
@@ -1365,6 +1373,8 @@ const shapeWidth = (w, o) => w * 1.25 * o.scale * (1 - (o.thinning || 0) * 0.5);
 const _penPath = new WeakMap();
 const citeRs = new WeakMap();
 const citeW = (c) => c.w || PAGE_W - 40; // 인용 상자 너비 (종이 단위, 기본은 가로 전체)
+const citeX = (c) => (c.x ?? 20); // 인용 상자 왼쪽 (종이 단위)
+const citeMaxX = (c) => PAGE_W - 20 - citeW(c);
 function penKey(s) {
   const p = s.pts, n = p.length;
   return n + '|' + p[0] + ',' + p[1] + '|' + p[n - 3] + ',' + p[n - 2] + '|' + p[n >> 1] + '|' + s.w + '|' + (s.ps || '') + '|' + (s.po ? JSON.stringify(s.po) : '') + '|' + (s.sv || 0) + '|' + (s.np ? 1 : 0);
