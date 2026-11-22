@@ -362,6 +362,7 @@ enum PencilAction {
 /// 웹뷰 안의 제스처들이 펜슬 획을 중간에 끊어 버려서(점만 찍힘), 창 단계에서 받아 네이티브로 그려요.
 final class InkWindow: UIWindow {
     private weak var tracked: UITouch?
+    private var tap: (touch: UITouch, at: CGPoint, time: TimeInterval)?
 
     private var bridge: PencilBridgeViewController? { rootViewController as? PencilBridgeViewController }
 
@@ -399,7 +400,18 @@ final class InkWindow: UIWindow {
             } else if pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
                 tracked = pencil
                 b.inkBegin(point(pencil, in: web))
-            }
+            } else if pencil.phase == .began, tracked == nil, web.hitTest(pencil.location(in: web), with: nil)?.isDescendant(of: web.scrollView) == true {
+                // (앱이 얹은 창·슬라이더 위를 누른 건 제외)
+                // 종이 밖(툴바 등)을 펜슬로 톡 누른 것: 웹킷이 가끔 이 탭을 웹에 안 넘겨서(올가미 직후 등) 기억해 뒀다가 확인해요
+                tap = (pencil, pencil.location(in: web), event.timestamp)
+            } else if let t = tap, t.touch === pencil, pencil.phase == .ended {
+                let p = pencil.location(in: web)
+                tap = nil
+                if hypot(p.x - t.at.x, p.y - t.at.y) < 12, event.timestamp - t.time < 0.5 {
+                    // 웹이 이미 받았으면 웹 쪽에서 무시해요 (window.lumenibTap)
+                    web.evaluateJavaScript("window.lumenibTap && window.lumenibTap(\(t.at.x), \(t.at.y))", completionHandler: nil)
+                }
+            } else if let t = tap, t.touch === pencil, pencil.phase == .cancelled { tap = nil }
         }
         super.sendEvent(event)
     }
