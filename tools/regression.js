@@ -297,13 +297,18 @@ export async function run() {
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     return !$('.lasso-menu') || '해제 안 됨';
   });
-  await check('올가미로 옮기기 · 되돌리기', async () => {
+  await check('올가미로 옮기기 · 되돌리기 · 고른 영역은 올가미 모양 그대로', async () => {
     const before = pixels(ink()); // 고르기 전 (고르면 고른 글씨는 선택 판으로 옮겨 그려져요)
     tool('lasso'); await settle();
     stroke(box(60, 280, 320, 340)); await settle();
-    const c = base(), r = c.getBoundingClientRect();
+    const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
+    const poly0 = P.selection?.poly; // 고른 영역은 그린 올가미 모양 그대로 (굿노트처럼)
+    if (!poly0 || poly0.length < 5) return '고른 영역이 올가미 모양이 아니에요';
+    const y0 = poly0[0][1];
     pe(c, 'pointerdown', r.left + 150, r.top + 310); pe(c, 'pointermove', r.left + 150, r.top + 360); pe(c, 'pointerup', r.left + 150, r.top + 360); await wait(250);
     if (!$('.lasso-menu')) return '옮긴 뒤 선택 유지 안 됨';
+    const k = r.width / 726;
+    if (Math.abs((P.selection.poly[0][1] - y0) * k - 50) > 3) return '올가미 모양이 글씨와 같이 안 움직여요';
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     const moved = ink().getContext('2d').getImageData(0, 0, ink().width, ink().height);
     undo(); await settle();

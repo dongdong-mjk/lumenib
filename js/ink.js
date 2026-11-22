@@ -619,7 +619,7 @@ export class Paper {
           return;
         }
       }
-      if (this.selection && t === 'lasso' && this.selection.page === page.i && inBox(this.selection.box, x, y)) {
+      if (this.selection && t === 'lasso' && this.selection.page === page.i && (inBox(this.selection.box, x, y) || (this.selection.poly && pip(this.selection.poly, x, y)))) {
         cur = { kind: 'move', x0: x, y0: y, dx: 0, dy: 0 };
         this.hideLassoMenu();
         return;
@@ -754,6 +754,7 @@ export class Paper {
             return;
           }
           sel.box = moveBox(sel.box, k.dx, k.dy);
+          if (sel.poly) sel.poly = sel.poly.map(([px, py]) => [px + k.dx, py + k.dy]);
           this.changed(page, false);
         }
         for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = '';
@@ -770,6 +771,7 @@ export class Paper {
             for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(ox + (s.pts[i] - ox) * k.kx); s.pts[i + 1] = round(oy + (s.pts[i + 1] - oy) * k.ky); }
           }
           this.selection.box = bbox([...this.selection.set]);
+          if (this.selection.poly) this.selection.poly = this.selection.poly.map(([px, py]) => [ox + (px - ox) * k.kx, oy + (py - oy) * k.ky]);
           this.drawPage(page);
           this.changed(page, false);
         }
@@ -873,9 +875,21 @@ export class Paper {
 
   drawLasso(page, pts) {
     const ctx = this.clearLive(page);
+    const poly = [];
+    for (let i = 0; i < pts.length; i += 2) poly.push([pts[i], pts[i + 1]]);
+    this.strokeLasso(ctx, poly, false);
+  }
+  // 올가미 선: 그리는 동안과 고른 뒤가 똑같은 파란 점선 (굿노트처럼, 화면 기준 굵기 일정)
+  strokeLasso(ctx, poly, close = true) {
+    if (!poly?.length) return;
+    const u = 1 / this.scale;
+    ctx.save();
     ctx.beginPath();
-    for (let i = 0; i < pts.length; i += 2) i ? ctx.lineTo(pts[i], pts[i + 1]) : ctx.moveTo(pts[i], pts[i + 1]);
-    ctx.setLineDash([6, 5]); ctx.strokeStyle = '#555'; ctx.lineWidth = 1.2; ctx.stroke();
+    poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    if (close) ctx.closePath();
+    ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.restore();
   }
 
   finishLasso(page, pts) {
@@ -903,7 +917,7 @@ export class Paper {
     if (!set.size && !cites.size) { this.clearLive(page); return; }
     let box = set.size ? bbox([...set]) : null;
     for (const c of cites) { const b = this.citeBox(c); box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b; }
-    this.selection = { page: page.i, set, cites, box };
+    this.selection = { page: page.i, set, cites, box, poly }; // poly: 그린 올가미 모양 그대로 보여 줘요
     this.drawPage(page);
     this.showLassoMenu();
   }
@@ -975,9 +989,9 @@ export class Paper {
     // 상자는 배율만큼 커지되, 선 굵기와 손잡이 크기는 화면 기준으로 일정하게
     const nb = [ox + (b[0] - ox) * kx, oy + (b[1] - oy) * ky, ox + (b[2] - ox) * kx, oy + (b[3] - oy) * ky];
     const u = 1 / this.scale;
-    ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u;
-    ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]);
-    ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.lineWidth = 2 * u;
+    if (sel.poly) this.strokeLasso(ctx, sel.poly.map(([px, py]) => [ox + (px - ox) * kx, oy + (py - oy) * ky]));
+    else { ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]); }
+    ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 2 * u;
     if (!sel.cites?.size) for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     ctx.restore();
   }
@@ -1008,9 +1022,8 @@ export class Paper {
       const ctx = this.ctxFor(cv, page);
       for (const q of sel.set) if (q.tool === 'hl') drawStroke(ctx, q);
       for (const q of sel.set) if (q.tool !== 'hl') drawStroke(ctx, q);
-      const b = sel.box, u = 1 / this.scale;
-      ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u;
-      ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+      if (sel.poly) this.strokeLasso(ctx, sel.poly);
+      else { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
       this.pagesEl.appendChild(g);
       this.clearLive(page); // 원래 자리의 선택 그림은 지워요
       k.ghost = g;
