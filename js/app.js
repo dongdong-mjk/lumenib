@@ -721,9 +721,6 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (tbPending) { tbPending = false; requestAnimationFrame(renderToolbar); }
   };
   // 툴바 밖을 새로 누르면 툴바 누름은 끝난 거예요
-  // 임시 기록 (올가미 뒤 툴바가 늦게 먹히는 문제): 누른 시각, 화면이 바빴던 시간
-  { let last = performance.now(); const lag = setInterval(() => { const n = performance.now(); if (n - last > 150) console.log('[dbg] busy ' + Math.round(n - last - 50) + 'ms'); last = n; }, 50); const prev = cleanup; void prev; window.__dbgLag = lag; }
-  document.addEventListener('pointerdown', (e) => console.log('[dbg] down ' + e.pointerType + ' ' + (e.target.closest?.('[data-tool],[data-act]')?.getAttribute('aria-label') || e.target.className || e.target.tagName) + ' t=' + Math.round(performance.now())), true);
   const tbOutside = (e) => { if (tbPressing && !tbSlot.contains(e.target)) tbRelease(); };
   document.addEventListener('pointerdown', tbOutside, true);
   window.addEventListener('pointerup', tbRelease, true);

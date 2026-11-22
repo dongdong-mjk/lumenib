@@ -77,11 +77,18 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     }
     private var relaying = false
     // 굿노트처럼: 종이가 미끄러지듯 스크롤되는 중에 펜슬을 대면 스크롤을 그 자리에서 멈춰요
-    private var lockedScrolls: [UIScrollView] = []
-    func unlockScrollsIfIdle() { if !lockedScrolls.isEmpty { unlockScrolls() } }
-    private func unlockScrolls() {
-        lockedScrolls.forEach { $0.panGestureRecognizer.isEnabled = true }
-        lockedScrolls = []
+    // 펜슬이 닿아 있는 동안 스크롤 잠금.
+    // 예전엔 스크롤 장치(제스처)를 껐다 켰는데, 그러면 웹킷이 다음 펜슬 터치를 붙잡아 둬서 툴바가 한동안 안 눌렸어요.
+    // 이제 장치는 건드리지 않고, 손으로 끌려서 움직이면 원래 자리로 되돌려 놓기만 해요 (자동 스크롤처럼 코드로 움직이는 건 그대로 둬요)
+    private var lockedScrolls: [(sv: UIScrollView, at: CGPoint)] = []
+    func unlockScrollsIfIdle() { lockedScrolls = [] }
+    private func unlockScrolls() { lockedScrolls = [] }
+    private func holdScrolls() {
+        for i in lockedScrolls.indices {
+            let sv = lockedScrolls[i].sv
+            if sv.isDragging || sv.isDecelerating { sv.setContentOffset(lockedScrolls[i].at, animated: false) }
+            else { lockedScrolls[i].at = sv.contentOffset }
+        }
     }
     private func stopScrolling(at p: CGPoint) {
         guard let web = webView else { return }
@@ -90,7 +97,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             if let sv = cur as? UIScrollView {
                 if sv.isDecelerating || sv.isDragging { sv.setContentOffset(sv.contentOffset, animated: false) }
                 // 펜슬이 종이에 닿아 있는 동안은 이 스크롤을 잠가요 (도구를 바꾼 직후 빠르게 쓰면 웹이 막기 전에 스크롤이 시작되곤 했어요)
-                if sv.panGestureRecognizer.isEnabled { sv.panGestureRecognizer.isEnabled = false; lockedScrolls.append(sv) }
+                lockedScrolls.append((sv, sv.contentOffset))
             }
             v = cur.superview
         }
@@ -103,6 +110,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         if relaying { relay("down", [p]) } else { inkOverlay.begin(p) }
     }
     func inkMove(_ pts: [SIMD3<Double>], _ pred: [SIMD3<Double>]) {
+        holdScrolls()
         if let l = pts.last { inkLastPoint = l }
         if relaying { relay("move", pts) } else { inkOverlay.add(pts, predicted: pred) }
     }
