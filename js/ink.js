@@ -1683,19 +1683,25 @@ function shapeAt(sh, x, y) {
   return stretchShape(sh.base, [cx, cy], sh.ref, [x, y], sh.rot || 0);
 }
 function stretchShape(base, c, ref, pen, rot) {
+  // 도형 테두리 상자(기울기 기준)에서 펜 쪽 모서리를 잡고, 대각선 반대 모서리는 꼼짝 않게 고정해요
   const cs = Math.cos(rot), sn = Math.sin(rot);
-  const A = [2 * c[0] - ref[0], 2 * c[1] - ref[1]]; // 펜 반대쪽(고정점)
-  const toL = (x, y) => { const dx = x - A[0], dy = y - A[1]; return [dx * cs + dy * sn, -dx * sn + dy * cs]; };
-  const r0 = toL(ref[0], ref[1]), r1 = toL(pen[0], pen[1]);
+  const toL = (x, y) => [x * cs + y * sn, -x * sn + y * cs];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < base.length; i += 3) { const [u, v] = toL(base[i], base[i + 1]); x0 = Math.min(x0, u); x1 = Math.max(x1, u); y0 = Math.min(y0, v); y1 = Math.max(y1, v); }
+  const R = toL(ref[0], ref[1]), Pn = toL(pen[0], pen[1]);
+  const hx = R[0] >= (x0 + x1) / 2 ? x1 : x0, hy = R[1] >= (y0 + y1) / 2 ? y1 : y0; // 펜 쪽 모서리
+  const ax = hx === x1 ? x0 : x1, ay = hy === y1 ? y0 : y1; // 고정 모서리
   const lim = (v) => Math.sign(v || 1) * Math.min(40, Math.max(0.02, Math.abs(v)));
-  let sx = Math.abs(r0[0]) > 4 ? r1[0] / r0[0] : null, sy = Math.abs(r0[1]) > 4 ? r1[1] / r0[1] : null;
+  // 펜이 모서리에서 조금 떨어져 끝났어도 그 차이만큼 유지해서 튀지 않게
+  const W = hx - ax, H = hy - ay;
+  let sx = Math.abs(W) > 4 ? (Pn[0] - (R[0] - hx) - ax) / W : null, sy = Math.abs(H) > 4 ? (Pn[1] - (R[1] - hy) - ay) / H : null;
   if (sx == null) sx = sy ?? 1; if (sy == null) sy = sx;
   sx = lim(sx); sy = lim(sy);
+  const f = (v) => Math.round(v * 100) / 100; // 원도 매끄럽게 (0.01 단위)
   const out = [];
   for (let i = 0; i < base.length; i += 3) {
-    const [u, v] = toL(base[i], base[i + 1]), X = u * sx, Y = v * sy;
-    const f = (v) => Math.round(v * 100) / 100; // 원도 매끄럽게 (0.01 단위)
-    out.push(f(A[0] + X * cs - Y * sn), f(A[1] + X * sn + Y * cs), base[i + 2]);
+    const [u, v] = toL(base[i], base[i + 1]), X = ax + (u - ax) * sx, Y = ay + (v - ay) * sy;
+    out.push(f(X * cs - Y * sn), f(X * sn + Y * cs), base[i + 2]);
   }
   return out;
 }

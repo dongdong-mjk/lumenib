@@ -251,7 +251,7 @@ export async function run() {
     const top = ys.filter((y) => y < Math.min(...ys) + 3).length, ok = corners >= 3 && corners <= 4;
     return ok || '꼭짓점 수가 이상해요 ' + corners;
   });
-  await check('멈춘 뒤 펜을 옆으로 움직이면 네모가 가로로만 늘어남 (굿노트처럼 비율이 펜 위치대로)', async () => {
+  await check('멈춘 뒤 펜을 옆으로 움직이면 네모가 가로로만 늘어남 · 반대쪽 꼭짓점 고정 (굿노트처럼)', async () => {
     tool('pen'); await settle();
     const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
     const L = (a, b, n = 12) => Array.from({ length: n + 1 }, (_, i) => [a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]);
@@ -267,6 +267,8 @@ export async function run() {
     const xs = s.pts.filter((_, i) => i % 3 === 0), ys = s.pts.filter((_, i) => i % 3 === 1);
     const k = r.width / 726, w = (Math.max(...xs) - Math.min(...xs)) * k, h = (Math.max(...ys) - Math.min(...ys)) * k;
     if (Math.abs(h - 80) > 8) return '세로도 바뀌었어요 ' + Math.round(h);
+    const bx = Math.max(...xs) * k, by = Math.max(...ys) * k; // 반대쪽(오른쪽 아래) 꼭짓점은 그대로
+    if (Math.abs(bx - 420) > 3 || Math.abs(by - 380) > 3) return '반대쪽 꼭짓점이 움직였어요 ' + Math.round(bx) + ',' + Math.round(by);
     return Math.abs(w - 180) < 10 || '가로가 펜 위치만큼 안 늘었어요 ' + Math.round(w);
   });
   await check('그리고 멈추면 직선 (형광펜)', async () => {

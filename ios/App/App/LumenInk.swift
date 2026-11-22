@@ -824,18 +824,23 @@ final class WebInkOverlay: UIView {
             }
             return (0...24).map { i in let t = Double(i) / 24; return SIMD3(c.x + (e.x - c.x) * t, c.y + (e.y - c.y) * t, z) }
         }
-        // 닫힌 도형·원 (굿노트처럼, 웹 stretchShape 와 같음): 펜 반대쪽을 고정하고 가로·세로를 따로 늘려요
+        // 닫힌 도형·원 (굿노트처럼, 웹 stretchShape 와 같음): 테두리 상자에서 펜 쪽 모서리를 잡고 대각선 반대 모서리는 고정
         let cs = cos(shapeRot), sn = sin(shapeRot)
-        let A = CGPoint(x: 2 * c.x - shapeRef.x, y: 2 * c.y - shapeRef.y)
-        func toL(_ q: CGPoint) -> (Double, Double) { let dx = q.x - A.x, dy = q.y - A.y; return (dx * cs + dy * sn, -dx * sn + dy * cs) }
-        let r0 = toL(shapeRef), r1 = toL(p)
+        func toL(_ x: Double, _ y: Double) -> (Double, Double) { (x * cs + y * sn, -x * sn + y * cs) }
+        var x0 = Double.infinity, x1 = -Double.infinity, y0 = Double.infinity, y1 = -Double.infinity
+        for q in shapeBase { let (u, v) = toL(q.x, q.y); x0 = min(x0, u); x1 = max(x1, u); y0 = min(y0, v); y1 = max(y1, v) }
+        let R = toL(shapeRef.x, shapeRef.y), Pn = toL(p.x, p.y)
+        let hx = R.0 >= (x0 + x1) / 2 ? x1 : x0, hy = R.1 >= (y0 + y1) / 2 ? y1 : y0
+        let ax = hx == x1 ? x0 : x1, ay = hy == y1 ? y0 : y1
         func lim(_ v: Double) -> Double { (v < 0 ? -1 : 1) * min(40, max(0.02, abs(v))) }
-        var sx: Double? = abs(r0.0) > 4 ? r1.0 / r0.0 : nil, sy: Double? = abs(r0.1) > 4 ? r1.1 / r0.1 : nil
+        let W = hx - ax, H = hy - ay
+        var sx: Double? = abs(W) > 4 ? (Pn.0 - (R.0 - hx) - ax) / W : nil, sy: Double? = abs(H) > 4 ? (Pn.1 - (R.1 - hy) - ay) / H : nil
         if sx == nil { sx = sy ?? 1 }; if sy == nil { sy = sx }
         let kx = lim(sx!), ky = lim(sy!)
+        _ = c
         return shapeBase.map { q in
-            let (u, v) = toL(CGPoint(x: q.x, y: q.y)); let X = u * kx, Y = v * ky
-            return SIMD3(A.x + X * cs - Y * sn, A.y + X * sn + Y * cs, q.z)
+            let (u, v) = toL(q.x, q.y); let X = ax + (u - ax) * kx, Y = ay + (v - ay) * ky
+            return SIMD3(X * cs - Y * sn, X * sn + Y * cs, q.z)
         }
     }
 
