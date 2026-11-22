@@ -159,6 +159,41 @@ export async function run() {
     undo(); await settle();
     return w > 20 || '도형 크기가 이상해요 ' + w;
   });
+  await check('도형은 그린 모양대로 · 덜 닫힌 원도 원 · 꺾은선 끝을 시작점에 대면 붙음', async () => {
+    tool('pen'); await settle();
+    const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
+    const drawHold = async (pts, after) => {
+      pe(c, 'pointerdown', r.left + pts[0][0], r.top + pts[0][1]);
+      for (const [x, y] of pts.slice(1)) pe(c, 'pointermove', r.left + x, r.top + y);
+      await wait(750);
+      if (after) pe(c, 'pointermove', r.left + after[0], r.top + after[1]);
+      const e = after || pts.at(-1);
+      pe(c, 'pointerup', r.left + e[0], r.top + e[1]); await settle();
+      return P.note.pages[0].strokes.at(-1);
+    };
+    // 1) 비뚤어진 세모: 그린 꼭짓점 근처 그대로
+    const A = [120, 330], B = [260, 300], C = [150, 200];
+    const tri = await drawHold([...line(A[0], A[1], B[0], B[1], 10), ...line(B[0], B[1], C[0], C[1], 10), ...line(C[0], C[1], A[0] + 3, A[1] - 2, 10)]);
+    const near = (q) => { let m = 1e9; for (let i = 0; i < tri.pts.length; i += 3) m = Math.min(m, Math.hypot(tri.pts[i] / 1 - q[0] / (r.width / 726), tri.pts[i + 1] - q[1] / (r.width / 726))); return m; };
+    undo(); await settle();
+    if (!tri?.sh) return '세모가 도형으로 안 바뀜';
+    if ([A, B, C].some((q) => near(q) > 12)) return '세모가 그린 모양과 달라요';
+    // 2) 4분의 3쯤만 그린 원 → 원
+    const arc = Array.from({ length: 50 }, (_, i) => { const t = (i / 49) * Math.PI * 1.8; return [450 + Math.cos(t) * 60, 260 + Math.sin(t) * 60]; });
+    const circ = await drawHold(arc);
+    undo(); await settle();
+    if (!circ?.sh) return '덜 닫힌 원이 도형으로 안 바뀜';
+    if (circ.pts.length / 3 < 40) return '원이 다각형으로 나와요 (' + circ.pts.length / 3 + '점)';
+    // 3) ㄷ 모양 꺾은선 → 멈춘 뒤 끝을 시작점에 대면 붙어서 닫힘
+    const S = [150, 450];
+    const open = [...line(S[0], S[1], 300, 450, 10), ...line(300, 450, 300, 560, 10), ...line(300, 560, 150, 560, 10)];
+    const k = r.width / 726;
+    const poly = await drawHold(open, [S[0] + 4, S[1] + 4]);
+    undo(); await settle();
+    if (!poly?.sh) return '꺾은선이 도형으로 안 바뀜';
+    const q = poly.pts, d = Math.hypot(q[q.length - 3] - q[0], q[q.length - 2] - q[1]);
+    return d < 0.5 || '끝점이 시작점에 안 붙어요 ' + d.toFixed(1) + ' (배율 ' + k.toFixed(2) + ')';
+  });
   await check('그리고 멈추면 직선 (형광펜)', async () => {
     tool('hl'); await settle();
     const c = base(), r = c.getBoundingClientRect();

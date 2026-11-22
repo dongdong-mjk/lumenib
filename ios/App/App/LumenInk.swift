@@ -778,6 +778,7 @@ final class WebInkOverlay: UIView {
     private var holdAnchor: CGPoint = .zero
     private(set) var shaped = false
     private var shapeLine = false, shapeBase: [SIMD3<Double>] = [], shapeC = CGPoint.zero, shapeRef = CGPoint.zero
+    private var shapeOpen: [CGPoint]? = nil, shapeMerge: Double = 14
     private var drawOpts: [String: Double] { shaped ? config.opts.merging(["_raw": 1]) { a, _ in a } : config.opts }
     private func armHold(_ p: CGPoint) {
         holdAnchor = p
@@ -787,9 +788,9 @@ final class WebInkOverlay: UIView {
             self.onHold?(self.pts)
         }
     }
-    func applyShape(line: Bool, _ list: [SIMD3<Double>]) {
+    func applyShape(line: Bool, open: [CGPoint]? = nil, merge: Double = 14, _ list: [SIMD3<Double>]) {
         guard !list.isEmpty, let last = pts.last else { return }
-        shaped = true; shapeLine = line; shapeBase = list
+        shaped = true; shapeLine = line; shapeBase = list; shapeOpen = open; shapeMerge = merge
         let n = Double(list.count)
         shapeC = line ? CGPoint(x: list[0].x, y: list[0].y) : CGPoint(x: list.reduce(0) { $0 + $1.x } / n, y: list.reduce(0) { $0 + $1.y } / n)
         shapeRef = CGPoint(x: last.x, y: last.y)
@@ -799,6 +800,18 @@ final class WebInkOverlay: UIView {
     }
     private func shapeAt(_ p: CGPoint) -> [SIMD3<Double>] {
         let c = shapeC, z = shapeBase.first?.z ?? 0.5
+        if let vs0 = shapeOpen, vs0.count >= 2 {
+            // 열린 꺾은선: 마지막 꼭짓점이 펜을 따라오고, 시작점에 가까이 가면 붙어서 닫혀요 (웹 shapeAt 과 같음)
+            var vs = Array(vs0.dropLast())
+            let s0 = vs[0]
+            vs.append(hypot(p.x - s0.x, p.y - s0.y) < shapeMerge ? s0 : p)
+            var out: [SIMD3<Double>] = []
+            for i in 0..<(vs.count - 1) {
+                let a = vs[i], b = vs[i + 1], n = max(2, Int(ceil(hypot(b.x - a.x, b.y - a.y) / 6)))
+                for j in (i == 0 ? 0 : 1)...n { let t = Double(j) / Double(n); out.append(SIMD3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, z)) }
+            }
+            return out
+        }
         if shapeLine {
             // 수평·수직에서 8° 안쪽이면 딱 맞춰요 (웹 axisSnap 과 같음)
             var e = p

@@ -73,7 +73,11 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             var list: [SIMD3<Double>] = []
             var i = 0
             while i + 2 < arr.count { list.append(SIMD3(arr[i], arr[i + 1], arr[i + 2])); i += 3 }
-            self.inkOverlay.applyShape(line: (obj["line"] as? Bool) ?? false, list)
+            var open: [CGPoint]? = nil
+            if (obj["kind"] as? String) == "open", let v = obj["verts"] as? [Double], v.count >= 4 {
+                open = stride(from: 0, to: v.count - 1, by: 2).map { CGPoint(x: v[$0], y: v[$0 + 1]) }
+            }
+            self.inkOverlay.applyShape(line: (obj["line"] as? Bool) ?? false, open: open, merge: (obj["merge"] as? Double) ?? 14, list)
         }
     }
     private var inkConfig = WebInkConfig()

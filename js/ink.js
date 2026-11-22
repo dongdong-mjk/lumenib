@@ -1386,6 +1386,8 @@ const round = (v) => Math.round(v * 10) / 10;
 const HOLD_MS = 500, HOLD_SLOP = 3;
 // 손으로 그린 점들을 직선 · 원(정원) · 타원 · 다각형(삼각형 · 사각형 · 오각형 …) · 별 중 맞는 것으로 바꿔요. 맞는 게 없으면 null.
 function snapShape(raw) {
+  // 굿노트처럼 (11/23): 반듯하게 '고치지' 않고, 그린 모양 그대로 선만 곧게/둥글게 정리해요.
+  //  직선 · 열린 꺾은선(ㄱ, ㄴ, 지그재그) · 닫힌 다각형(그린 꼭짓점 그대로) · 원/타원(그린 기울기 그대로)
   const P = [];
   let prSum = 0;
   for (let i = 0; i < raw.length; i += 3) { P.push([raw[i], raw[i + 1]]); prSum += raw[i + 2]; }
@@ -1398,50 +1400,77 @@ function snapShape(raw) {
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const size = Math.max(x1 - x0, y1 - y0);
   const a = P[0], b = P[P.length - 1];
-  const out = (list) => { const o = []; for (const [x, y] of list) o.push(round(x), round(y), pr); return o; };
-  const polyOut = (vs) => { const o = []; vs.forEach((q, i) => o.push(...sampleSeg(q, vs[(i + 1) % vs.length]).slice(i ? 1 : 0))); return out(o); };
-  // 직선: 처음과 끝을 이은 선에서 크게 벗어나지 않음
+  const out = (list, kind, verts) => { const o = []; for (const [x, y] of list) o.push(round(x), round(y), pr); o.kind = kind; o.verts = verts; return o; };
+  const chain = (vs, close) => { const o = []; const n = close ? vs.length : vs.length - 1; for (let i = 0; i < n; i++) o.push(...sampleSeg(vs[i], vs[(i + 1) % vs.length]).slice(i ? 1 : 0)); return o; };
+  // 직선: 처음과 끝을 이은 선에서 크게 벗어나지 않음 (수평·수직 근처면 딱 맞춰요)
   const ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (ab > 0.8 * len) {
     const dev = Math.max(...P.map((q) => segDist(q, a, b)));
-    return dev < Math.max(4, ab * 0.08) ? out(sampleSeg(a, axisSnap(a, b))) : null;
+    if (dev < Math.max(4, ab * 0.08)) { const e = axisSnap(a, b); return out(sampleSeg(a, e), 'line', [a, e]); }
   }
-  // 닫힌 도형만: 끝이 시작 근처로 돌아옴 (조금 모자라거나 겹쳐도 괜찮아요)
-  if (ab > Math.max(16, size * 0.35)) return null;
+  const closed = ab < Math.max(16, size * 0.35);
 
-  // 원 · 타원 맞춤도
-  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-  const rx = (x1 - x0) / 2, ry = (y1 - y0) / 2;
-  const ellErr = rx < 4 || ry < 4 ? 1 : P.reduce((s, q) => s + Math.abs(Math.hypot((q[0] - cx) / rx, (q[1] - cy) / ry) - 1), 0) / P.length;
+  // 원·타원 맞춤 (그린 기울기 그대로): 점들의 퍼짐 방향으로 축을 잡아요
+  const ell = fitEllipse(P);
+  // 원을 다 못 그리고 멈춰도(끝이 안 만나도) 둥글게 거의 한 바퀴면 원으로 봐요
+  const sweep = ell ? angleSweep(P, ell.c) : 0;
+  const roundish = ell && ell.err < 0.1 && (closed || sweep > 1.5 * Math.PI);
 
-  // 다각형 맞춤도: 꼭짓점을 여러 세밀도로 찾아서, 둘레에 잘 맞는 것 중 꼭짓점이 가장 적은 것
+  // 꼭짓점 찾기 (닫힌 모양 / 열린 꺾은선)
   let best = null;
-  for (const f of [0.14, 0.11, 0.08, 0.06]) {
-    const vs = polyVertices(P, size * f);
-    if (vs.length < 3 || vs.length > 12) continue;
-    const segs = vs.map((q, i) => [q, vs[(i + 1) % vs.length]]);
-    const err = P.reduce((s, q) => s + Math.min(...segs.map(([u, v]) => segDist(q, u, v))), 0) / P.length / size;
+  for (const f of [0.14, 0.11, 0.08]) {
+    const vs = closed ? polyVertices(P, size * f) : rdp(P, size * f);
+    const minV = closed ? 3 : 3, maxV = closed ? 6 : 8;
+    const star = closed && vs.length === 10;
+    if (vs.length < minV || (vs.length > maxV && !star)) continue;
+    const segs = vs.map((q, i) => [q, vs[(i + 1) % vs.length]]).slice(0, closed ? vs.length : vs.length - 1);
+    const err = P.reduce((s2, q) => s2 + Math.min(...segs.map(([u, v]) => segDist(q, u, v))), 0) / P.length / size;
     if (err < 0.035 && (!best || vs.length < best.vs.length)) best = { vs, err };
   }
-  // 원은 둥근 면이라 다각형으로 맞추면 오차가 커요. 다각형이 원보다 확실히 잘 맞을 때만 다각형.
-  if (best && (best.err * 4 < ellErr || ellErr > 0.12)) {
-    const vs = regularShape(best.vs, [x0, y0, x1, y1]);
-    // 그리기 시작한 곳에서 가장 가까운 꼭짓점부터
-    let k = 0;
-    vs.forEach((q, i) => { if (Math.hypot(q[0] - a[0], q[1] - a[1]) < Math.hypot(vs[k][0] - a[0], vs[k][1] - a[1])) k = i; });
-    const ordered = [...vs.slice(k), ...vs.slice(0, k)];
-    if (turnDir(ordered) !== turnDir(P)) ordered.splice(1, ordered.length - 1, ...ordered.slice(1).reverse());
-    return polyOut(ordered);
+  // 둥근 모양을 꼭짓점 많은 다각형으로 보지 않게: 원이 잘 맞으면 원이 우선
+  if (best && !(roundish && ell.err < best.err * 3)) {
+    if (closed) {
+      // 그린 꼭짓점 그대로 (시작한 곳에서 가장 가까운 꼭짓점부터)
+      const vs = best.vs;
+      let k = 0;
+      vs.forEach((q, i) => { if (Math.hypot(q[0] - a[0], q[1] - a[1]) < Math.hypot(vs[k][0] - a[0], vs[k][1] - a[1])) k = i; });
+      const ordered = [...vs.slice(k), ...vs.slice(0, k)];
+      return out(chain([...ordered, ordered[0]], false), 'closed', [...ordered, ordered[0]]);
+    }
+    const vs = [a, ...best.vs.slice(1, -1), b];
+    return out(chain(vs, false), 'open', vs);
   }
-  if (ellErr > 0.2) return null;
-  // 원 · 타원: 가로세로 차이가 30% 안이면 정원
-  let ex = rx, ey = ry;
-  if (Math.abs(rx - ry) / Math.max(rx, ry) < 0.3) ex = ey = (rx + ry) / 2;
-  const start = Math.atan2(a[1] - cy, a[0] - cx), n = Math.max(48, Math.round((ex + ey) / 1.5));
-  const dir = turnDir(P);
+  if (!roundish) return null;
+  // 원/타원: 가로세로 차이가 12% 안이면 정원, 아니면 그린 기울기의 타원
+  let { c, rx, ry, rot } = ell;
+  if (Math.abs(rx - ry) / Math.max(rx, ry) < 0.12) rx = ry = (rx + ry) / 2;
+  const start = Math.atan2(a[1] - c[1], a[0] - c[0]) - rot, n = Math.max(48, Math.round((rx + ry) / 1.5));
+  const dir = turnDir(P), cs = Math.cos(rot), sn = Math.sin(rot);
   const o = [];
-  for (let i = 0; i <= n; i++) { const t = start + dir * (i / n) * Math.PI * 2; o.push([cx + ex * Math.cos(t), cy + ey * Math.sin(t)]); }
-  return out(o);
+  for (let i = 0; i <= n; i++) { const t = start + dir * (i / n) * Math.PI * 2, ex = rx * Math.cos(t), ey = ry * Math.sin(t); o.push([c[0] + ex * cs - ey * sn, c[1] + ex * sn + ey * cs]); }
+  return out(o, 'closed', null);
+}
+// 타원 맞춤: 가운데·기울기는 점들의 퍼짐(공분산)으로, 반지름은 그 축으로 투영한 거리로
+function fitEllipse(P) {
+  const n = P.length;
+  const cx = avg(P.map((q) => q[0])), cy = avg(P.map((q) => q[1]));
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const [x, y] of P) { sxx += (x - cx) ** 2; syy += (y - cy) ** 2; sxy += (x - cx) * (y - cy); }
+  const rot = 0.5 * Math.atan2(2 * sxy, sxx - syy), cs = Math.cos(rot), sn = Math.sin(rot);
+  const loc = P.map(([x, y]) => [(x - cx) * cs + (y - cy) * sn, -(x - cx) * sn + (y - cy) * cs]);
+  const rx = (Math.max(...loc.map((q) => q[0])) - Math.min(...loc.map((q) => q[0]))) / 2;
+  const ry = (Math.max(...loc.map((q) => q[1])) - Math.min(...loc.map((q) => q[1]))) / 2;
+  if (rx < 4 || ry < 4) return null;
+  const ox = (Math.max(...loc.map((q) => q[0])) + Math.min(...loc.map((q) => q[0]))) / 2, oy = (Math.max(...loc.map((q) => q[1])) + Math.min(...loc.map((q) => q[1]))) / 2;
+  const c = [cx + ox * cs - oy * sn, cy + ox * sn + oy * cs];
+  const err = loc.reduce((s2, [x, y]) => s2 + Math.abs(Math.hypot((x - ox) / rx, (y - oy) / ry) - 1), 0) / n;
+  return { c, rx, ry, rot, err };
+}
+// 가운데를 기준으로 몇 도를 돌았는지 (원을 거의 다 그렸는지 보려고)
+function angleSweep(P, c) {
+  let tot = 0, prev = Math.atan2(P[0][1] - c[1], P[0][0] - c[0]);
+  for (let i = 1; i < P.length; i++) { const t = Math.atan2(P[i][1] - c[1], P[i][0] - c[0]); let d = t - prev; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; tot += d; prev = t; }
+  return Math.abs(tot);
 }
 const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
 const DEG = Math.PI / 180;
@@ -1550,24 +1579,32 @@ function rdp(pts, eps) {
   return [...rdp(pts.slice(0, idx + 1), eps).slice(0, -1), ...rdp(pts.slice(idx), eps)];
 }
 export { snapShape as _snapShapeForTest };
-// 도형으로 바뀐 순간의 상태: 직선인지, 가운데, 그때 펜 위치. 누른 채로 움직이면 이걸 기준으로 바꿔요
+// 도형으로 바뀐 순간의 상태. 누른 채로 움직이면 이걸 기준으로 바꿔요
+//  직선: 시작점 고정, 끝점이 펜을 따라와요 / 열린 꺾은선: 마지막 꼭짓점이 펜을 따라오고 시작점에 가까이 가면 붙어서 닫혀요
+//  닫힌 도형·원: 가운데를 기준으로 크기·각도
 function shapeState(pts, raw) {
   const n = pts.length / 3;
-  const ax = pts[0], ay = pts[1], bx = pts[pts.length - 3], by = pts[pts.length - 2];
-  const len = Math.hypot(bx - ax, by - ay) || 1;
-  let maxOff = 0, cx = 0, cy = 0;
-  for (let i = 0; i < pts.length; i += 3) { maxOff = Math.max(maxOff, Math.abs((pts[i] - ax) * (by - ay) - (pts[i + 1] - ay) * (bx - ax)) / len); cx += pts[i]; cy += pts[i + 1]; }
-  const line = maxOff < 0.5 && len > 1;
+  let cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i += 3) { cx += pts[i]; cy += pts[i + 1]; }
+  const kind = pts.kind || 'closed';
   const ref = [raw[raw.length - 3], raw[raw.length - 2]];
-  return { line, base: pts.slice(), c: line ? [ax, ay] : [cx / n, cy / n], ref, p: pts[2] };
+  return { kind, line: kind === 'line', verts: pts.verts, base: pts.slice(), c: kind === 'line' ? [pts[0], pts[1]] : [cx / n, cy / n], ref, p: pts[2] };
 }
-// 누른 채로 펜을 움직이면: 직선은 끝점이 펜을 따라오고, 도형은 가운데를 기준으로 크기·각도가 바뀌어요
+const MERGE_DIST = 14; // 끝점을 시작점에 이만큼(종이 단위) 가까이 대면 붙어요
 function shapeAt(sh, x, y) {
   const [cx, cy] = sh.c;
-  if (sh.line) {
+  if (sh.kind === 'line') {
     const out = [], N = 24;
     [x, y] = axisSnap([cx, cy], [x, y]);
     for (let i = 0; i <= N; i++) out.push(round(cx + ((x - cx) * i) / N), round(cy + ((y - cy) * i) / N), sh.p);
+    return out;
+  }
+  if (sh.kind === 'open' && sh.verts) {
+    const vs = sh.verts.slice(0, -1), s0 = vs[0];
+    const end = Math.hypot(x - s0[0], y - s0[1]) < MERGE_DIST ? s0 : [x, y];
+    vs.push(end);
+    const out = [];
+    for (let i = 0; i < vs.length - 1; i++) for (const q of sampleSeg(vs[i], vs[i + 1]).slice(i ? 1 : 0)) out.push(round(q[0]), round(q[1]), sh.p);
     return out;
   }
   const v0x = sh.ref[0] - cx, v0y = sh.ref[1] - cy, v1x = x - cx, v1y = y - cy;
@@ -1587,9 +1624,8 @@ export function snapForNative(flat, scale) {
   for (let i = 0; i < flat.length; i += 3) P.push(flat[i] / scale, flat[i + 1] / scale, flat[i + 2]);
   const pts = snapShape(P);
   if (!pts) return null;
-  const sh = shapeState(pts, P);
   const back = (a) => a.map((v, i) => (i % 3 === 2 ? v : v * scale));
-  return { line: sh.line, pts: back(pts) };
+  return { line: pts.kind === 'line', kind: pts.kind, verts: pts.verts ? pts.verts.flatMap(([x, y]) => [x * scale, y * scale]) : null, merge: MERGE_DIST * scale, pts: back(pts) };
 }
 // 예전 획: np(필압 끔) → 볼펜, 표시 없음 → 만년필(그때 기본이 필압 켜짐)
 const penStyleOf = (s) => s.ps || (s.np ? 'ball' : 'fountain');
