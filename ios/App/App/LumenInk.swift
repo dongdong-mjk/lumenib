@@ -795,7 +795,14 @@ final class WebInkOverlay: UIView {
             CATransaction.commit()
         } else {
             // 웹 그림이 화면에 실제로 올라오기까지 조금 걸릴 때가 있어서, 아주 잠깐 겹쳐 둔 뒤 지워요 (펜은 불투명해서 겹쳐도 티가 안 나요)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.remove(l) }
+            // 바로 지우면 웹 그림이 늦게 올라올 때 사라졌다 나타나고, 그대로 겹쳐 두면 가장자리가 겹쳐 살짝 굵어 보여요.
+            // 그래서 겹치는 동안 앱 쪽 선을 서서히 옅게 해서 지워요
+            CATransaction.begin()
+            CATransaction.setCompletionBlock { l.removeFromSuperlayer() }
+            let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = 1; a.toValue = 0; a.duration = 0.16
+            a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            l.opacity = 0; l.add(a, forKey: "fade")
+            CATransaction.commit()
         }
     }
     func drop(_ l: CAShapeLayer) { if let i = pending.firstIndex(of: l) { pending.remove(at: i); remove(l) } }
