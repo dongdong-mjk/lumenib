@@ -291,6 +291,10 @@ svg { display: block; }
 .paper-scroll.zoomed { overflow-x: auto; }
 .pages { will-change: transform; }
 .pages { margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.pages { position: relative; }
+.sel-ghost { position: absolute; pointer-events: none; z-index: 20; will-change: transform; }
+.sel-ghost canvas { position: absolute; left: 0; top: 0; }
+.sel-ghost-inner { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; color: var(--paper-text); }
 .page { position: relative; isolation: isolate; background: var(--paper); box-shadow: var(--shadow-paper); overflow: hidden; -webkit-user-select: none; user-select: none; }
 .page-inner { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; color: var(--paper-text); }
 /* 빠르게 연달아 눌러도 두 번 탭(확대) 동작으로 먹히지 않게 */

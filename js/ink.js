@@ -615,7 +615,7 @@ export class Paper {
                 if (this.scrollEl.scrollTop !== before) {
                   const [mx, my] = this.toLocal(page, { clientX: k.cx, clientY: k.cy });
                   k.dx = this.selection?.cites?.size ? 0 : mx - k.x0; k.dy = my - k.y0;
-                  this.drawSelection(page, k.dx, k.dy);
+                  this.moveGhost(page, k);
                 }
               }
               k.raf = requestAnimationFrame(tick);
@@ -631,7 +631,7 @@ export class Paper {
       }
       if (cur.kind === 'draw') this.drawLive(page, cur.s);
       else if (cur.kind === 'lasso') this.drawLasso(page, cur.pts);
-      else if (cur.kind === 'move') this.drawSelection(page, cur.dx, cur.dy);
+      else if (cur.kind === 'move') this.moveGhost(page, cur);
       else if (cur.kind === 'scale') this.drawSelection(page, 0, 0, cur);
     });
 
@@ -641,6 +641,7 @@ export class Paper {
       cur = null;
       if (k.hold) clearTimeout(k.hold.t);
       if (k.raf) cancelAnimationFrame(k.raf);
+      if (k.ghost) { k.ghost.remove(); for (const c of this.selection?.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.visibility = ''; }
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
         this.pagePush(page.i);
@@ -912,6 +913,42 @@ export class Paper {
     ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.lineWidth = 2 * u;
     if (!sel.cites?.size) for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     ctx.restore();
+  }
+
+  // 올가미로 옮기는 동안: 고른 글씨·인용을 한 번만 따로 그린 판을 만들어 통째로 옮겨요.
+  // 매번 다시 그리면 무거워서 펜슬 입력이 밀리고, 장 밖으로 나가면 안 보였어요 (11/22)
+  moveGhost(page, k) {
+    if (!k.ghost) {
+      const sel = this.selection;
+      const g = document.createElement('div');
+      g.className = 'sel-ghost';
+      Object.assign(g.style, { left: page.el.offsetLeft + 'px', top: page.el.offsetTop + 'px', width: page.el.offsetWidth + 'px', height: page.el.offsetHeight + 'px' });
+      const inner = document.createElement('div');
+      inner.className = 'sel-ghost-inner';
+      inner.style.transform = `scale(${this.scale})`;
+      for (const c of sel.cites || []) {
+        const el = citeEls.get(c);
+        if (!el) continue;
+        const cl = el.cloneNode(true); cl.style.transform = ''; cl.classList.add('moving');
+        inner.appendChild(cl);
+        for (const o of [el, citeUis.get(c)]) if (o) o.style.visibility = 'hidden';
+      }
+      g.appendChild(inner);
+      const cv = document.createElement('canvas');
+      cv.width = page.live.width; cv.height = page.live.height;
+      cv.style.width = page.live.style.width; cv.style.height = page.live.style.height;
+      g.appendChild(cv);
+      const ctx = this.ctxFor(cv, page);
+      for (const q of sel.set) if (q.tool === 'hl') drawStroke(ctx, q);
+      for (const q of sel.set) if (q.tool !== 'hl') drawStroke(ctx, q);
+      const b = sel.box, u = 1 / this.scale;
+      ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u;
+      ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+      this.pagesEl.appendChild(g);
+      this.clearLive(page); // 원래 자리의 선택 그림은 지워요
+      k.ghost = g;
+    }
+    k.ghost.style.transform = `translate(${k.dx * this.scale}px, ${k.dy * this.scale}px)`;
   }
 
   clearSelection() {
