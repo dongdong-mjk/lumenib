@@ -78,6 +78,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     private var relaying = false
     // 굿노트처럼: 종이가 미끄러지듯 스크롤되는 중에 펜슬을 대면 스크롤을 그 자리에서 멈춰요
     private var lockedScrolls: [UIScrollView] = []
+    func unlockScrollsIfIdle() { if !lockedScrolls.isEmpty { unlockScrolls() } }
     private func unlockScrolls() {
         lockedScrolls.forEach { $0.panGestureRecognizer.isEnabled = true }
         lockedScrolls = []
@@ -371,6 +372,8 @@ final class InkWindow: UIWindow {
            let t = all.first(where: { $0.phase == .began && !f.contains($0.location(in: nil)) }) {
             b.closePanel(touchAt: t.location(in: nil))
         }
+        // 안전장치: 펜슬로 쓰는 중이 아닌데 스크롤이 잠겨 있으면 풀어요 (페이지가 멈추거나 확대가 안 되던 것)
+        if event.type == .touches, tracked == nil, let b = bridge, let all = event.allTouches, all.contains(where: { $0.phase == .began }) { b.unlockScrollsIfIdle() }
         if event.type == .touches, let b = bridge, let web = b.webView, let all = event.allTouches,
            let pencil = all.first(where: { $0.type == .pencil }) {
             if let t = tracked, t === pencil {

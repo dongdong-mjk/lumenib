@@ -966,11 +966,17 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   // 펜슬로 종이에 쓰기 시작하면 열려 있던 툴바 창을 닫아요 (굿노트처럼 바로 써지게)
   window.lumenibCloseMenus = () => { toolbarEl?.querySelector('.tb-menu')?.remove(); };
   // 지우개 · 올가미: 네이티브가 받은 펜슬 움직임을 종이에 포인터 이벤트로 그대로 전해요
-  let relayTarget = null;
+  let relayTarget = null, relayLast = [0, 0];
   window.lumenibPointer = (type, pts) => {
     const p = ns.paper;
     if (!p) return false;
+    // 끝 신호가 점 없이 오거나(취소) 앞 동작이 안 끝난 채 새로 시작하면, 앞 동작을 꼭 끝내 줘요.
+    // 안 그러면 올가미·지우개가 '하는 중'으로 남아 화면이 멈추거나 확대가 안 됐어요
+    const end = (t) => { if (!relayTarget) return; relayTarget.dispatchEvent(new PointerEvent(t, { clientX: relayLast[0], clientY: relayLast[1], pointerType: 'pen', pointerId: 77, isPrimary: true, bubbles: true, cancelable: true, button: 0, buttons: 0 })); relayTarget = null; };
+    if (!pts.length) { if (type === 'up' || type === 'cancel') end(type === 'up' ? 'pointerup' : 'pointercancel'); return true; }
+    if (type === 'down') end('pointercancel');
     for (const [x, y, pr] of pts) {
+      relayLast = [x, y];
       if (type === 'down') {
         const pageEl = document.elementFromPoint(x, y)?.closest('.page');
         relayTarget = p.pages.find((q) => q?.el === pageEl)?.base || null;
