@@ -161,6 +161,7 @@ export class Paper {
   startPinch(cx, cy, dist) {
     const r = this.scrollEl.getBoundingClientRect();
     this._pan = { cx, cy, dist, ox: cx - r.left, oy: cy - r.top, z: 1, sl: this.scrollEl.scrollLeft, st: this.scrollEl.scrollTop };
+    this.pagesEl.style.willChange = 'transform'; // 확대하는 동안만 그림처럼 (끝나면 글자를 다시 선명하게)
     const pr = this.pagesEl.getBoundingClientRect();
     this.pagesEl.style.transformOrigin = `${cx - pr.left}px ${cy - pr.top}px`;
   }
@@ -174,7 +175,7 @@ export class Paper {
   endPinch() {
     const p = this._pan; this._pan = null;
     const el = this.scrollEl;
-    this.pagesEl.style.transform = ''; this.pagesEl.style.transformOrigin = '';
+    this.pagesEl.style.transform = ''; this.pagesEl.style.transformOrigin = ''; this.pagesEl.style.willChange = '';
     const z0 = this.zoom, z1 = Math.min(3, Math.max(1, z0 * p.z));
     // 손가락 가운데 있던 종이 위치가 그대로 그 자리에 오게
     const offL = this.pagesEl.offsetLeft, offT = this.pagesEl.offsetTop;

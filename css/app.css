@@ -289,7 +289,7 @@ svg { display: block; }
 .paper-scroll { touch-action: pan-x pan-y; }
 .paper-scroll.finger { touch-action: none; }
 .paper-scroll.zoomed { overflow-x: auto; }
-.pages { will-change: transform; }
+/* 종이 전체를 늘 '그림 한 장'으로 다루면 확대 뒤에도 글자가 다시 선명하게 그려지지 않아 깨져 보였어요. 두 손가락 확대·패널 접기 동안만 켜요 (js) */
 .pages { margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 .pages { position: relative; }
 .sel-ghost { position: absolute; pointer-events: none; z-index: 20; will-change: transform; }
