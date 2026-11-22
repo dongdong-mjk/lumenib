@@ -3,7 +3,7 @@
 import { icon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
-import { Paper, tool, SIZE_RANGE, SIZE_DEFAULT, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
+import { Paper, tool, snapForNative, SIZE_RANGE, SIZE_DEFAULT, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
 import { screen as trackScreen, track, isTracking } from './analytics.js';
 import * as C from './cloud.js';
@@ -949,7 +949,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     const on = !!p && !p.readonly && p.scrollEl?.isConnected && !blocked;
     const pen = tool.type === 'pen';
     // 펜·형광펜은 네이티브가 그리고, 지우개·올가미는 네이티브가 펜슬을 받아 웹에 그대로 넘겨요(lumenibPointer)
-    const btns = [...(p?.scrollEl?.querySelectorAll('.cite-ui button, .lasso-menu, .passage-block button') || [])].map(rect);
+    const btns = [...(p?.scrollEl?.querySelectorAll('.cite-ui button, .cite-rs, .lasso-menu, .passage-block button') || [])].map(rect);
     nativeInk.postMessage({
       action: 'inkConfig', enabled: on,
       tool: tool.type,
@@ -1052,11 +1052,13 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (done) { S.saveSettings(); track('size_custom_' + t); renderToolbar(); } else showSizePreview(t);
     sendInkConfig();
   };
-  window.lumenibInk = (pts) => {
+  // 네이티브 펜: 그리고 멈추면 도형으로 (굿노트처럼)
+  window.lumenibSnap = (flat, scale) => snapForNative(flat, scale);
+  window.lumenibInk = (pts, extra) => {
     const post = () => nativeInk?.postMessage({ action: 'inkDrawn' });
     const hl = tool.type === 'hl';
     // 형광펜: 웹 획이 서서히 나타나기 시작할 때 네이티브도 서서히 지워요 (겹쳐 진해지거나 비어 깜빡이지 않게)
-    const ok = !!ns.paper?.addExternalStroke(pts, hl ? { fadeIn: post } : null);
+    const ok = !!ns.paper?.addExternalStroke(pts, { ...(hl ? { fadeIn: post } : {}), shape: !!extra?.shape });
     if (ok) track('native_ink_stroke');
     // 펜: 웹이 새 획을 실제로 화면에 그린 다음(두 프레임 뒤)에 네이티브가 임시 선을 지워요. 바로 지우면 한 번 깜빡였어요
     if (ok && !hl) requestAnimationFrame(() => requestAnimationFrame(post));

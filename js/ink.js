@@ -274,11 +274,12 @@ export class Paper {
 
   renderCitations(page) {
     page.inner.querySelectorAll('.cite-block').forEach((e) => e.remove());
-    page.ui.querySelectorAll('.cite-ui').forEach((e) => e.remove());
+    page.ui.querySelectorAll('.cite-ui, .cite-rs').forEach((e) => e.remove());
     this.note.citations.filter((c) => c.page === page.i).forEach((c) => {
       const el = document.createElement('div');
       el.className = 'cite-block';
       el.style.top = c.y + 'px';
+      if (c.w) { el.style.right = 'auto'; el.style.width = c.w + 'px'; } // 너비를 바꾼 인용 (세로는 내용만큼)
       citeEls.set(c, el);
       el.innerHTML = `<h5>${esc(refText(c))}</h5>${(c.text || []).map((v) => `<div class="row"><span class="vn">${v.n}</span><span>${esc(v.t)}</span></div>`).join('')}`;
       page.inner.appendChild(el);
@@ -292,8 +293,39 @@ export class Paper {
     u.className = 'cite-ui';
     citeUis.set(c, u);
     u.style.top = c.y + 'px';
+    u.style.right = (PAGE_W - 20 - citeW(c) + 2) + 'px';
     u.innerHTML = `<button class="cite-grip" aria-label="옮기기"><svg width="18" height="18" viewBox="0 0 24 24" fill="#555"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button><button class="cite-x" aria-label="빼기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
     page.ui.appendChild(u);
+    // 오른쪽 아래 손잡이로 인용 상자 너비 조절 (높이는 내용만큼 따라와요)
+    const rs = document.createElement('div');
+    rs.className = 'cite-rs';
+    rs.setAttribute('aria-label', '너비 조절');
+    const placeRs = () => { rs.style.top = (c.y + el.offsetHeight - 22) + 'px'; rs.style.left = (20 + citeW(c) - 22) + 'px'; };
+    placeRs();
+    requestAnimationFrame(placeRs);
+    page.ui.appendChild(rs);
+    citeRs.set(c, rs);
+    let rz = null;
+    rs.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      try { rs.setPointerCapture(e.pointerId); } catch {}
+      rz = { x0: e.clientX, w0: citeW(c), id: e.pointerId, snap: this.snapshot() };
+    });
+    rs.addEventListener('pointermove', (e) => {
+      if (!rz || e.pointerId !== rz.id) return;
+      const w = Math.round(Math.max(220, Math.min(PAGE_W - 40, rz.w0 + (e.clientX - rz.x0) / this.scale)));
+      c.w = w >= PAGE_W - 41 ? undefined : w; // 끝까지 늘리면 원래대로(가로 전체)
+      el.style.right = c.w ? 'auto' : ''; el.style.width = c.w ? c.w + 'px' : '';
+      u.style.right = (PAGE_W - 20 - citeW(c) + 2) + 'px';
+      placeRs();
+    });
+    const rsEnd = (e) => {
+      if (!rz || e.pointerId !== rz.id) return;
+      if (citeW(c) !== rz.w0) { this._push({ t: 'full', json: rz.snap }); this.onChange({}); this.onHistory(); }
+      rz = null;
+    };
+    rs.addEventListener('pointerup', rsEnd);
+    rs.addEventListener('pointercancel', rsEnd);
     const grip = u.querySelector('.cite-grip');
     let d = null;
     grip.addEventListener('pointerdown', (e) => {
@@ -355,6 +387,7 @@ export class Paper {
       if (Math.abs(ny - d.cy) > 1 || c.page !== d.page0) d.moved = true;
       c.y = Math.round(ny);
       el.style.top = u.style.top = c.y + 'px';
+      const rsEl = citeRs.get(c); if (rsEl) rsEl.style.top = (c.y + el.offsetHeight - 22) + 'px';
       if (d.layers) { const px = (c.y - d.cy) * this.scale; for (const l of d.layers) l.style.transform = `translateY(${px}px)`; }
     };
     const onMove = (e) => {
@@ -612,7 +645,7 @@ export class Paper {
           const p = cur.s.pts;
           const lx = p[p.length - 3], ly = p[p.length - 2];
           if ((x - lx) ** 2 + (y - ly) ** 2 < 0.6) continue;
-          if (cur.snapped) continue; // 도형이 된 뒤에는 펜을 떼기 전까지 그대로
+          if (cur.snapped) { cur.s.pts = shapeAt(cur.shape, x, y); page._hlS = null; continue; } // 도형이 된 뒤 누른 채로 움직이면 크기·각도 조절 (직선은 끝점이 따라와요)
           p.push(round(x), round(y), Math.round(pr * 100) / 100);
           if (cur.hold && Math.hypot(x - cur.hold.x, y - cur.hold.y) > HOLD_SLOP) {
             clearTimeout(cur.hold.t);
@@ -744,8 +777,9 @@ export class Paper {
     const pts = snapShape(k.s.pts);
     if (!pts) return;
     k.snapped = true;
+    k.shape = shapeState(pts, k.s.pts);
     k.s.pts = pts;
-    if (k.s.tool === 'hl') k.s.sh = 1; // 도형은 다듬지 않고 꼭짓점 그대로
+    k.s.sh = 1; // 도형은 다듬지 않고 꼭짓점 그대로 (펜·형광펜)
     page._hlS = null; // 형광펜 도형: 처음부터 다시 그려요
     this.drawLive(page, k.s);
   }
@@ -912,7 +946,7 @@ export class Paper {
   citeBox(c) {
     const el = citeEls.get(c);
     if (!el || !el.isConnected) return null;
-    return [20, c.y, PAGE_W - 20, c.y + el.offsetHeight];
+    return [20, c.y, 20 + citeW(c), c.y + el.offsetHeight];
   }
 
   drawSelection(page, dx = 0, dy = 0, sc = null) {
@@ -1200,6 +1234,7 @@ export class Paper {
     const r = page.base.getBoundingClientRect();
     const loc = ([cx, cy, pr]) => [round((cx - r.left) / this.scale), round((cy - r.top) / this.scale), Math.round(pr * 100) / 100];
     const [x0, y0, p0] = loc(pts[0]);
+    const shaped = !!opts?.shape;
     const s = tool.type === 'pen'
       ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, sv: 2, pts: [x0, y0, p0] }
       : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x0, y0, 0.5] };
@@ -1211,6 +1246,7 @@ export class Paper {
       p.push(x, y, s.tool === 'hl' ? 0.5 : pr);
     }
     if (s.pts.length === 3) s.pts.push(s.pts[0] + 0.3, s.pts[1] + 0.3, s.pts[2]);
+    if (shaped) s.sh = 1;
     this.pagePush(page.i);
     s.t = Date.now();
     this.note.pages[page.i].strokes.push(s);
@@ -1296,8 +1332,8 @@ function drawStroke(ctx, s, live = false) {
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   const pts = [];
   for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
-  if (s.po && !o.legacy && st !== 'ball') startPressure(pts);
-  if (o.sigma) gaussSmooth(pts, o.sigma);
+  if (s.po && !o.legacy && st !== 'ball' && !s.sh) startPressure(pts);
+  if (o.sigma && !s.sh) gaussSmooth(pts, o.sigma);
   if (o.flat) applyFlatNib(pts, o.flat);
   const raw = getStroke(pts, strokeOpts(o, live));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
@@ -1315,6 +1351,8 @@ function drawStroke(ctx, s, live = false) {
 }
 // 획이 바뀌면(옮기기·크기 바꾸기 등) 다시 계산하도록, 모양을 정하는 값들로 열쇠를 만들어요
 const _penPath = new WeakMap();
+const citeRs = new WeakMap();
+const citeW = (c) => c.w || PAGE_W - 40; // 인용 상자 너비 (종이 단위, 기본은 가로 전체)
 function penKey(s) {
   const p = s.pts, n = p.length;
   return n + '|' + p[0] + ',' + p[1] + '|' + p[n - 3] + ',' + p[n - 2] + '|' + p[n >> 1] + '|' + s.w + '|' + (s.ps || '') + '|' + (s.po ? JSON.stringify(s.po) : '') + '|' + (s.sv || 0) + '|' + (s.np ? 1 : 0);
@@ -1480,6 +1518,46 @@ function rdp(pts, eps) {
   return [...rdp(pts.slice(0, idx + 1), eps).slice(0, -1), ...rdp(pts.slice(idx), eps)];
 }
 export { snapShape as _snapShapeForTest };
+// 도형으로 바뀐 순간의 상태: 직선인지, 가운데, 그때 펜 위치. 누른 채로 움직이면 이걸 기준으로 바꿔요
+function shapeState(pts, raw) {
+  const n = pts.length / 3;
+  const ax = pts[0], ay = pts[1], bx = pts[pts.length - 3], by = pts[pts.length - 2];
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  let maxOff = 0, cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i += 3) { maxOff = Math.max(maxOff, Math.abs((pts[i] - ax) * (by - ay) - (pts[i + 1] - ay) * (bx - ax)) / len); cx += pts[i]; cy += pts[i + 1]; }
+  const line = maxOff < 0.5 && len > 1;
+  const ref = [raw[raw.length - 3], raw[raw.length - 2]];
+  return { line, base: pts.slice(), c: line ? [ax, ay] : [cx / n, cy / n], ref, p: pts[2] };
+}
+// 누른 채로 펜을 움직이면: 직선은 끝점이 펜을 따라오고, 도형은 가운데를 기준으로 크기·각도가 바뀌어요
+function shapeAt(sh, x, y) {
+  const [cx, cy] = sh.c;
+  if (sh.line) {
+    const out = [], N = 24;
+    for (let i = 0; i <= N; i++) out.push(round(cx + ((x - cx) * i) / N), round(cy + ((y - cy) * i) / N), sh.p);
+    return out;
+  }
+  const v0x = sh.ref[0] - cx, v0y = sh.ref[1] - cy, v1x = x - cx, v1y = y - cy;
+  const d0 = Math.hypot(v0x, v0y), d1 = Math.hypot(v1x, v1y);
+  if (d0 < 4) return sh.base.slice();
+  const k = Math.max(0.2, Math.min(5, d1 / d0)), a = Math.atan2(v1y, v1x) - Math.atan2(v0y, v0x);
+  const cos = Math.cos(a) * k, sin = Math.sin(a) * k, out = [];
+  for (let i = 0; i < sh.base.length; i += 3) {
+    const dx = sh.base[i] - cx, dy = sh.base[i + 1] - cy;
+    out.push(round(cx + dx * cos - dy * sin), round(cy + dx * sin + dy * cos), sh.base[i + 2]);
+  }
+  return out;
+}
+// iPad 앱: 네이티브 펜이 '멈춤'을 알려 오면 도형으로 바꿔 줘요 (좌표는 화면, scale로 종이 단위로 바꿔 계산)
+export function snapForNative(flat, scale) {
+  const P = [];
+  for (let i = 0; i < flat.length; i += 3) P.push(flat[i] / scale, flat[i + 1] / scale, flat[i + 2]);
+  const pts = snapShape(P);
+  if (!pts) return null;
+  const sh = shapeState(pts, P);
+  const back = (a) => a.map((v, i) => (i % 3 === 2 ? v : v * scale));
+  return { line: sh.line, pts: back(pts) };
+}
 // 예전 획: np(필압 끔) → 볼펜, 표시 없음 → 만년필(그때 기본이 필압 켜짐)
 const penStyleOf = (s) => s.ps || (s.np ? 'ball' : 'fountain');
 // 펜 종류 + 세부 설정 → 그리는 방식. po가 없는 예전 획은 그때 모양 그대로.

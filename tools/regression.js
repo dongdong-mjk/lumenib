@@ -143,6 +143,37 @@ export async function run() {
     redo(); await settle();
     return true;
   });
+  await check('그리고 멈추면 도형 · 누른 채로 움직이면 크기 조절 (펜)', async () => {
+    tool('pen'); await settle();
+    const c = base(), r = c.getBoundingClientRect();
+    const pts = [...line(400, 300, 520, 302, 10), ...line(520, 302, 518, 380, 8), ...line(518, 380, 402, 378, 10), ...line(402, 378, 400, 302, 8)];
+    pe(c, 'pointerdown', r.left + pts[0][0], r.top + pts[0][1]);
+    for (const [x, y] of pts.slice(1)) pe(c, 'pointermove', r.left + x, r.top + y);
+    await wait(750); // 펜을 떼지 않고 멈춤
+    pe(c, 'pointermove', r.left + 420, r.top + 300); // 누른 채로 움직여 크기 조절
+    pe(c, 'pointerup', r.left + 420, r.top + 300); await settle();
+    const P = window.__lumenibPaper, last = P.note.pages[0].strokes.at(-1);
+    if (!last?.sh) return '도형으로 안 바뀜';
+    const xs = last.pts.filter((_, i) => i % 3 === 0), ys = last.pts.filter((_, i) => i % 3 === 1);
+    const w = Math.max(...xs) - Math.min(...xs);
+    undo(); await settle();
+    return w > 20 || '도형 크기가 이상해요 ' + w;
+  });
+  await check('그리고 멈추면 직선 (형광펜)', async () => {
+    tool('hl'); await settle();
+    const c = base(), r = c.getBoundingClientRect();
+    const pts = Array.from({ length: 30 }, (_, i) => [100 + i * 8, 700 + Math.sin(i / 2) * 3]);
+    pe(c, 'pointerdown', r.left + pts[0][0], r.top + pts[0][1]);
+    for (const [x, y] of pts.slice(1)) pe(c, 'pointermove', r.left + x, r.top + y);
+    await wait(750);
+    pe(c, 'pointerup', r.left + pts.at(-1)[0], r.top + pts.at(-1)[1]); await settle();
+    const last = window.__lumenibPaper.note.pages[0].strokes.at(-1);
+    const ys = last.pts.filter((_, i) => i % 3 === 1);
+    const spread = Math.max(...ys) - Math.min(...ys);
+    undo(); await settle(); tool('pen'); await settle();
+    if (!last.sh) return '직선으로 안 바뀜';
+    return spread < 1.5 || '곧은 선이 아니에요 ' + spread;
+  });
   await check('올가미: 획 일부만 둘러도 고름 · 선택 해제', async () => {
     tool('lasso'); await settle();
     stroke(box(150, 280, 230, 340)); await settle(); // 펜 선(80~300)의 가운데만
@@ -267,6 +298,18 @@ export async function run() {
     if (!$$('.page')[1].querySelector('.cite-block')) return '2쪽으로 안 넘어감';
     undo(); await settle();
     return !!$$('.page')[0].querySelector('.cite-block') && !$$('.page')[1].querySelector('.cite-block') || '되돌리기 안 됨';
+  });
+  await check('인용 상자 너비 조절 (오른쪽 아래 손잡이) · 되돌리기', async () => {
+    se.scrollTop = 0; await wait(100);
+    const cb = $('.cite-block'), rs = $('.cite-rs');
+    if (!cb || !rs) return '손잡이 없음';
+    const w0 = cb.getBoundingClientRect().width, g = rs.getBoundingClientRect();
+    pe(rs, 'pointerdown', g.left + 10, g.top + 10, 970); pe(rs, 'pointermove', g.left - 150, g.top + 10, 970); pe(rs, 'pointerup', g.left - 150, g.top + 10, 970); await settle();
+    const w1 = cb.getBoundingClientRect().width;
+    if (w1 > w0 - 100) return '너비가 안 줄었어요 ' + [w0, w1];
+    undo(); await settle();
+    const w2 = $('.cite-block').getBoundingClientRect().width;
+    return Math.abs(w2 - w0) < 2 || '되돌리기 안 됨 ' + [w0, w2];
   });
   await check('종이 종류 바꿔도 확대·스크롤 유지 · 마지막 종이 기억', async () => {
     se.scrollTop = 300; await wait(100);

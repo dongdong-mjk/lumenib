@@ -311,6 +311,10 @@ button { touch-action: manipulation; }
 .cite-ui button:active { background: #eee; }
 .cite-grip { cursor: grab; }
 .cite-moving .cite-ui:not(.moving) { visibility: hidden; }
+/* 인용 상자 너비 조절 손잡이 (오른쪽 아래 모서리) */
+.cite-rs { position: absolute; width: 22px; height: 22px; pointer-events: auto; touch-action: none; cursor: ew-resize; z-index: 2; }
+.cite-rs::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 9px; height: 9px; border-right: 2px solid #999; border-bottom: 2px solid #999; border-bottom-right-radius: 3px; }
+.cite-moving .cite-rs { visibility: hidden; }
 .cite-block.moving { z-index: 1; box-shadow: 0 6px 20px rgba(0,0,0,.18); border-color: #111; }
 .cite-block h5 { padding-right: 70px; }
 .mode2 { display: flex; background: #f0f0f0; border-radius: 10px; padding: 3px; }

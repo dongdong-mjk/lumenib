@@ -200,7 +200,7 @@ struct LumenStyleParams { var scale: Double; var thinning: Double; var taper: Do
 func lumenParams(_ st: LumenPenStyle, _ po: [String: Double]) -> LumenStyleParams {
     let v = { (k: LumenPenOption) in po[k.rawValue] ?? k.defaultValue }
     // 손떨림 보정 (웹 styleOpts 와 같음): 선 끝은 펜촉에 바로 붙고, 지나온 부분을 앞뒤 점과 고르게 다듬어요
-    let stream = 0.15, sigma = (v(.stab) / 100) * 6
+    let stream = 0.15, sigma = po["_raw"] != nil ? 0 : (v(.stab) / 100) * 6 // 도형(_raw)은 다듬지 않아요
     switch st {
     case .ball: return .init(scale: 1, thinning: 0, taper: 0, stream: stream, flat: 0, sigma: sigma)
     case .fountain:
@@ -220,7 +220,7 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
         pts.append(SIMD3(s.pts[i] * k, s.pts[i + 1] * k, s.style == .ball ? 0.5 : s.pts[i + 2]))
         i += 3
     }
-    if s.style != .ball, !pts.isEmpty {
+    if s.style != .ball, !pts.isEmpty, s.opts["_raw"] == nil {
         // 시작 힘 보정 (웹 startPressure 와 같음): 누르는 순간부터 제 굵기로
         let K = min(6, pts.count)
         var m = 0.0
@@ -762,7 +762,47 @@ final class WebInkOverlay: UIView {
     required init?(coder: NSCoder) { fatalError() }
     override func layoutSubviews() { super.layoutSubviews(); live.frame = bounds }
 
+    // ---- 그리고 멈추면 도형 (굿노트처럼) ----
+    // 펜을 떼지 않고 0.5초 멈추면 onHold 로 알려요. 도형이 되면 누른 채로 움직여 크기·각도(직선은 끝점)를 바꿔요
+    var onHold: (([SIMD3<Double>]) -> Void)?
+    private var holdTimer: Timer?
+    private var holdAnchor: CGPoint = .zero
+    private(set) var shaped = false
+    private var shapeLine = false, shapeBase: [SIMD3<Double>] = [], shapeC = CGPoint.zero, shapeRef = CGPoint.zero
+    private var drawOpts: [String: Double] { shaped ? config.opts.merging(["_raw": 1]) { a, _ in a } : config.opts }
+    private func armHold(_ p: CGPoint) {
+        holdAnchor = p
+        holdTimer?.invalidate()
+        holdTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            guard let self, !self.shaped, self.pts.count > 3 else { return }
+            self.onHold?(self.pts)
+        }
+    }
+    func applyShape(line: Bool, _ list: [SIMD3<Double>]) {
+        guard !list.isEmpty, let last = pts.last else { return }
+        shaped = true; shapeLine = line; shapeBase = list
+        let n = Double(list.count)
+        shapeC = line ? CGPoint(x: list[0].x, y: list[0].y) : CGPoint(x: list.reduce(0) { $0 + $1.x } / n, y: list.reduce(0) { $0 + $1.y } / n)
+        shapeRef = CGPoint(x: last.x, y: last.y)
+        pts = list
+        UIImpactFeedbackGenerator(style: .light).impactOccurred() // 도형이 됐다는 작은 진동
+        redraw(predicted: [])
+    }
+    private func shapeAt(_ p: CGPoint) -> [SIMD3<Double>] {
+        let c = shapeC, z = shapeBase.first?.z ?? 0.5
+        if shapeLine {
+            return (0...24).map { i in let t = Double(i) / 24; return SIMD3(c.x + (p.x - c.x) * t, c.y + (p.y - c.y) * t, z) }
+        }
+        let v0 = CGPoint(x: shapeRef.x - c.x, y: shapeRef.y - c.y), v1 = CGPoint(x: p.x - c.x, y: p.y - c.y)
+        let d0 = hypot(v0.x, v0.y), d1 = hypot(v1.x, v1.y)
+        if d0 < 4 { return shapeBase }
+        let k = max(0.2, min(5, d1 / d0)), a = atan2(v1.y, v1.x) - atan2(v0.y, v0.x)
+        let cs = cos(a) * k, sn = sin(a) * k
+        return shapeBase.map { q in let dx = q.x - c.x, dy = q.y - c.y; return SIMD3(c.x + dx * cs - dy * sn, c.y + dx * sn + dy * cs, q.z) }
+    }
+
     func begin(_ p: SIMD3<Double>) {
+        shaped = false; holdTimer?.invalidate(); armHold(CGPoint(x: p.x, y: p.y))
         // 쓰기 시작한 종이 밖으로 나간 부분은 웹처럼 잘라서 안 보이게 해요 (노트 밖까지 선이 보였다 사라지던 것)
         let pt = CGPoint(x: p.x, y: p.y)
         let page = config.pages.first { $0.contains(pt) }
@@ -779,6 +819,11 @@ final class WebInkOverlay: UIView {
         return m
     }
     func add(_ list: [SIMD3<Double>], predicted: [SIMD3<Double>]) {
+        if shaped {
+            if let p = list.last { pts = shapeAt(CGPoint(x: p.x, y: p.y)); redraw(predicted: []) }
+            return
+        }
+        if let p = list.last, hypot(p.x - holdAnchor.x, p.y - holdAnchor.y) > 3 { armHold(CGPoint(x: p.x, y: p.y)) }
         for p in list {
             if let l = pts.last { let dx = p.x - l.x, dy = p.y - l.y; if dx * dx + dy * dy < 0.25 { continue } }
             pts.append(p)
@@ -795,7 +840,7 @@ final class WebInkOverlay: UIView {
             // 펜을 뗀 뒤 모양(끝 가늘어짐 포함)으로 바꿔 둬요. 웹이 그린 선과 똑같아서 넘어갈 때 달라 보이지 않아요
             var flat: [Double] = []
             for p in pts { flat += [p.x, p.y, p.z] }
-            let st = LumenStroke(tool: config.tool, style: config.style, opts: config.opts, color: config.color,
+            let st = LumenStroke(tool: config.tool, style: config.style, opts: drawOpts, color: config.color,
                                  width: config.width * Double(config.scale), pts: flat)
             l.path = lumenPenPath(st, live: false)
         }
@@ -808,6 +853,7 @@ final class WebInkOverlay: UIView {
         CATransaction.commit()
         pending.append(l)
         pts = []
+        holdTimer?.invalidate(); shaped = false
         return l
     }
     /// 웹이 다 그렸다고 알려 주면 가장 오래된 남겨 둔 획을 지워요
@@ -838,7 +884,7 @@ final class WebInkOverlay: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true); l.removeFromSuperlayer(); CATransaction.commit()
     }
     func clear() {
-        pts = []
+        pts = []; holdTimer?.invalidate(); shaped = false
         CATransaction.begin(); CATransaction.setDisableActions(true); live.path = nil; CATransaction.commit()
     }
 
@@ -846,7 +892,7 @@ final class WebInkOverlay: UIView {
         // 화면 좌표 그대로 그려요: 굵기만 종이 배율을 곱하면 웹에서 그린 것과 같은 모양
         var flat: [Double] = []
         for p in pts + predicted { flat += [p.x, p.y, config.tool == .highlighter ? 0.5 : p.z] }
-        let s = LumenStroke(tool: config.tool, style: config.style, opts: config.opts, color: config.color,
+        let s = LumenStroke(tool: config.tool, style: config.style, opts: drawOpts, color: config.color,
                             width: config.width * Double(config.scale), pts: flat)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         let color = UIColor(hexString: config.color)

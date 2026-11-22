@@ -61,6 +61,21 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     // MARK: 필기만 네이티브 (웹 노트 위에서 애플펜슬 펜·형광펜)
     private let inkOverlay = WebInkOverlay()
+    // 펜을 떼지 않고 멈추면 웹의 도형 인식으로 도형 점을 받아 와요
+    private func handleHold(_ pts: [SIMD3<Double>]) {
+        let flat = pts.flatMap { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
+        guard let data = try? JSONSerialization.data(withJSONObject: flat), let json = String(data: data, encoding: .utf8) else { return }
+        let scale = Double(inkConfig.scale)
+        webView?.evaluateJavaScript("JSON.stringify(window.lumenibSnap ? window.lumenibSnap(\(json), \(scale)) : null)") { [weak self] r, _ in
+            guard let self, let str = r as? String, let d = str.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                  let arr = obj["pts"] as? [Double], arr.count >= 6 else { return }
+            var list: [SIMD3<Double>] = []
+            var i = 0
+            while i + 2 < arr.count { list.append(SIMD3(arr[i], arr[i + 1], arr[i + 2])); i += 3 }
+            self.inkOverlay.applyShape(line: (obj["line"] as? Bool) ?? false, list)
+        }
+    }
     private var inkConfig = WebInkConfig()
 
     // 창(InkWindow)이 애플펜슬 터치를 웹보다 먼저 받아서 여기로 넘겨요.
@@ -168,6 +183,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         inkOverlay.frame = web.bounds
         inkOverlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         web.addSubview(inkOverlay)
+        inkOverlay.onHold = { [weak self] pts in self?.handleHold(pts) }
     }
 
     func inkEnd() {
@@ -177,8 +193,9 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             let pts = inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
             guard let data = try? JSONSerialization.data(withJSONObject: pts), let json = String(data: data, encoding: .utf8) else { inkOverlay.clear(); return }
             // 웹이 노트에 넣어 다시 그린 다음에 지워서 깜빡이지 않게
+            let shaped = inkOverlay.shaped
             let kept = inkOverlay.commit()
-            webView?.evaluateJavaScript("window.lumenibInk && window.lumenibInk(\(json))") { [weak self] r, _ in
+            webView?.evaluateJavaScript("window.lumenibInk && window.lumenibInk(\(json), {shape: \(shaped)})") { [weak self] r, _ in
                 // 웹이 획을 못 받았으면(예: 종이 밖) 바로 지워요
                 if (r as? Bool) == false { self?.inkOverlay.drop(kept) }
             }
