@@ -5,6 +5,8 @@
 // 점검용 노트를 새로 만들고, 끝나면 지워요.
 
 const wait = (t) => new Promise((r) => setTimeout(r, t));
+// 툴바는 손을 뗀 뒤 다음 화면 갱신 때 다시 그려져요. 창이 숨겨져 있으면 갱신이 느려서 넉넉히 기다려요
+const settle = () => wait(700);
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
@@ -75,21 +77,21 @@ export async function run() {
 
   await check('뒤로 버튼(피그마 꺾쇠 아이콘)', () => ($('[data-act="back"] path')?.getAttribute('d') || '').startsWith('M14.932') || '아이콘 다름');
   await check('툴바 도구 선택(펜·형광펜·지우개·올가미)', async () => {
-    for (const t of ['hl', 'eraser', 'lasso', 'pen']) { tool(t); await wait(150); if (!$(`[data-tool="${t}"]`).classList.contains('on')) return t + ' 선택 안 됨'; }
+    for (const t of ['hl', 'eraser', 'lasso', 'pen']) { tool(t); await settle(); if (!$(`[data-tool="${t}"]`).classList.contains('on')) return t + ' 선택 안 됨'; }
     return true;
   });
   await check('툴바 가운데 영역 너비 고정(268)', () => Math.round($('.tb-opts').getBoundingClientRect().width) === 268 || $('.tb-opts').getBoundingClientRect().width);
 
   await check('펜 쓰기 · 되돌리기 · 다시 하기', async () => {
-    tool('pen'); await wait(100);
+    tool('pen'); await settle();
     const p0 = pixels(ink());
     stroke(line(80, 300, 300, 320)); await wait(150);
     const p1 = pixels(ink()); if (p1 <= p0) return '펜 선이 안 그려짐';
-    undo(); await wait(200); if (pixels(ink()) !== p0) return '되돌리기 안 됨';
-    redo(); await wait(200); return pixels(ink()) === p1 || '다시 하기 안 됨';
+    await settle(); undo(); await settle(); if (pixels(ink()) !== p0) return '되돌리기 안 됨';
+    redo(); await settle(); return pixels(ink()) === p1 || '다시 하기 안 됨';
   });
   await check('형광펜: 글씨 밑 캔버스에 그려짐 · 돼지꼬리 겹침 고르게', async () => {
-    tool('hl'); await wait(100);
+    tool('hl'); await settle();
     const pts = Array.from({ length: 120 }, (_, i) => { const t = (i / 120) * Math.PI * 4; return [120 + i * 2 + Math.cos(t) * 30, 420 + Math.sin(t) * 30]; });
     stroke(pts); await wait(200);
     const c = base(), ctx = c.getContext('2d'), k = c.width / c.getBoundingClientRect().width;
@@ -102,14 +104,14 @@ export async function run() {
   });
 
   await check('올가미: 획 일부만 둘러도 고름 · 선택 해제', async () => {
-    tool('lasso'); await wait(100);
+    tool('lasso'); await settle();
     stroke(box(150, 280, 230, 340)); await wait(200); // 펜 선(80~300)의 가운데만
     if (!$('.lasso-menu')) return '선택 안 됨';
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await wait(200);
     return !$('.lasso-menu') || '해제 안 됨';
   });
   await check('올가미로 옮기기 · 되돌리기', async () => {
-    tool('lasso'); await wait(100);
+    tool('lasso'); await settle();
     stroke(box(60, 280, 320, 340)); await wait(200);
     const before = pixels(ink());
     const c = base(), r = c.getBoundingClientRect();
@@ -142,7 +144,7 @@ export async function run() {
   await check('인용 위에 쓴 글씨만 손잡이로 같이 움직임', async () => {
     const cb = $('.cite-block'), pr = $$('.page')[0].getBoundingClientRect(), k = pr.width / 726;
     const top = (cb.getBoundingClientRect().top - pr.top) / 1; // 화면 px
-    tool('pen'); await wait(100);
+    tool('pen'); await settle();
     stroke(line(100, top + 30, 200, top + 30)); await wait(150);
     const grip = $('.cite-grip'), g = grip.getBoundingClientRect();
     const inkBefore = pixels(ink());
@@ -173,9 +175,9 @@ export async function run() {
   await check('올가미로 인용 고르면 위의 글씨도 같이', async () => {
     se.scrollTop = 0; await wait(100);
     const cb = $('.cite-block'), pr = $$('.page')[0].getBoundingClientRect(), top = cb.getBoundingClientRect().top - pr.top;
-    tool('pen'); await wait(100);
+    tool('pen'); await settle();
     stroke(line(100, top + 30, 200, top + 30)); await wait(150);
-    tool('lasso'); await wait(100);
+    tool('lasso'); await settle();
     stroke(box(500, top + 5, 560, top + 25)); await wait(250);
     const ok = !!$('.lasso-menu');
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await wait(150);
