@@ -772,9 +772,9 @@ export class Paper {
     const set = new Set(), cites = new Set();
     if (poly.length > 4) {
       for (const s of this.note.pages[page.i].strokes) {
-        let inside = 0, total = 0;
-        for (let j = 0; j < s.pts.length; j += 3) { total++; if (pip(poly, s.pts[j], s.pts[j + 1])) inside++; }
-        if (total && inside / total >= 0.5) set.add(s);
+        // 굿노트처럼: 획의 일부만 올가미 안에 들어와도 그 획 전체를 골라요 (점 사이도 촘촘히 보고)
+        const d = denseOf(s);
+        for (let j = 0; j < d.length; j += 3) if (pip(poly, d[j], d[j + 1])) { set.add(s); break; }
       }
       // 인용 블록: 일부만 둘러도 블록 전체가 같이 골라져요 (굿노트처럼)
       for (const c of this.note.citations) {
