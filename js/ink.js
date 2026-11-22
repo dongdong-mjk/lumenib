@@ -1352,7 +1352,7 @@ function drawStroke(ctx, s, live = false) {
   const pts = [];
   for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
   if (s.po && !o.legacy && st !== 'ball' && !s.sh) startPressure(pts);
-  if (o.sigma && !s.sh) gaussSmooth(pts, o.sigma);
+  if (o.sigma && !s.sh) { gaussSmooth(pts, o.sigma); smoothPressure(pts); }
   if (o.flat) applyFlatNib(pts, o.flat);
   const raw = getStroke(pts, strokeOpts(o, live));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
@@ -1651,7 +1651,8 @@ function styleOpts(st, po, legacy = false) {
   // 손떨림 보정 (11/22, 굿노트처럼): 선 끝은 펜촉에 바로 붙어 따라오고(stream 작게), 지나온 부분을 앞뒤 점과 고르게 다듬어요(sigma).
   // 예전 획(sv 없음)은 그때 방식(늦게 따라오는 stream) 그대로 그려요
   const stream = legacy ? 0.25 + (po.stab / 100) * 0.6 : 0.15;
-  const sigma = legacy ? 0 : (po.stab / 100) * 6;
+  // 보정 0%여도 아주 약하게(1)는 다듬어요. 펜슬 점의 미세한 떨림 때문에 선이 군데군데 끊겨 보였어요
+  const sigma = legacy ? 0 : Math.max(1, (po.stab / 100) * 6);
   if (legacy) return { ...styleOptsBody(st, po, stream, sigma), legacy: true };
   return styleOptsBody(st, po, stream, sigma);
 }
@@ -1670,6 +1671,12 @@ function startPressure(pts) {
   let m = 0;
   for (let i = 0; i < K; i++) m = Math.max(m, pts[i][2]);
   for (let i = 0; i < K; i++) pts[i][2] = Math.max(pts[i][2], m);
+}
+// 누르는 힘이 한두 점만 뚝 떨어지면 선이 끊겨 보여서, 앞뒤 점과 살짝 섞어요
+function smoothPressure(pts) {
+  if (pts.length < 3) return;
+  const z = pts.map((q) => q[2]);
+  for (let i = 1; i < pts.length - 1; i++) pts[i][2] = (z[i - 1] + 2 * z[i] + z[i + 1]) / 4;
 }
 // 지나온 점을 앞뒤로 고르게 다듬기 (양 끝 점은 그대로, 끝에 가까울수록 덜 다듬어서 펜촉 쪽은 바로 붙어 있어요)
 function gaussSmooth(pts, sigma) {

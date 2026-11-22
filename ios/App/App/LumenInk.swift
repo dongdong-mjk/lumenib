@@ -200,7 +200,7 @@ struct LumenStyleParams { var scale: Double; var thinning: Double; var taper: Do
 func lumenParams(_ st: LumenPenStyle, _ po: [String: Double]) -> LumenStyleParams {
     let v = { (k: LumenPenOption) in po[k.rawValue] ?? k.defaultValue }
     // 손떨림 보정 (웹 styleOpts 와 같음): 선 끝은 펜촉에 바로 붙고, 지나온 부분을 앞뒤 점과 고르게 다듬어요
-    let stream = 0.15, sigma = po["_raw"] != nil ? 0 : (v(.stab) / 100) * 6 // 도형(_raw)은 다듬지 않아요
+    let stream = 0.15, sigma = po["_raw"] != nil ? 0 : max(1, (v(.stab) / 100) * 6) // 도형(_raw)은 다듬지 않아요. 보정 0%여도 아주 약하게(1) (웹과 같음)
     switch st {
     case .ball: return .init(scale: 1, thinning: 0, taper: 0, stream: stream, flat: 0, sigma: sigma)
     case .fountain:
@@ -245,6 +245,9 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
             for j in -r...r { let w = exp(-Double(j * j) / (2 * o.sigma * o.sigma)); sx += src[i + j].x * w; sy += src[i + j].y * w; sw += w }
             pts[i].x = sx / sw; pts[i].y = sy / sw
         }
+        // 누르는 힘도 앞뒤와 살짝 섞어요 (웹 smoothPressure 와 같음)
+        let z = pts.map { $0.z }
+        for i in 1..<(n - 1) { pts[i].z = (z[i - 1] + 2 * z[i] + z[i + 1]) / 4 }
     }
     if o.flat > 0 {
         // 평평함: 45° 기울어진 납작한 펜촉처럼 긋는 방향에 따라 굵기
