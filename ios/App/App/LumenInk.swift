@@ -220,6 +220,13 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
         pts.append(SIMD3(s.pts[i] * k, s.pts[i + 1] * k, s.style == .ball ? 0.5 : s.pts[i + 2]))
         i += 3
     }
+    if s.style != .ball, !pts.isEmpty {
+        // 시작 힘 보정 (웹 startPressure 와 같음): 누르는 순간부터 제 굵기로
+        let K = min(6, pts.count)
+        var m = 0.0
+        for i in 0..<K { m = max(m, pts[i].z) }
+        for i in 0..<K { pts[i].z = max(pts[i].z, m) }
+    }
     if o.sigma >= 0.5, pts.count >= 3 {
         // 지나온 점을 앞뒤로 고르게 다듬기 (웹 gaussSmooth 와 같음)
         let n = pts.count, R = Int(ceil(o.sigma * 2)), src = pts
@@ -760,7 +767,9 @@ final class WebInkOverlay: UIView {
         let pt = CGPoint(x: p.x, y: p.y)
         let page = config.pages.first { $0.contains(pt) }
         clipRect = (page ?? config.area).intersection(config.area.isEmpty ? (page ?? .infinite) : config.area)
+        CATransaction.begin(); CATransaction.setDisableActions(true) // 시작할 때 어떤 애니메이션도 없이 바로 보이게
         live.mask = clipMask()
+        CATransaction.commit()
         pts = [p]; redraw(predicted: [])
     }
     private var clipRect: CGRect = .null

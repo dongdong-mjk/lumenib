@@ -1141,6 +1141,7 @@ function drawStroke(ctx, s, live = false) {
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   const pts = [];
   for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
+  if (s.po && !o.legacy && st !== 'ball') startPressure(pts);
   if (o.sigma) gaussSmooth(pts, o.sigma);
   if (o.flat) applyFlatNib(pts, o.flat);
   const raw = getStroke(pts, strokeOpts(o, live));
@@ -1326,12 +1327,24 @@ function styleOpts(st, po, legacy = false) {
   // 예전 획(sv 없음)은 그때 방식(늦게 따라오는 stream) 그대로 그려요
   const stream = legacy ? 0.25 + (po.stab / 100) * 0.6 : 0.15;
   const sigma = legacy ? 0 : (po.stab / 100) * 6;
+  if (legacy) return { ...styleOptsBody(st, po, stream, sigma), legacy: true };
+  return styleOptsBody(st, po, stream, sigma);
+}
+function styleOptsBody(st, po, stream, sigma) {
   if (st === 'ball') return { scale: 1, thinning: 0, taper: 0, stream, sigma };
   if (st === 'fountain') {
     const flat = (po.flat || 0) / 100;
     return { scale: 1, thinning: Math.max(0.2 + (po.pressure / 100) * 0.8, 0.85 * flat), taper: (po.sharp / 100) * 12, stream, flat, sigma };
   }
   return { scale: 1.4, thinning: 0.8, taper: (po.sharp / 100) * 26, stream, sigma };
+}
+// 펜슬은 닿는 첫 순간 누르는 힘이 0에 가깝게 잡혀서 선 시작이 가늘게 나왔다 굵어졌어요(페이드인처럼).
+// 처음 몇 점은 그다음 점들의 힘까지 보고 큰 쪽을 써서, 누르는 순간부터 제 굵기로 시작해요
+function startPressure(pts) {
+  const K = Math.min(6, pts.length);
+  let m = 0;
+  for (let i = 0; i < K; i++) m = Math.max(m, pts[i][2]);
+  for (let i = 0; i < K; i++) pts[i][2] = Math.max(pts[i][2], m);
 }
 // 지나온 점을 앞뒤로 고르게 다듬기 (양 끝 점은 그대로, 끝에 가까울수록 덜 다듬어서 펜촉 쪽은 바로 붙어 있어요)
 function gaussSmooth(pts, sigma) {
