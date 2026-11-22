@@ -721,6 +721,10 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (tbPending) { tbPending = false; requestAnimationFrame(renderToolbar); }
   };
   // 툴바 밖을 새로 누르면 툴바 누름은 끝난 거예요
+  // 임시 기록 (툴바 선택 안 되는 문제 찾기)
+  const dbgDown = (e) => { const t = e.target; console.log('[dbg] down ' + e.pointerType + ' id=' + e.pointerId + ' tgt=' + (t.closest?.('[data-tool],[data-act],[data-size],[data-color]')?.outerHTML.slice(0, 40) || t.className || t.tagName) + ' tbPressing=' + tbPressing + ' xy=' + Math.round(e.clientX) + ',' + Math.round(e.clientY) + ' el=' + (document.elementFromPoint(e.clientX, e.clientY)?.className || '')); };
+  document.addEventListener('pointerdown', dbgDown, true);
+  document.addEventListener('click', (e) => console.log('[dbg] click ' + (e.target.closest?.('button')?.getAttribute('aria-label') || e.target.className)), true);
   const tbOutside = (e) => { if (tbPressing && !tbSlot.contains(e.target)) tbRelease(); };
   document.addEventListener('pointerdown', tbOutside, true);
   window.addEventListener('pointerup', tbRelease, true);
