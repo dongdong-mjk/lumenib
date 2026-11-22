@@ -214,6 +214,8 @@ export async function run() {
     $$('.bp-action button').find((b) => /인용으로|노트에 넣기/.test(b.textContent))?.click(); await settle();
     const blocks = $$('.page')[0].querySelectorAll('.cite-block');
     if (blocks.length < 2) return '인용이 2개가 아님 ' + blocks.length;
+    const [b1, b2] = [...blocks].map((b) => b.getBoundingClientRect());
+    if (b1.bottom > b2.top && b2.bottom > b1.top) return '새 인용이 기존 인용과 겹쳐서 들어감';
     const pr = $$('.page')[0].getBoundingClientRect();
     const tops = () => [...$$('.page')[0].querySelectorAll('.cite-block')].map((b) => Math.round(b.getBoundingClientRect().top - pr.top));
     const t0 = tops(), y0 = Math.min(...t0) - 10, y1 = Math.max(...t0) + 40;
