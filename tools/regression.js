@@ -212,6 +212,23 @@ export async function run() {
     if (back.join() !== t0.join()) return '되돌리기 후 자리 다름 ' + [t0, back];
     return cost < 60 || '손 뗄 때 처리가 무거움 ' + Math.round(cost) + 'ms';
   });
+  await check('올가미로 인용·글씨를 다음 장으로 옮기기 · 되돌리기', async () => {
+    se.scrollTop = 0; await wait(100);
+    const p0 = $$('.page')[0], pr = p0.getBoundingClientRect();
+    const cb = p0.querySelector('.cite-block'); if (!cb) return '인용 없음';
+    const top = cb.getBoundingClientRect().top - pr.top;
+    tool('lasso'); await settle();
+    stroke(box(480, top - 10, 560, top + 30)); await settle();
+    if (!$('.lasso-menu')) return '안 골라짐';
+    const c = base(), r = c.getBoundingClientRect();
+    pe(c, 'pointerdown', r.left + 520, r.top + top + 10);
+    $$('.page')[1].scrollIntoView(); await wait(200);
+    const r2 = $$('.page')[1].getBoundingClientRect();
+    pe(c, 'pointermove', r.left + 520, r2.top + 150); pe(c, 'pointerup', r.left + 520, r2.top + 150); await settle();
+    if (!$$('.page')[1].querySelector('.cite-block')) return '2쪽으로 안 넘어감';
+    undo(); await settle();
+    return !!$$('.page')[0].querySelector('.cite-block') && !$$('.page')[1].querySelector('.cite-block') || '되돌리기 안 됨';
+  });
   await check('종이 종류 바꿔도 확대·스크롤 유지 · 마지막 종이 기억', async () => {
     se.scrollTop = 300; await wait(100);
     const st = se.scrollTop;

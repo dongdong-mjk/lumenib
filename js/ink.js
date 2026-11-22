@@ -656,15 +656,35 @@ export class Paper {
       } else if (k.kind === 'move') {
         if (Math.abs(k.dx) + Math.abs(k.dy) > 1) {
           const sel = this.selection;
-          // 인용이 섞이면: 노트 전체를 저장하면 손을 뗀 뒤 한동안 버벅여서, 인용 자리와 그 장 획 목록만 기억해요
-          if (sel.cites?.size) this._push({ t: 'cites', items: [...sel.cites].map((c) => ({ ci: this.note.citations.indexOf(c), page: c.page, y: c.y })), strokes: { [sel.page]: this.note.pages[sel.page].strokes.slice() } });
+          // 손을 뗀 곳이 다른 장이면 그 장으로 옮겨요 (올가미로도 다음·이전 장으로, 11/22)
+          let to = page;
+          if (k.cy != null) {
+            to = this.pages.find((q) => { const b = q?.el.getBoundingClientRect(); return b && k.cy >= b.top && k.cy <= b.bottom; }) || page;
+          }
+          const off = to === page ? 0 : (page.el.getBoundingClientRect().top - to.el.getBoundingClientRect().top) / this.scale;
+          const dy = k.dy + off;
+          // 되돌리기 기록: 인용 자리와 관련된 장의 획 목록만 (노트 전체를 저장하면 손을 뗀 뒤 버벅여요)
+          const strokesBefore = { [sel.page]: this.note.pages[sel.page].strokes.slice() };
+          if (to !== page) strokesBefore[to.i] = this.note.pages[to.i].strokes.slice();
+          if (sel.cites?.size || to !== page) this._push({ t: 'cites', items: [...(sel.cites || [])].map((c) => ({ ci: this.note.citations.indexOf(c), page: c.page, y: c.y })), strokes: strokesBefore });
           else this.pagePush(sel.page);
           this.cloneSelection();
-          for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + k.dy); } }
+          for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + dy); } }
+          if (to !== page) {
+            this.note.pages[page.i].strokes = this.note.pages[page.i].strokes.filter((q) => !sel.set.has(q));
+            this.note.pages[to.i].strokes.push(...sel.set);
+          }
           if (sel.cites?.size) {
-            for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + k.dy))); }
-            this.renderCitations(page);
+            for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.page = to.i; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + dy))); }
+            this.renderCitations(page); if (to !== page) this.renderCitations(to);
             this.onChange({});
+          }
+          if (to !== page) {
+            this.selection = null; this.hideLassoMenu();
+            this.drawPage(page); this.drawPage(to);
+            this.changed(page, false); this.changed(to, false);
+            if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
+            return;
           }
           sel.box = moveBox(sel.box, sel.cites?.size ? 0 : k.dx, k.dy);
           this.changed(page, false);
