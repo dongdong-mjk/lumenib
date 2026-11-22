@@ -302,7 +302,7 @@ export class Paper {
     const rs = document.createElement('div');
     rs.className = 'cite-rs';
     rs.setAttribute('aria-label', '너비 조절');
-    const placeRs = () => { rs.style.top = (c.y + el.offsetHeight - 22) + 'px'; rs.style.left = (citeX(c) + citeW(c) - 22) + 'px'; };
+    const placeRs = () => { rs.style.top = (c.y + el.offsetHeight - 28) + 'px'; rs.style.left = (citeX(c) + citeW(c) - 28) + 'px'; };
     placeRs();
     requestAnimationFrame(placeRs);
     page.ui.appendChild(rs);
@@ -395,7 +395,7 @@ export class Paper {
       el.style.left = citeX(c) + 'px';
       u.style.right = (PAGE_W - citeX(c) - citeW(c) + 2) + 'px';
       el.style.top = u.style.top = c.y + 'px';
-      const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.top = (c.y + el.offsetHeight - 22) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 22) + 'px'; }
+      const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.top = (c.y + el.offsetHeight - 28) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 28) + 'px'; }
       if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
     };
     const onMove = (e) => {
@@ -1405,9 +1405,11 @@ function snapShape(raw) {
   const out = (list, kind, verts) => { const o = []; for (const [x, y] of list) o.push(round(x), round(y), pr); o.kind = kind; o.verts = verts; return o; };
   const ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
   // 1) 직선
-  if (ab > 0.8 * len) {
-    const dev = Math.max(...P.map((q) => segDist(q, a, b)));
-    if (dev < Math.max(4, ab * 0.08)) { const e = axisSnap(a, b); return out(sampleSeg(a, e), 'line', [a, e]); }
+  if (ab > 0.75 * len) {
+    // 펜을 댈 때·뗄 때 생기는 작은 갈고리는 빼고 봐요 (형광펜 밑줄이 직선으로 안 잡히던 것)
+    const cut = Math.floor(P.length * 0.08), mid = P.slice(cut, P.length - cut);
+    const dev = Math.max(...(mid.length > 2 ? mid : P).map((q) => segDist(q, a, b)));
+    if (dev < Math.max(5, ab * 0.1)) { const e = axisSnap(a, b); return out(sampleSeg(a, e), 'line', [a, e]); }
   }
   const closedish = ab < Math.max(14, size * 0.25);
   // 2) 꺾은선: 꼭짓점을 찾고, 각 구간이 곧은지 봐요

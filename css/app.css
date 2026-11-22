@@ -306,13 +306,14 @@ button { touch-action: manipulation; }
 .page-inner { z-index: 0; }
 .page canvas.bg { z-index: -1; }
 .page-ui { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; pointer-events: none; z-index: 3; }
-.cite-ui { position: absolute; right: 22px; display: flex; gap: 0; padding-top: 2px; pointer-events: auto; }
-.cite-ui button { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; touch-action: none; }
+/* 옮기기·빼기: 32×32 (WCAG 2.2 최소 24×24 이상), 아이콘 간격을 좁혀 한 묶음으로 보이게 (11/23, 전 40×40) */
+.cite-ui { position: absolute; right: 22px; display: flex; gap: 0; padding-top: 4px; pointer-events: auto; }
+.cite-ui button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; touch-action: none; }
 .cite-ui button:active { background: #eee; }
 .cite-grip { cursor: grab; }
 .cite-moving .cite-ui:not(.moving) { visibility: hidden; }
 /* 인용 상자 너비 조절 손잡이 (오른쪽 아래 모서리) */
-.cite-rs { position: absolute; width: 22px; height: 22px; pointer-events: auto; touch-action: none; cursor: ew-resize; z-index: 2; }
+.cite-rs { position: absolute; width: 28px; height: 28px; pointer-events: auto; touch-action: none; cursor: ew-resize; z-index: 2; }
 /* 아이패드 창 크기 조절 손잡이처럼: 상자 모서리 곡선을 따라가는 짧은 호 */
 .cite-rs::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 16px; height: 16px;
   background: no-repeat center / 16px 16px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 3 V5 A9 9 0 0 1 5 14 H3' fill='none' stroke='%23999' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E"); } /* 아이패드처럼 상자 안쪽에 모서리를 따라 */
