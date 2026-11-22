@@ -85,7 +85,7 @@ export async function run() {
   await check('펜 쓰기 · 되돌리기 · 다시 하기', async () => {
     tool('pen'); await settle();
     const p0 = pixels(ink());
-    stroke(line(80, 300, 300, 320)); await wait(150);
+    stroke(line(80, 300, 300, 320)); await settle();
     const p1 = pixels(ink()); if (p1 <= p0) return '펜 선이 안 그려짐';
     await settle(); undo(); await settle(); if (pixels(ink()) !== p0) return '되돌리기 안 됨';
     redo(); await settle(); return pixels(ink()) === p1 || '다시 하기 안 됨';
@@ -105,26 +105,26 @@ export async function run() {
 
   await check('올가미: 획 일부만 둘러도 고름 · 선택 해제', async () => {
     tool('lasso'); await settle();
-    stroke(box(150, 280, 230, 340)); await wait(200); // 펜 선(80~300)의 가운데만
+    stroke(box(150, 280, 230, 340)); await settle(); // 펜 선(80~300)의 가운데만
     if (!$('.lasso-menu')) return '선택 안 됨';
-    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await wait(200);
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await settle();
     return !$('.lasso-menu') || '해제 안 됨';
   });
   await check('올가미로 옮기기 · 되돌리기', async () => {
     tool('lasso'); await settle();
-    stroke(box(60, 280, 320, 340)); await wait(200);
+    stroke(box(60, 280, 320, 340)); await settle();
     const before = pixels(ink());
     const c = base(), r = c.getBoundingClientRect();
     pe(c, 'pointerdown', r.left + 150, r.top + 310); pe(c, 'pointermove', r.left + 150, r.top + 360); pe(c, 'pointerup', r.left + 150, r.top + 360); await wait(250);
     if (!$('.lasso-menu')) return '옮긴 뒤 선택 유지 안 됨';
-    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await wait(150);
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await settle();
     const moved = ink().getContext('2d').getImageData(0, 0, ink().width, ink().height);
-    undo(); await wait(250);
+    undo(); await settle();
     return pixels(ink()) === before || '되돌리기 후 그림이 달라요 ' + [before, pixels(ink()), moved.width];
   });
 
   await check('구절 고르기: 9→10→11 누적', async () => {
-    for (const n of [9, 10, 11]) { $(`.verse[data-n="${n}"]`)?.click(); await wait(150); }
+    for (const n of [9, 10, 11]) { $(`.verse[data-n="${n}"]`)?.click(); await settle(); }
     const sel = $$('.verse.sel').map((v) => +v.dataset.n);
     return (sel.join() === '9,10,11') || '고른 절: ' + sel.join();
   });
@@ -145,7 +145,7 @@ export async function run() {
     const cb = $('.cite-block'), pr = $$('.page')[0].getBoundingClientRect(), k = pr.width / 726;
     const top = (cb.getBoundingClientRect().top - pr.top) / 1; // 화면 px
     tool('pen'); await settle();
-    stroke(line(100, top + 30, 200, top + 30)); await wait(150);
+    stroke(line(100, top + 30, 200, top + 30)); await settle();
     const grip = $('.cite-grip'), g = grip.getBoundingClientRect();
     const inkBefore = pixels(ink());
     pe(grip, 'pointerdown', g.left + 5, g.top + 5, 902); pe(window, 'pointermove', g.left + 5, g.top + 125, 902); pe(window, 'pointerup', g.left + 5, g.top + 125, 902); await wait(400);
@@ -155,7 +155,7 @@ export async function run() {
     // 글씨도 같이 내려갔는지: 원래 자리에 글씨가 없어야 해요
     const c = ink(), kk = c.width / c.getBoundingClientRect().width;
     const old = c.getContext('2d').getImageData(Math.round(150 * kk), Math.round((top + 30) * kk), 1, 1).data[3];
-    undo(); await wait(300);
+    undo(); await settle();
     return !old || '글씨가 따라오지 않았어요';
   });
   await check('인용을 다음 장으로 옮기기 · 되돌리기 · 자리 유지', async () => {
@@ -176,12 +176,12 @@ export async function run() {
     se.scrollTop = 0; await wait(100);
     const cb = $('.cite-block'), pr = $$('.page')[0].getBoundingClientRect(), top = cb.getBoundingClientRect().top - pr.top;
     tool('pen'); await settle();
-    stroke(line(100, top + 30, 200, top + 30)); await wait(150);
+    stroke(line(100, top + 30, 200, top + 30)); await settle();
     tool('lasso'); await settle();
-    stroke(box(500, top + 5, 560, top + 25)); await wait(250);
+    stroke(box(500, top + 5, 560, top + 25)); await settle();
     const ok = !!$('.lasso-menu');
-    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await wait(150);
-    undo(); await wait(200);
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await settle();
+    undo(); await settle();
     return ok || '인용이 안 골라짐';
   });
 
