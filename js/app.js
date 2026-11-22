@@ -963,14 +963,26 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   }
   // 스크롤하면 종이·버튼 자리가 바뀌니 네이티브에 다시 알려요 (한 프레임에 한 번)
   if (nativeInk) { let q = 0; scrollEl.addEventListener('scroll', () => { if (q) return; q = requestAnimationFrame(() => { q = 0; sendInkConfig(); }); }, { passive: true }); }
-  // 앱이 본 펜슬 탭(종이 밖)을 웹이 못 받았을 때 대신 눌러요. 웹킷이 가끔 펜슬 탭을 안 넘겨줘서 툴바가 안 눌렸어요
+  // 앱이 본 펜슬 탭(종이 밖). 웹킷이 펜슬 탭을 가끔 늦게 주거나 안 줘서 툴바가 느리거나 안 눌렸어요.
+  //  - 툴바 도구·색·굵기·지우개 방식: 닿는 순간(down) 앱 신호로 바로 눌러요. 웹킷이 따로 주는 펜슬 누름은 무시해요(두 번 눌림 방지)
+  //  - 그 밖의 버튼: 뗄 때(up) 웹이 그 탭을 못 받았으면 대신 눌러요
+  const TB_CTRL = '[data-tool], [data-color], [data-size], [data-em]';
   let lastPenDown = 0;
   document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'pen') lastPenDown = performance.now(); }, true);
-  window.lumenibTap = (x, y) => {
-    if (performance.now() - lastPenDown < 600) return; // 웹이 이미 받았어요
+  if (nativeInk) tbSlot.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'pen' && e.pointerId !== 78 && e.target.closest?.(TB_CTRL)) { e.stopImmediatePropagation(); e.preventDefault(); }
+  }, true);
+  window.lumenibTap = (x, y, phase = 'up') => {
     const el = document.elementFromPoint(x, y);
     if (!el) return;
     const o = { clientX: x, clientY: y, bubbles: true, cancelable: true, pointerType: 'pen', pointerId: 78, isPrimary: true, button: 0 };
+    const ctrl = el.closest(TB_CTRL);
+    if (ctrl && tbSlot.contains(ctrl)) {
+      if (phase === 'down') ctrl.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
+      else window.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+      return;
+    }
+    if (phase !== 'up' || performance.now() - lastPenDown < 600) return; // 웹이 이미 받았어요
     el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
     el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
     el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));

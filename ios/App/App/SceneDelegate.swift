@@ -402,14 +402,17 @@ final class InkWindow: UIWindow {
                 b.inkBegin(point(pencil, in: web))
             } else if pencil.phase == .began, tracked == nil, web.hitTest(pencil.location(in: web), with: nil)?.isDescendant(of: web.scrollView) == true {
                 // (앱이 얹은 창·슬라이더 위를 누른 건 제외)
-                // 종이 밖(툴바 등)을 펜슬로 톡 누른 것: 웹킷이 가끔 이 탭을 웹에 안 넘겨서(올가미 직후 등) 기억해 뒀다가 확인해요
-                tap = (pencil, pencil.location(in: web), event.timestamp)
+                // 종이 밖(툴바 등)을 펜슬로 톡 누른 것: 웹킷이 가끔 이 탭을 웹에 안 넘기거나 늦게 넘겨서(올가미 직후 등),
+                // 닿는 순간 앱이 직접 알려요. 툴바 도구·색·굵기는 이걸로 바로 바뀌고, 나머지는 뗄 때 웹이 못 받았으면 대신 눌러요
+                let at = pencil.location(in: web)
+                tap = (pencil, at, event.timestamp)
+                web.evaluateJavaScript("window.lumenibTap && window.lumenibTap(\(at.x), \(at.y), 'down')", completionHandler: nil)
             } else if let t = tap, t.touch === pencil, pencil.phase == .ended {
                 let p = pencil.location(in: web)
                 tap = nil
                 if hypot(p.x - t.at.x, p.y - t.at.y) < 12, event.timestamp - t.time < 0.5 {
                     // 웹이 이미 받았으면 웹 쪽에서 무시해요 (window.lumenibTap)
-                    web.evaluateJavaScript("window.lumenibTap && window.lumenibTap(\(t.at.x), \(t.at.y))", completionHandler: nil)
+                    web.evaluateJavaScript("window.lumenibTap && window.lumenibTap(\(t.at.x), \(t.at.y), 'up')", completionHandler: nil)
                 }
             } else if let t = tap, t.touch === pencil, pencil.phase == .cancelled { tap = nil }
         }
