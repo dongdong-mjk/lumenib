@@ -827,7 +827,7 @@ final class WebInkOverlay: UIView {
         let v0 = CGPoint(x: shapeRef.x - c.x, y: shapeRef.y - c.y), v1 = CGPoint(x: p.x - c.x, y: p.y - c.y)
         let d0 = hypot(v0.x, v0.y), d1 = hypot(v1.x, v1.y)
         if d0 < 4 { return shapeBase }
-        let k = max(0.2, min(5, d1 / d0)), a = atan2(v1.y, v1.x) - atan2(v0.y, v0.x)
+        let k = max(0.05, min(40, d1 / d0)), a = atan2(v1.y, v1.x) - atan2(v0.y, v0.x) // 크기 한계를 넉넉히 (웹과 같음)
         let cs = cos(a) * k, sn = sin(a) * k
         return shapeBase.map { q in let dx = q.x - c.x, dy = q.y - c.y; return SIMD3(c.x + dx * cs - dy * sn, c.y + dx * sn + dy * cs, q.z) }
     }

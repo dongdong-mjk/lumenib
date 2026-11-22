@@ -1407,8 +1407,10 @@ function snapShape(raw) {
   const out = (list, kind, verts) => { const o = [], rr = kind === 'ellipse' ? (v) => Math.round(v * 100) / 100 : round; for (const [x, y] of list) o.push(rr(x), rr(y), pr); o.kind = kind; o.verts = verts; return o; };
   const ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
   // 1) 직선
-  if (ab > 0.75 * len) {
-    // 펜을 댈 때·뗄 때 생기는 작은 갈고리는 빼고 봐요 (형광펜 밑줄이 직선으로 안 잡히던 것)
+  // 직선 판정은 그은 길이 대신 '처음·끝 거리 ≈ 전체 크기'로 봐요.
+  // 펜슬은 멈춰 있어도 미세하게 떨려서 길이가 부풀어, 아이패드에서만 직선으로 안 잡혔어요 (마우스는 안 떨려서 됐어요)
+  if (ab > 0.85 * size) {
+    // 펜을 댈 때·뗄 때 생기는 작은 갈고리는 빼고 봐요
     const cut = Math.floor(P.length * 0.08), mid = P.slice(cut, P.length - cut);
     const dev = Math.max(...(mid.length > 2 ? mid : P).map((q) => segDist(q, a, b)));
     if (dev < Math.max(5, ab * 0.1)) { const e = axisSnap(a, b); return out(sampleSeg(a, e), 'line', [a, e]); }
@@ -1628,7 +1630,7 @@ function shapeAt(sh, x, y) {
   const v0x = sh.ref[0] - cx, v0y = sh.ref[1] - cy, v1x = x - cx, v1y = y - cy;
   const d0 = Math.hypot(v0x, v0y), d1 = Math.hypot(v1x, v1y);
   if (d0 < 4) return sh.base.slice();
-  const k = Math.max(0.2, Math.min(5, d1 / d0)), a = Math.atan2(v1y, v1x) - Math.atan2(v0y, v0x);
+  const k = Math.max(0.05, Math.min(40, d1 / d0)), a = Math.atan2(v1y, v1x) - Math.atan2(v0y, v0x); // 크기 한계를 넉넉히 (종이 끝까지 키울 수 있게)
   const cos = Math.cos(a) * k, sin = Math.sin(a) * k, out = [];
   for (let i = 0; i < sh.base.length; i += 3) {
     const dx = sh.base[i] - cx, dy = sh.base[i + 1] - cy;

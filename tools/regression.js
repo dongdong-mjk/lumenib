@@ -205,6 +205,26 @@ export async function run() {
     const q = poly.pts, d = Math.hypot(q[q.length - 3] - q[0], q[q.length - 2] - q[1]);
     return d < 0.5 || '끝점이 시작점에 안 붙어요 ' + d.toFixed(1) + ' (배율 ' + k.toFixed(2) + ')';
   });
+  await check('펜슬처럼 떨리는 손으로 그은 선도 멈추면 직선 (펜·형광펜)', async () => {
+    const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
+    for (const t of ['pen', 'hl']) {
+      tool(t); await settle();
+      // 촘촘한 점 + 미세한 떨림, 끝에서 멈춘 채로도 조금씩 흔들림 (아이패드 펜슬처럼)
+      const pts = [];
+      for (let i = 0; i <= 150; i++) pts.push([120 + i * 2 + Math.sin(i * 2.7) * 1.2, 620 + i * 0.15 + Math.cos(i * 3.1) * 1.2]);
+      pe(c, 'pointerdown', r.left + pts[0][0], r.top + pts[0][1]);
+      for (const [x, y] of pts.slice(1)) pe(c, 'pointermove', r.left + x, r.top + y);
+      const [ex, ey] = pts.at(-1);
+      for (let j = 0; j < 12; j++) { pe(c, 'pointermove', r.left + ex + Math.sin(j) * 1.5, r.top + ey + Math.cos(j) * 1.5); await wait(60); }
+      await wait(600);
+      pe(c, 'pointerup', r.left + ex, r.top + ey); await settle();
+      const last = P.note.pages[0].strokes.at(-1);
+      undo(); await settle();
+      if (!last?.sh) return t + ': 직선으로 안 바뀜';
+    }
+    tool('pen'); await settle();
+    return true;
+  });
   await check('그리고 멈추면 직선 (형광펜)', async () => {
     tool('hl'); await settle();
     const c = base(), r = c.getBoundingClientRect();
