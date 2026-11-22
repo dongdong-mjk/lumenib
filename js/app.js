@@ -1049,6 +1049,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
       p.clearSelection();
+      p.flushPages(true); // 아직 안 그린 장까지 다 그린 뒤 내보내요
       const n = p.note;
       const used = (i) => i === 0 || n.pages[i]?.strokes.length || n.citations.some((c) => c.page === i);
       const pages = p.pages.filter((pg) => pg && used(pg.i));

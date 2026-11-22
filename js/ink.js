@@ -119,7 +119,10 @@ export class Paper {
         }
       }
     };
-    this._onScroll = () => { cancelAnimationFrame(this._sbRaf); this._sbRaf = requestAnimationFrame(() => this.updateBars()); };
+    this._onScroll = () => {
+      if (this.pages?.some((q) => q?.dirty)) this.flushPages(); // 아직 안 그린 장이 보이면 바로 그려요
+      cancelAnimationFrame(this._sbRaf); this._sbRaf = requestAnimationFrame(() => this.updateBars());
+    };
     scrollEl.addEventListener('scroll', this._onScroll, { passive: true });
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
     scrollEl.addEventListener('touchmove', this._touchBlock, { passive: false });
@@ -129,6 +132,7 @@ export class Paper {
 
   destroy() {
     this._ro.disconnect();
+    cancelAnimationFrame(this._flushRaf);
     this.scrollEl.removeEventListener('touchstart', this._touchBlock);
     this.scrollEl.removeEventListener('scroll', this._onScroll);
     this._bars?.v.remove(); this._bars?.h.remove();
@@ -424,11 +428,13 @@ export class Paper {
     const avail = this.scrollEl.clientWidth - 40;
     const w = Math.round(Math.max(320, Math.min(avail, 1100)) * (this.zoom || 1));
     this.scale = w / PAGE_W;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const h0 = Math.round(PAGE_H * this.scale);
+    // 크게 확대하면 캔버스가 너무 커져서(아이패드 한도 넘음) 버벅이고 그림이 빠질 수 있어요. 한 장 크기를 한도 안으로
+    const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(14e6 / (w * h0)));
     this.pagesEl.style.width = w + 'px';
     for (const p of this.pages) {
       if (!p) continue;
-      const h = Math.round(PAGE_H * this.scale);
+      const h = h0;
       p.el.style.width = w + 'px';
       p.el.style.height = h + 'px';
       p.inner.style.transform = p.ui.style.transform = `scale(${this.scale})`;
@@ -439,10 +445,26 @@ export class Paper {
         c.style.height = h + 'px';
       }
       p.dpr = dpr;
-      this.drawBackground(p);
-      this.drawPage(p);
+      p.dirty = true; // 그림은 보이는 장부터 그려요 (아래 flushPages)
     }
     this.positionLassoMenu();
+    // 확대·축소 뒤 모든 장을 한꺼번에 다시 그리면 버벅였어요. 스크롤 위치가 정해진 뒤(같은 순간 안) 보이는 장만 바로 그리고 나머지는 한 장씩
+    queueMicrotask(() => this.flushPages());
+  }
+
+  flushPages(all = false) {
+    if (!this.pages) return;
+    const r = this.scrollEl.getBoundingClientRect(), m = r.height; // 화면 위아래로 한 화면씩 여유
+    let rest = false;
+    for (const p of this.pages) {
+      if (!p?.dirty) continue;
+      const b = p.el.getBoundingClientRect();
+      if (all || (b.bottom > r.top - m && b.top < r.bottom + m)) this.drawPage(p); else rest = true;
+    }
+    if (rest && !all) {
+      cancelAnimationFrame(this._flushRaf);
+      this._flushRaf = requestAnimationFrame(() => { const p = this.pages?.find((q) => q?.dirty); if (p) { this.drawPage(p); this.flushPages(); } });
+    }
   }
 
   // ---------- 그리기 ----------
@@ -477,6 +499,7 @@ export class Paper {
   }
 
   drawPage(page) {
+    if (page.dirty) { page.dirty = false; this.drawBackground(page); }
     const ctx = this.ctxFor(page.base, page), ictx = this.ctxFor(page.ink, page);
     ctx.clearRect(0, 0, PAGE_W, PAGE_H);
     ictx.clearRect(0, 0, PAGE_W, PAGE_H);
