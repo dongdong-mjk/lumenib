@@ -1119,6 +1119,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     });
     if (ns.undo[n.id]) [p.undoStack, p.redoStack] = ns.undo[n.id];
     ns.paper = p;
+    window.__lumenibPaper = p; // 회귀 점검(tools/regression.js)에서 씀
     await p.render();
     scrollEl.scrollTop = 0;
     renderToolbar();

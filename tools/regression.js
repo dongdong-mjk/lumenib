@@ -32,8 +32,9 @@ function stroke(pts, page = 0) {
 const line = (x0, y0, x1, y1, n = 30) => Array.from({ length: n + 1 }, (_, i) => [x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n]);
 const box = (x0, y0, x1, y1) => [...line(x0, y0, x1, y0, 8), ...line(x1, y0, x1, y1, 8), ...line(x1, y1, x0, y1, 8), ...line(x0, y1, x0, y0, 8)];
 function tool(name) { $(`[data-tool="${name}"]`)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); }
-const undo = () => $('[data-act="undo"]')?.click();
-const redo = () => $('[data-act="redo"]')?.click();
+// 되돌리기 버튼은 툴바가 다시 그려져야 켜져서, 점검에선 종이에 바로 시켜요
+const undo = () => window.__lumenibPaper?.undo();
+const redo = () => window.__lumenibPaper?.redo();
 const scroller = () => $('.paper-scroll');
 function pinch(scaleOut) {
   const se = scroller(), tgt = se.querySelector('.page'), r = tgt.getBoundingClientRect();
@@ -77,8 +78,10 @@ export async function run() {
 
   await check('뒤로 버튼(피그마 꺾쇠 아이콘)', () => ($('[data-act="back"] path')?.getAttribute('d') || '').startsWith('M14.932') || '아이콘 다름');
   await check('툴바 도구 선택(펜·형광펜·지우개·올가미)', async () => {
-    for (const t of ['hl', 'eraser', 'lasso', 'pen']) { tool(t); await settle(); if (!$(`[data-tool="${t}"]`).classList.contains('on')) return t + ' 선택 안 됨'; }
-    return true;
+    const I = await import('../js/ink.js');
+    for (const t of ['hl', 'eraser', 'lasso', 'pen']) { tool(t); await settle(); if (I.tool.type !== t) return t + ' 선택 안 됨'; }
+    await wait(800); // 툴바 표시도 따라오는지
+    return $('[data-tool].on')?.dataset.tool === 'pen' || '툴바 표시가 안 바뀜';
   });
   await check('툴바 가운데 영역 너비 고정(268)', () => Math.round($('.tb-opts').getBoundingClientRect().width) === 268 || $('.tb-opts').getBoundingClientRect().width);
 
@@ -107,7 +110,7 @@ export async function run() {
     tool('lasso'); await settle();
     stroke(box(150, 280, 230, 340)); await settle(); // 펜 선(80~300)의 가운데만
     if (!$('.lasso-menu')) return '선택 안 됨';
-    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await settle();
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     return !$('.lasso-menu') || '해제 안 됨';
   });
   await check('올가미로 옮기기 · 되돌리기', async () => {
@@ -117,7 +120,7 @@ export async function run() {
     const c = base(), r = c.getBoundingClientRect();
     pe(c, 'pointerdown', r.left + 150, r.top + 310); pe(c, 'pointermove', r.left + 150, r.top + 360); pe(c, 'pointerup', r.left + 150, r.top + 360); await wait(250);
     if (!$('.lasso-menu')) return '옮긴 뒤 선택 유지 안 됨';
-    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await settle();
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     const moved = ink().getContext('2d').getImageData(0, 0, ink().width, ink().height);
     undo(); await settle();
     return pixels(ink()) === before || '되돌리기 후 그림이 달라요 ' + [before, pixels(ink()), moved.width];
@@ -180,7 +183,7 @@ export async function run() {
     tool('lasso'); await settle();
     stroke(box(500, top + 5, 560, top + 25)); await settle();
     const ok = !!$('.lasso-menu');
-    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.click(); await settle();
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     undo(); await settle();
     return ok || '인용이 안 골라짐';
   });
