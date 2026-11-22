@@ -106,6 +106,26 @@ export async function run() {
     return alphas.size <= 2 || '겹친 곳 진하기가 달라요 ' + [...alphas];
   });
 
+  await check('두 손가락 탭 = 되돌리기 · 펜슬 직후 손바닥 탭은 무시', async () => {
+    tool('pen'); await settle();
+    stroke(line(80, 500, 300, 510)); await settle();
+    const tgt = $$('.page')[0], r = tgt.getBoundingClientRect();
+    const T = (id, x, y, type = 'direct') => new Touch({ identifier: id, target: tgt, clientX: x, clientY: y, touchType: type });
+    const tap = (withPencil) => {
+      const a = T(11, r.left + 200, r.top + 600), b = T(12, r.left + 260, r.top + 600);
+      tgt.dispatchEvent(new TouchEvent('touchstart', { touches: [a, b], targetTouches: [a, b], changedTouches: [a, b], bubbles: true, cancelable: true }));
+      if (withPencil) { const p = T(13, r.left + 300, r.top + 300, 'stylus'); tgt.dispatchEvent(new TouchEvent('touchstart', { touches: [a, b, p], targetTouches: [a, b, p], changedTouches: [p], bubbles: true, cancelable: true })); }
+      tgt.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [a, b], bubbles: true, cancelable: true }));
+    };
+    const n0 = window.__lumenibPaper.undoStack.length;
+    tap(true); await wait(500);
+    if (window.__lumenibPaper.undoStack.length !== n0) return '펜슬과 같이 닿은 탭에 되돌려짐';
+    await wait(900);
+    tap(false); await wait(500);
+    if (window.__lumenibPaper.undoStack.length !== n0 - 1) return '두 손가락 탭으로 안 되돌려짐';
+    redo(); await settle();
+    return true;
+  });
   await check('올가미: 획 일부만 둘러도 고름 · 선택 해제', async () => {
     tool('lasso'); await settle();
     stroke(box(150, 280, 230, 340)); await settle(); // 펜 선(80~300)의 가운데만

@@ -90,10 +90,20 @@ export class Paper {
       // 버튼(올가미 메뉴, 인용 빼기 등)은 펜슬로 눌러도 클릭이 되게 막지 않아요
       if (e.target.closest && e.target.closest('button, .lasso-menu, .cite-ui, input, a')) return;
       const stylus = [...e.touches].some((t) => t.touchType === 'stylus');
-      if (stylus) { if (!this.readonly) e.preventDefault(); return; }
+      if (stylus) {
+        // 펜슬이 닿으면 방금 손바닥이 만든 '두 손가락 탭'은 되돌리기가 아니에요
+        this._lastPencil = performance.now();
+        if (this._tap2) this._tap2.ok = false;
+        clearTimeout(this._tap2Timer);
+        if (!this.readonly) e.preventDefault();
+        return;
+      }
       // 두 손가락 탭 = 되돌리기 (짧게 톡, 거의 안 움직였을 때만)
       if (e.type === 'touchstart') {
-        if (e.touches.length === 2 && !this._tap2) this._tap2 = { t: performance.now(), pts: [...e.touches].map((t) => [t.identifier, t.clientX, t.clientY]), ok: true };
+        // 손바닥은 닿는 면이 넓어요(반지름이 큼). 그런 접촉이나 펜슬을 쓰던 직후의 탭은 되돌리기로 안 봐요
+        const palm = [...e.touches].some((t) => (t.radiusX || 0) > 40 || (t.radiusY || 0) > 40);
+        if (e.touches.length === 2 && !this._tap2) this._tap2 = { t: performance.now(), pts: [...e.touches].map((t) => [t.identifier, t.clientX, t.clientY]), ok: !palm && performance.now() - (this._lastPencil || 0) > 800 };
+        else if (this._tap2 && palm) this._tap2.ok = false;
         else if (e.touches.length > 2 && this._tap2) this._tap2.ok = false;
       } else if (this._tap2 && this._tap2.ok) {
         for (const t of e.touches) {
@@ -115,7 +125,12 @@ export class Paper {
       if (e.touches.length === 0 && this._tap2) {
         const tp = this._tap2; this._tap2 = null;
         if (tp.ok && performance.now() - tp.t < 350 && !this.readonly) {
-          if (this.undoStack.length) { this.undo(); toast('되돌렸어요'); } else toast('되돌릴 게 없어요');
+          // 손바닥을 대고 곧바로 펜슬을 대는 경우가 있어서, 잠깐 기다렸다가 펜슬이 안 오면 되돌려요
+          clearTimeout(this._tap2Timer);
+          this._tap2Timer = setTimeout(() => {
+            if (performance.now() - (this._lastPencil || 0) < 600) return;
+            if (this.undoStack.length) { this.undo(); toast('되돌렸어요'); } else toast('되돌릴 게 없어요');
+          }, 220);
         }
       }
     };
