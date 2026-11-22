@@ -225,6 +225,32 @@ export async function run() {
     tool('pen'); await settle();
     return true;
   });
+  await check('대충 그린 네모(변 중간에서 시작·끝이 지나침·약간 사다리꼴) → 반듯한 네모, 꼬리 없음', async () => {
+    tool('pen'); await settle();
+    const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
+    const L = (a, b, n = 14) => Array.from({ length: n + 1 }, (_, i) => [a[0] + (b[0] - a[0]) * i / n + Math.sin(i * 2.1) * 1.5, a[1] + (b[1] - a[1]) * i / n + Math.cos(i * 1.7) * 1.5]);
+    // 윗변 가운데에서 시작 → 오른쪽 위 → 오른쪽 아래(조금 안쪽) → 왼쪽 아래 → 왼쪽 위 → 시작점을 지나쳐서 끝
+    const pts = [...L([440, 300], [560, 296]), ...L([560, 296], [552, 400]), ...L([552, 400], [330, 404]), ...L([330, 404], [322, 300]), ...L([322, 300], [470, 302])];
+    pe(c, 'pointerdown', r.left + pts[0][0], r.top + pts[0][1]);
+    for (const [x, y] of pts.slice(1)) pe(c, 'pointermove', r.left + x, r.top + y);
+    await wait(750);
+    pe(c, 'pointerup', r.left + pts.at(-1)[0], r.top + pts.at(-1)[1]); await settle();
+    const s = P.note.pages[0].strokes.at(-1);
+    undo(); await settle();
+    if (!s?.sh) return '도형으로 안 바뀜';
+    // 꼭짓점: 방향이 크게 바뀌는 곳 세기
+    const q = []; for (let i = 0; i < s.pts.length; i += 3) q.push([s.pts[i], s.pts[i + 1]]);
+    let corners = 0; const step = 6;
+    for (let i = step; i < q.length - step; i += 1) {
+      const a1 = Math.atan2(q[i][1] - q[i - step][1], q[i][0] - q[i - step][0]), a2 = Math.atan2(q[i + step][1] - q[i][1], q[i + step][0] - q[i][0]);
+      let d = Math.abs(a1 - a2); if (d > Math.PI) d = 2 * Math.PI - d;
+      if (d > 1.2) { corners++; i += step * 2; }
+    }
+    const xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
+    // 반듯한 네모면 변이 수평·수직: 위·아래 변의 y 차이가 거의 없음
+    const top = ys.filter((y) => y < Math.min(...ys) + 3).length, ok = corners >= 3 && corners <= 4;
+    return ok || '꼭짓점 수가 이상해요 ' + corners;
+  });
   await check('그리고 멈추면 직선 (형광펜)', async () => {
     tool('hl'); await settle();
     const c = base(), r = c.getBoundingClientRect();

@@ -1416,16 +1416,17 @@ function snapShape(raw) {
     if (dev < Math.max(5, ab * 0.1)) { const e = axisSnap(a, b); return out(sampleSeg(a, e), 'line', [a, e]); }
   }
   const closedish = ab < Math.max(14, size * 0.25);
-  // 2) 꺾은선: 꼭짓점을 찾고, 각 구간이 곧은지 봐요
+  // 2) 꺾은선: 큰 꺾임만 꼭짓점으로 (짧은 흔들림·작은 꺾임은 무시)
   let poly = null;
-  for (const f of [0.1, 0.07, 0.05]) {
-    let vs = rdp(P, Math.max(3, size * f));
-    vs = dropSmallTurns(vs, size * f);
-    if (vs.length < 3 || vs.length > 9) continue;
+  for (const f of [0.12, 0.09, 0.07]) {
+    const eps = Math.max(3, size * f);
+    let vs = closedish ? cleanLoop(polyVertices(P, eps), size) : dropSmallTurns(rdp(P, eps), size * 0.12);
+    if (vs.length < 3 || vs.length > (closedish ? 6 : 8)) { if (!(closedish && vs.length === 10)) continue; }
+    const segs = closedish ? vs.map((q, i) => [q, vs[(i + 1) % vs.length]]) : vs.slice(0, -1).map((u, k) => [u, vs[k + 1]]);
     let err = 0;
-    for (let i = 0; i < P.length; i++) err += Math.min(...vs.slice(0, -1).map((u, k) => segDist(P[i], u, vs[k + 1])));
+    for (const q of P) err += Math.min(...segs.map(([u, v]) => segDist(q, u, v)));
     err /= P.length * size;
-    if (err < 0.03 && (!poly || vs.length < poly.vs.length)) poly = { vs, err };
+    if (err < 0.045 && (!poly || vs.length < poly.vs.length)) poly = { vs, err };
   }
   // 3) 원·타원
   const ell = fitEllipse(P);
@@ -1434,11 +1435,19 @@ function snapShape(raw) {
   // 둥근 모양이면 원이 우선 (꼭짓점이 많거나, 다각형보다 원이 더 잘 맞을 때)
   const preferCircle = round_ && (!poly || poly.vs.length > 6 || ell.err < poly.err * 2.5);
   if (poly && !preferCircle) {
+    if (closedish) {
+      // 닫힌 도형: 시작·끝 위치와 상관없이 꼭짓점끼리 이어서 닫아요 (튀어나온 꼬리 없이)
+      let vs = poly.vs.map((q) => q.slice());
+      if (vs.length === 4) vs = squareUp(vs); // 네 각이 거의 직각이면 반듯한 네모 (기울기는 그린 대로)
+      let k = 0;
+      vs.forEach((q, i) => { if (Math.hypot(q[0] - a[0], q[1] - a[1]) < Math.hypot(vs[k][0] - a[0], vs[k][1] - a[1])) k = i; });
+      const loop = [...vs.slice(k), ...vs.slice(0, k)];
+      loop.push(loop[0].slice());
+      return out(chainPts(loop), 'closed-poly', loop);
+    }
     const vs = poly.vs.map((q) => q.slice());
-    vs[0] = a.slice();
-    if (closedish) vs[vs.length - 1] = vs[0]; // 끝이 시작점 근처면 붙여서 닫아요
-    else vs[vs.length - 1] = b.slice();
-    return out(chainPts(vs), closedish ? 'closed-poly' : 'open', vs);
+    vs[0] = a.slice(); vs[vs.length - 1] = b.slice();
+    return out(chainPts(vs), 'open', vs);
   }
   if (!round_) return null;
   let { c, rx, ry, rot } = ell;
@@ -1455,6 +1464,46 @@ function chainPts(vs) {
   const o = [];
   for (let i = 0; i < vs.length - 1; i++) o.push(...sampleSeg(vs[i], vs[i + 1], 2).slice(i ? 1 : 0));
   return o;
+}
+// 닫힌 꼭짓점 고리 정리: 작은 꺾임(35° 미만)과 아주 짧은 변(전체의 12% 미만)의 꼭짓점은 빼요
+function cleanLoop(vs, size) {
+  vs = vs.slice();
+  for (let changed = true; changed && vs.length > 3;) {
+    changed = false;
+    for (let i = 0; i < vs.length && vs.length > 3; i++) {
+      const p0 = vs[(i - 1 + vs.length) % vs.length], p1 = vs[i], p2 = vs[(i + 1) % vs.length];
+      const v1 = [p1[0] - p0[0], p1[1] - p0[1]], v2 = [p2[0] - p1[0], p2[1] - p1[1]];
+      const turn = Math.abs(Math.atan2(v1[0] * v2[1] - v1[1] * v2[0], v1[0] * v2[0] + v1[1] * v2[1]));
+      if (turn < 35 * DEG || Math.hypot(v1[0], v1[1]) < size * 0.12) { vs.splice(i, 1); changed = true; i--; }
+    }
+  }
+  return vs;
+}
+// 네 각이 모두 직각에 가까우면(±20°) 반듯한 직사각형으로. 기울기는 그린 대로, 수평·수직 8° 안이면 딱 맞춤
+function squareUp(vs) {
+  const ang = (u, v) => Math.atan2(v[1] - u[1], v[0] - u[0]);
+  for (let i = 0; i < 4; i++) {
+    const p0 = vs[(i + 3) % 4], p1 = vs[i], p2 = vs[(i + 1) % 4];
+    const a1 = ang(p1, p0), a2 = ang(p1, p2);
+    let d = Math.abs(a1 - a2) % (2 * Math.PI); if (d > Math.PI) d = 2 * Math.PI - d;
+    if (Math.abs(d - Math.PI / 2) > 20 * DEG) return vs;
+  }
+  // 변 방향 평균으로 회전각 (90° 단위로 접어서)
+  let sx = 0, sy = 0;
+  for (let i = 0; i < 4; i++) { const t = ang(vs[i], vs[(i + 1) % 4]) * 4; sx += Math.cos(t); sy += Math.sin(t); }
+  let rot = Math.atan2(sy, sx) / 4;
+  const g = ((rot % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2);
+  if (g < 8 * DEG) rot -= g; else if (Math.PI / 2 - g < 8 * DEG) rot += Math.PI / 2 - g;
+  const c = [avg(vs.map((q) => q[0])), avg(vs.map((q) => q[1]))], cs = Math.cos(rot), sn = Math.sin(rot);
+  const loc = vs.map(([x, y]) => [(x - c[0]) * cs + (y - c[1]) * sn, -(x - c[0]) * sn + (y - c[1]) * cs]);
+  const hw = (Math.max(...loc.map((q) => q[0])) - Math.min(...loc.map((q) => q[0]))) / 2;
+  const hh = (Math.max(...loc.map((q) => q[1])) - Math.min(...loc.map((q) => q[1]))) / 2;
+  const ox = (Math.max(...loc.map((q) => q[0])) + Math.min(...loc.map((q) => q[0]))) / 2, oy = (Math.max(...loc.map((q) => q[1])) + Math.min(...loc.map((q) => q[1]))) / 2;
+  // 그린 순서(방향)를 지켜서 꼭짓점을 돌려줘요
+  const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([x, y]) => [c[0] + (x + ox) * cs - (y + oy) * sn, c[1] + (x + ox) * sn + (y + oy) * cs]);
+  const order = corners.map((q) => vs.reduce((bi, v, i) => (Math.hypot(v[0] - q[0], v[1] - q[1]) < Math.hypot(vs[bi][0] - q[0], vs[bi][1] - q[1]) ? i : bi), 0));
+  const res = vs.map((_, i) => corners[order.indexOf(i)] || vs[i]);
+  return res;
 }
 // 거의 일직선으로 이어지는 꼭짓점은 빼요 (손 떨림으로 생긴 잔 꺾임)
 function dropSmallTurns(vs, eps) {
@@ -1619,7 +1668,7 @@ function shapeAt(sh, x, y) {
     for (let i = 0; i <= N; i++) out.push(round(cx + ((x - cx) * i) / N), round(cy + ((y - cy) * i) / N), sh.p);
     return out;
   }
-  if ((sh.kind === 'open' || sh.kind === 'closed-poly') && sh.verts) {
+  if (sh.kind === 'open' && sh.verts) {
     // 마지막 꼭짓점(펜 끝)이 펜을 따라와요. 시작점에 가까이 대면 붙어서 닫혀요
     const vs = sh.verts.slice(0, -1).map((q) => q.slice()), s0 = vs[0];
     vs.push(Math.hypot(x - s0[0], y - s0[1]) < MERGE_DIST ? s0 : [x, y]);
@@ -1645,7 +1694,7 @@ export function snapForNative(flat, scale) {
   const pts = snapShape(P);
   if (!pts) return null;
   const back = (a) => a.map((v, i) => (i % 3 === 2 ? v : v * scale));
-  return { line: pts.kind === 'line', kind: pts.kind === 'closed-poly' ? 'open' : pts.kind, verts: pts.verts ? pts.verts.flatMap(([x, y]) => [x * scale, y * scale]) : null, merge: MERGE_DIST * scale, pts: back(pts) };
+  return { line: pts.kind === 'line', kind: pts.kind, verts: pts.verts ? pts.verts.flatMap(([x, y]) => [x * scale, y * scale]) : null, merge: MERGE_DIST * scale, pts: back(pts) };
 }
 // 예전 획: np(필압 끔) → 볼펜, 표시 없음 → 만년필(그때 기본이 필압 켜짐)
 const penStyleOf = (s) => s.ps || (s.np ? 'ball' : 'fountain');
