@@ -195,17 +195,18 @@ struct LumenStroke: Codable {
 
 private let REF_SIZE = 2.6 * 1.25
 
-struct LumenStyleParams { var scale: Double; var thinning: Double; var taper: Double; var stream: Double; var flat: Double }
+struct LumenStyleParams { var scale: Double; var thinning: Double; var taper: Double; var stream: Double; var flat: Double; var sigma: Double = 0 }
 
 func lumenParams(_ st: LumenPenStyle, _ po: [String: Double]) -> LumenStyleParams {
     let v = { (k: LumenPenOption) in po[k.rawValue] ?? k.defaultValue }
-    let stream = 0.25 + (v(.stab) / 100) * 0.6
+    // 손떨림 보정 (웹 styleOpts 와 같음): 선 끝은 펜촉에 바로 붙고, 지나온 부분을 앞뒤 점과 고르게 다듬어요
+    let stream = 0.15, sigma = (v(.stab) / 100) * 6
     switch st {
-    case .ball: return .init(scale: 1, thinning: 0, taper: 0, stream: stream, flat: 0)
+    case .ball: return .init(scale: 1, thinning: 0, taper: 0, stream: stream, flat: 0, sigma: sigma)
     case .fountain:
         let flat = v(.flat) / 100
-        return .init(scale: 1, thinning: max(0.2 + (v(.pressure) / 100) * 0.8, 0.85 * flat), taper: (v(.sharp) / 100) * 12, stream: stream, flat: flat)
-    case .brush: return .init(scale: 1.4, thinning: 0.8, taper: (v(.sharp) / 100) * 26, stream: stream, flat: 0)
+        return .init(scale: 1, thinning: max(0.2 + (v(.pressure) / 100) * 0.8, 0.85 * flat), taper: (v(.sharp) / 100) * 12, stream: stream, flat: flat, sigma: sigma)
+    case .brush: return .init(scale: 1.4, thinning: 0.8, taper: (v(.sharp) / 100) * 26, stream: stream, flat: 0, sigma: sigma)
     }
 }
 
@@ -218,6 +219,16 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
     while i + 2 < s.pts.count {
         pts.append(SIMD3(s.pts[i] * k, s.pts[i + 1] * k, s.style == .ball ? 0.5 : s.pts[i + 2]))
         i += 3
+    }
+    if o.sigma >= 0.5, pts.count >= 3 {
+        // 지나온 점을 앞뒤로 고르게 다듬기 (웹 gaussSmooth 와 같음)
+        let n = pts.count, R = Int(ceil(o.sigma * 2)), src = pts
+        for i in 1..<(n - 1) {
+            let r = min(R, i, n - 1 - i)
+            var sx = 0.0, sy = 0.0, sw = 0.0
+            for j in -r...r { let w = exp(-Double(j * j) / (2 * o.sigma * o.sigma)); sx += src[i + j].x * w; sy += src[i + j].y * w; sw += w }
+            pts[i].x = sx / sw; pts[i].y = sy / sw
+        }
     }
     if o.flat > 0 {
         // 평평함: 45° 기울어진 납작한 펜촉처럼 긋는 방향에 따라 굵기

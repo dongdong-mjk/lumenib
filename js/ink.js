@@ -539,7 +539,7 @@ export class Paper {
       if (cur && e.pointerType === 'touch') return;
       if (t === 'pen' || t === 'hl') {
         const s = t === 'pen'
-          ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, pts: [x, y, pr] }
+          ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, sv: 2, pts: [x, y, pr] }
           : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x, y, 0.5] };
         cur = { kind: 'draw', s };
         this.drawLive(page, s);
@@ -1049,7 +1049,7 @@ export class Paper {
     const loc = ([cx, cy, pr]) => [round((cx - r.left) / this.scale), round((cy - r.top) / this.scale), Math.round(pr * 100) / 100];
     const [x0, y0, p0] = loc(pts[0]);
     const s = tool.type === 'pen'
-      ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, pts: [x0, y0, p0] }
+      ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, sv: 2, pts: [x0, y0, p0] }
       : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x0, y0, 0.5] };
     for (let i = 1; i < pts.length; i++) {
       const [x, y, pr] = loc(pts[i]);
@@ -1137,10 +1137,11 @@ function drawStroke(ctx, s, live = false) {
   }
   // 펜: 필압을 부드럽게 다듬은 외곽선을 만들어 면으로 채워요 (선 가장자리가 매끈하게)
   // 굵기마다 다듬는 정도가 달라지지 않게, 가운데 굵기 기준으로 좌표를 키웠다 줄여서 계산해요
-  const st = penStyleOf(s), o = styleOpts(st, s.po);
+  const st = penStyleOf(s), o = styleOpts(st, s.po, !s.sv);
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   const pts = [];
   for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
+  if (o.sigma) gaussSmooth(pts, o.sigma);
   if (o.flat) applyFlatNib(pts, o.flat);
   const raw = getStroke(pts, strokeOpts(o, live));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
@@ -1319,15 +1320,29 @@ export { snapShape as _snapShapeForTest };
 // 예전 획: np(필압 끔) → 볼펜, 표시 없음 → 만년필(그때 기본이 필압 켜짐)
 const penStyleOf = (s) => s.ps || (s.np ? 'ball' : 'fountain');
 // 펜 종류 + 세부 설정 → 그리는 방식. po가 없는 예전 획은 그때 모양 그대로.
-function styleOpts(st, po) {
+function styleOpts(st, po, legacy = false) {
   if (!po) return { ball: { scale: 1, thinning: 0, taper: 0, stream: 0.5 }, fountain: { scale: 1, thinning: 0.6, taper: 0, stream: 0.5 }, brush: { scale: 1.4, thinning: 0.75, taper: 14, stream: 0.5 } }[st];
-  const stream = 0.25 + (po.stab / 100) * 0.6; // 손떨림 보정: 클수록 손 떨림을 더 눌러 줌
-  if (st === 'ball') return { scale: 1, thinning: 0, taper: 0, stream };
+  // 손떨림 보정 (11/22, 굿노트처럼): 선 끝은 펜촉에 바로 붙어 따라오고(stream 작게), 지나온 부분을 앞뒤 점과 고르게 다듬어요(sigma).
+  // 예전 획(sv 없음)은 그때 방식(늦게 따라오는 stream) 그대로 그려요
+  const stream = legacy ? 0.25 + (po.stab / 100) * 0.6 : 0.15;
+  const sigma = legacy ? 0 : (po.stab / 100) * 6;
+  if (st === 'ball') return { scale: 1, thinning: 0, taper: 0, stream, sigma };
   if (st === 'fountain') {
     const flat = (po.flat || 0) / 100;
-    return { scale: 1, thinning: Math.max(0.2 + (po.pressure / 100) * 0.8, 0.85 * flat), taper: (po.sharp / 100) * 12, stream, flat };
+    return { scale: 1, thinning: Math.max(0.2 + (po.pressure / 100) * 0.8, 0.85 * flat), taper: (po.sharp / 100) * 12, stream, flat, sigma };
   }
-  return { scale: 1.4, thinning: 0.8, taper: (po.sharp / 100) * 26, stream };
+  return { scale: 1.4, thinning: 0.8, taper: (po.sharp / 100) * 26, stream, sigma };
+}
+// 지나온 점을 앞뒤로 고르게 다듬기 (양 끝 점은 그대로, 끝에 가까울수록 덜 다듬어서 펜촉 쪽은 바로 붙어 있어요)
+function gaussSmooth(pts, sigma) {
+  if (sigma < 0.5 || pts.length < 3) return;
+  const n = pts.length, R = Math.ceil(sigma * 2), src = pts.map((q) => [q[0], q[1]]);
+  for (let i = 1; i < n - 1; i++) {
+    const r = Math.min(R, i, n - 1 - i);
+    let sx = 0, sy = 0, sw = 0;
+    for (let j = -r; j <= r; j++) { const w = Math.exp(-(j * j) / (2 * sigma * sigma)); sx += src[i + j][0] * w; sy += src[i + j][1] * w; sw += w; }
+    pts[i][0] = sx / sw; pts[i][1] = sy / sw;
+  }
 }
 function strokeOpts(o, live) {
   return {
