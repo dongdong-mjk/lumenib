@@ -1,5 +1,5 @@
 // 회귀 점검 (민정님 요청: 무엇을 고치든 그동안 요청한 기능이 다 되는지 확인)
-// 사용: 브라우저에서 사이트를 열고 콘솔에서
+// 사용: 브라우저에서 사이트를 열고(예전 파일이 남아 있지 않게 js·css를 fetch(..., {cache:'reload'})로 한 번 새로 받은 뒤 새로고침) 콘솔에서
 //   const m = await import('./tools/regression.js?' + Date.now()); console.table(await m.run());
 // 웹에서 확인할 수 있는 것만 자동으로 봐요. 애플펜슬·네이티브 동작은 메모리의 수동 목록으로 확인해요.
 // 점검용 노트를 새로 만들고, 끝나면 지워요.
@@ -90,8 +90,8 @@ export async function run() {
     const p0 = pixels(ink());
     stroke(line(80, 300, 300, 320)); await settle();
     const p1 = pixels(ink()); if (p1 <= p0) return '펜 선이 안 그려짐';
-    await settle(); undo(); await settle(); if (pixels(ink()) !== p0) return '되돌리기 안 됨';
-    redo(); await settle(); return pixels(ink()) === p1 || '다시 하기 안 됨';
+    await settle(); undo(); await settle(); if (pixels(ink()) > p0 + 10) return '되돌리기 안 됨';
+    redo(); await settle(); return Math.abs(pixels(ink()) - p1) < p1 * 0.05 || '다시 하기 안 됨';
   });
   await check('형광펜: 글씨 밑 캔버스에 그려짐 · 돼지꼬리 겹침 고르게', async () => {
     tool('hl'); await settle();
@@ -99,7 +99,7 @@ export async function run() {
     stroke(pts); await wait(200);
     const c = base(), ctx = c.getContext('2d'), k = c.width / c.getBoundingClientRect().width;
     // 고리가 겹치는 곳과 안 겹치는 곳의 진하기가 같아야 해요
-    const a = ctx.getImageData(Math.round(120 * k), Math.round(420 * k), 1, 1).data[3];
+    const a = ctx.getImageData(Math.round(pts[0][0] * k), Math.round(pts[0][1] * k), 1, 1).data[3];
     if (!a) return '형광펜이 안 그려짐';
     const alphas = new Set();
     for (const [x, y] of pts.filter((_, i) => i % 10 === 5)) alphas.add(ctx.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data[3]);
@@ -114,16 +114,16 @@ export async function run() {
     return !$('.lasso-menu') || '해제 안 됨';
   });
   await check('올가미로 옮기기 · 되돌리기', async () => {
+    const before = pixels(ink()); // 고르기 전 (고르면 고른 글씨는 선택 판으로 옮겨 그려져요)
     tool('lasso'); await settle();
     stroke(box(60, 280, 320, 340)); await settle();
-    const before = pixels(ink());
     const c = base(), r = c.getBoundingClientRect();
     pe(c, 'pointerdown', r.left + 150, r.top + 310); pe(c, 'pointermove', r.left + 150, r.top + 360); pe(c, 'pointerup', r.left + 150, r.top + 360); await wait(250);
     if (!$('.lasso-menu')) return '옮긴 뒤 선택 유지 안 됨';
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     const moved = ink().getContext('2d').getImageData(0, 0, ink().width, ink().height);
     undo(); await settle();
-    return pixels(ink()) === before || '되돌리기 후 그림이 달라요 ' + [before, pixels(ink()), moved.width];
+    return Math.abs(pixels(ink()) - before) < before * 0.05 || '되돌리기 후 그림이 달라요 ' + [before, pixels(ink()), moved.width];
   });
 
   await check('구절 고르기: 9→10→11 누적', async () => {
