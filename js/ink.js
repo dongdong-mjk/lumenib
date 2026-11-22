@@ -707,7 +707,7 @@ export class Paper {
       cur = null;
       if (k.hold) clearTimeout(k.hold.t);
       if (k.raf) cancelAnimationFrame(k.raf);
-      if (k.ghost) { k.ghost.remove(); for (const c of this.selection?.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.visibility = ''; }
+      if (k.ghost) { k.ghost.remove(); for (const c of this.selection?.cites || []) for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.visibility = ''; }
       if (k.kind === 'draw') {
         if (k.s.pts.length === 3) k.s.pts.push(k.s.pts[0] + 0.3, k.s.pts[1] + 0.3, k.s.pts[2]);
         this.pagePush(page.i);
@@ -757,7 +757,7 @@ export class Paper {
           if (sel.poly) sel.poly = sel.poly.map(([px, py]) => [px + k.dx, py + k.dy]);
           this.changed(page, false);
         }
-        for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = '';
+        for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.transform = '';
         this.drawSelection(page);
         this.showLassoMenu();
       } else if (k.kind === 'scale') {
@@ -884,8 +884,14 @@ export class Paper {
     if (!poly?.length) return;
     const u = 1 / this.scale;
     ctx.save();
+    // 펜슬 점이 촘촘하고 떨려서 점선이 뭉개져 보였어요: 화면 3px 안쪽 점은 건너뛰고 부드러운 곡선으로 이어요
+    const q = [poly[0]];
+    for (const p of poly) { const l = q[q.length - 1]; if (Math.hypot(p[0] - l[0], p[1] - l[1]) >= 3 * u) q.push(p); }
+    if (q.length > 1 && q[q.length - 1] !== poly[poly.length - 1]) q.push(poly[poly.length - 1]);
     ctx.beginPath();
-    poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.moveTo(q[0][0], q[0][1]);
+    for (let i = 1; i < q.length - 1; i++) ctx.quadraticCurveTo(q[i][0], q[i][1], (q[i][0] + q[i + 1][0]) / 2, (q[i][1] + q[i + 1][1]) / 2);
+    if (q.length > 1) ctx.lineTo(q[q.length - 1][0], q[q.length - 1][1]);
     if (close) ctx.closePath();
     ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.lineJoin = 'round';
     ctx.stroke();
@@ -977,7 +983,7 @@ export class Paper {
     const ctx = this.clearLive(page);
     // 고른 인용 블록은 옮기는 동안 위아래로 같이 따라와요 (인용은 가로로는 안 움직여요)
     for (const c of sel.cites || []) {
-      for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
+      for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
     }
     const b = sel.box;
     const ox = sc ? sc.h.ax : 0, oy = sc ? sc.h.ay : 0, kx = sc ? sc.kx : 1, ky = sc ? sc.ky : 1;
@@ -989,8 +995,7 @@ export class Paper {
     // 상자는 배율만큼 커지되, 선 굵기와 손잡이 크기는 화면 기준으로 일정하게
     const nb = [ox + (b[0] - ox) * kx, oy + (b[1] - oy) * ky, ox + (b[2] - ox) * kx, oy + (b[3] - oy) * ky];
     const u = 1 / this.scale;
-    if (sel.poly) this.strokeLasso(ctx, sel.poly.map(([px, py]) => [ox + (px - ox) * kx, oy + (py - oy) * ky]));
-    else { ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]); }
+    ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]); // 고른 뒤엔 사각형 (11/23 결정)
     ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 2 * u;
     if (!sel.cites?.size) for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
     ctx.restore();
@@ -1012,7 +1017,7 @@ export class Paper {
         if (!el) continue;
         const cl = el.cloneNode(true); cl.style.transform = ''; cl.classList.add('moving');
         inner.appendChild(cl);
-        for (const o of [el, citeUis.get(c)]) if (o) o.style.visibility = 'hidden';
+        for (const o of [el, citeUis.get(c), citeRs.get(c)]) if (o) o.style.visibility = 'hidden'; // 크기 조절 손잡이도 같이 숨겨요 (원래 자리에 남아 있던 것)
       }
       g.appendChild(inner);
       const cv = document.createElement('canvas');
@@ -1022,8 +1027,7 @@ export class Paper {
       const ctx = this.ctxFor(cv, page);
       for (const q of sel.set) if (q.tool === 'hl') drawStroke(ctx, q);
       for (const q of sel.set) if (q.tool !== 'hl') drawStroke(ctx, q);
-      if (sel.poly) this.strokeLasso(ctx, sel.poly);
-      else { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
+      { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
       this.pagesEl.appendChild(g);
       this.clearLive(page); // 원래 자리의 선택 그림은 지워요
       k.ghost = g;
@@ -1033,7 +1037,7 @@ export class Paper {
 
   clearSelection() {
     const sel = this.selection;
-    for (const c of sel?.cites || []) for (const el of [citeEls.get(c), citeUis.get(c)]) if (el) el.style.transform = '';
+    for (const c of sel?.cites || []) for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.transform = '';
     this.selection = null;
     this.hideLassoMenu();
     if (sel) this.drawPage(this.pages[sel.page]);

@@ -297,18 +297,17 @@ export async function run() {
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     return !$('.lasso-menu') || '해제 안 됨';
   });
-  await check('올가미로 옮기기 · 되돌리기 · 고른 영역은 올가미 모양 그대로', async () => {
+  await check('올가미로 옮기기 · 되돌리기 · 선택 사각형도 같이', async () => {
     const before = pixels(ink()); // 고르기 전 (고르면 고른 글씨는 선택 판으로 옮겨 그려져요)
     tool('lasso'); await settle();
     stroke(box(60, 280, 320, 340)); await settle();
     const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
-    const poly0 = P.selection?.poly; // 고른 영역은 그린 올가미 모양 그대로 (굿노트처럼)
-    if (!poly0 || poly0.length < 5) return '고른 영역이 올가미 모양이 아니에요';
-    const y0 = poly0[0][1];
+    const y0 = P.selection?.box?.[1];
+    if (y0 == null) return '고르기 안 됨';
     pe(c, 'pointerdown', r.left + 150, r.top + 310); pe(c, 'pointermove', r.left + 150, r.top + 360); pe(c, 'pointerup', r.left + 150, r.top + 360); await wait(250);
     if (!$('.lasso-menu')) return '옮긴 뒤 선택 유지 안 됨';
     const k = r.width / 726;
-    if (Math.abs((P.selection.poly[0][1] - y0) * k - 50) > 3) return '올가미 모양이 글씨와 같이 안 움직여요';
+    if (Math.abs((P.selection.box[1] - y0) * k - 50) > 3) return '선택 사각형이 글씨와 같이 안 움직여요';
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     const moved = ink().getContext('2d').getImageData(0, 0, ink().width, ink().height);
     undo(); await settle();
@@ -377,7 +376,7 @@ export async function run() {
     return ok || '인용이 안 골라짐';
   });
 
-  await check('올가미로 인용 두 개 옮기기 · 되돌리기 (가볍게)', async () => {
+  await check('올가미로 인용 두 개 옮기기 · 되돌리기 (가볍게) · 크기 조절 손잡이도 같이', async () => {
     se.scrollTop = 0; await wait(100);
     $('.verse[data-n="20"]')?.click(); await wait(300);
     $$('.bp-action button').find((b) => /인용으로|노트에 넣기/.test(b.textContent))?.click(); await settle();
@@ -393,8 +392,11 @@ export async function run() {
     if (!$('.lasso-menu')) return '두 인용이 안 골라짐';
     const c = base(), r = c.getBoundingClientRect();
     const t1 = performance.now();
-    pe(c, 'pointerdown', r.left + 520, r.top + y0 + 20); pe(c, 'pointermove', r.left + 520, r.top + y0 + 80); pe(c, 'pointerup', r.left + 520, r.top + y0 + 80);
+    pe(c, 'pointerdown', r.left + 520, r.top + y0 + 20); pe(c, 'pointermove', r.left + 520, r.top + y0 + 80);
+    const rsLeft = [...$$('.page')[0].querySelectorAll('.cite-rs')].some((el) => el.style.visibility !== 'hidden'); // 옮기는 동안 크기 조절 손잡이가 원래 자리에 남으면 안 돼요
+    pe(c, 'pointerup', r.left + 520, r.top + y0 + 80);
     const cost = performance.now() - t1; await settle();
+    if (rsLeft) return '옮기는 동안 크기 조절 손잡이가 원래 자리에 남아 있어요';
     const moved = tops();
     $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
     undo(); await settle();
