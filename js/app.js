@@ -708,13 +708,21 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   tbSlot.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.tb-menu')) return; // 펼친 창 안(슬라이더 등)은 그대로
     tbPressing = true;
+    // 손을 뗀 신호가 가끔 안 와서(누른 버튼이 다시 그려져 사라진 경우 등) 툴바가 계속 '누르는 중'으로 멈춰
+    // 다시 그려지지 않았어요(선택이 안 되는 것처럼 보임). 잠시 뒤엔 무조건 풀어요
+    clearTimeout(tbTimer); tbTimer = setTimeout(tbRelease, 700);
     if (e.target.closest('[data-tool], [data-color], [data-size], [data-em]')) e.preventDefault();
   }, true);
+  let tbTimer = 0;
   const tbRelease = () => {
+    clearTimeout(tbTimer);
     if (!tbPressing) return;
     tbPressing = false;
     if (tbPending) { tbPending = false; requestAnimationFrame(renderToolbar); }
   };
+  // 툴바 밖을 새로 누르면 툴바 누름은 끝난 거예요
+  const tbOutside = (e) => { if (tbPressing && !tbSlot.contains(e.target)) tbRelease(); };
+  document.addEventListener('pointerdown', tbOutside, true);
   window.addEventListener('pointerup', tbRelease, true);
   window.addEventListener('pointercancel', tbRelease, true);
 
@@ -1276,7 +1284,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     });
   }
 
-  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); ns.offInk?.(); document.removeEventListener('pointerdown', closeMenusOutside, true); window.removeEventListener('pointerup', tbRelease, true); window.removeEventListener('pointercancel', tbRelease, true); };
+  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); ns.offInk?.(); document.removeEventListener('pointerdown', closeMenusOutside, true); window.removeEventListener('pointerup', tbRelease, true); window.removeEventListener('pointercancel', tbRelease, true); document.removeEventListener('pointerdown', tbOutside, true); clearTimeout(tbTimer); };
 
   renderTabs();
   renderInfo();
