@@ -115,9 +115,28 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         if relaying { relay("move", pts) } else { inkOverlay.add(pts, predicted: pred) }
     }
     func inkCancel() { unlockScrolls(); if relaying { relay("cancel", []) } else { inkOverlay.clear() } }
-    private func relay(_ type: String, _ pts: [SIMD3<Double>]) {
+    // 지우개·올가미 펜슬 움직임을 웹에 넘기기.
+    // 움직일 때마다 바로 보내면 웹이 처리하기 전에 계속 쌓여서, 펜을 뗀 뒤에도 한동안 밀린 걸 처리하느라 화면이 멈추고
+    // 툴바 누름도 늦게 먹혔어요. 이제 앞의 묶음을 웹이 다 처리한 뒤에 그동안 모인 움직임을 한 번에 보내요
+    private var relayInFlight = false
+    private var relayPending: [SIMD3<Double>] = []
+    private func relayJS(_ type: String, _ pts: [SIMD3<Double>]) -> String {
         let arr = pts.map { "[\(($0.x * 10).rounded() / 10),\(($0.y * 10).rounded() / 10),\(($0.z * 100).rounded() / 100)]" }.joined(separator: ",")
-        webView?.evaluateJavaScript("window.lumenibPointer && window.lumenibPointer('\(type)', [\(arr)])", completionHandler: nil)
+        return "window.lumenibPointer && window.lumenibPointer('\(type)', [\(arr)]);"
+    }
+    private func pumpRelay() {
+        guard !relayInFlight, !relayPending.isEmpty, let web = webView else { return }
+        let pts = relayPending; relayPending = []
+        relayInFlight = true
+        web.evaluateJavaScript(relayJS("move", pts)) { [weak self] _, _ in self?.relayInFlight = false; self?.pumpRelay() }
+    }
+    private func relay(_ type: String, _ pts: [SIMD3<Double>]) {
+        if type == "move" { relayPending += pts; pumpRelay(); return }
+        // 시작·끝은 바로 보내요 (쌓여 있던 움직임을 먼저 붙여서 순서를 지켜요)
+        var js = ""
+        if !relayPending.isEmpty { js += relayJS("move", relayPending); relayPending = [] }
+        js += relayJS(type, pts)
+        webView?.evaluateJavaScript(js, completionHandler: nil)
     }
 
     // 노트 종이 스크롤만 손가락으로만 스크롤되게 해요 (성경 목록 같은 다른 스크롤은 펜슬로도 돼요).

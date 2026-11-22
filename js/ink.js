@@ -1167,6 +1167,12 @@ export class Paper {
     if (pageIdx === 0) y = Math.max(y, page.linesTop - 10);
     const estH = 46 + (cite.text?.length || 1) * 20;
     y = Math.max(20, Math.min(y, PAGE_H - estH - 20));
+    if (!at) {
+      // 같은 자리에 이미 인용이 있으면 그 아래로 (겹쳐서 하나가 사라진 것처럼 보였어요)
+      const others = this.note.citations.filter((q) => q.page === pageIdx).sort((a, b) => a.y - b.y);
+      for (const q of others) { const h = citeEls.get(q)?.offsetHeight || 60; if (y + estH > q.y && y < q.y + h) y = q.y + h + 12; }
+      y = Math.min(y, PAGE_H - estH - 20);
+    }
     const c = { ...cite, page: pageIdx, y: Math.round(y), t: Date.now() };
     this.note.citations.push(c);
     this.renderCitations(page);
