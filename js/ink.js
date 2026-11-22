@@ -996,7 +996,10 @@ export class Paper {
     const d = JSON.parse(json);
     this.note.pages = d.pages; this.note.citations = d.citations; this.note.passages = d.passages;
     this.selection = null; this.hideLassoMenu();
+    // 되돌리기로 노트를 다시 그려도 보던 자리(확대·스크롤)를 그대로 둬요 (왼쪽 위로 튀던 것)
+    const el = this.scrollEl, sl = el.scrollLeft, st = el.scrollTop;
     this.render();
+    el.scrollLeft = sl; el.scrollTop = st;
     this.onChange({ structure: true });
     this.onHistory();
   }
