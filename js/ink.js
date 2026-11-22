@@ -1330,7 +1330,7 @@ function styleOpts(st, po) {
 }
 function strokeOpts(o, live) {
   return {
-    size: REF_SIZE, thinning: o.thinning, smoothing: 0.6, streamline: live ? Math.max(0.2, o.stream - 0.15) : o.stream,
+    size: REF_SIZE, thinning: o.thinning, smoothing: 0.6, streamline: o.stream, // 쓰는 중과 완성본이 같은 보정
     simulatePressure: false, last: !live,
     easing: (t) => Math.sin((t * Math.PI) / 2),
     start: { taper: o.taper, cap: true }, end: { taper: live ? 0 : o.taper, cap: true },

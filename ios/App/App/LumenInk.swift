@@ -231,7 +231,7 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
     }
     var opt = Freehand.Options()
     opt.size = REF_SIZE; opt.thinning = o.thinning; opt.smoothing = 0.6
-    opt.streamline = live ? max(0.2, o.stream - 0.15) : o.stream
+    opt.streamline = o.stream // 쓰는 중에도 완성본과 같은 보정 (떼는 순간 선 모양이 바뀌던 것)
     opt.easing = { sin($0 * Double.pi / 2) }
     opt.taperStart = o.taper; opt.taperEnd = live ? 0 : o.taper
     opt.last = !live
@@ -771,6 +771,14 @@ final class WebInkOverlay: UIView {
         let l = CAShapeLayer()
         l.frame = live.frame
         l.path = live.path; l.fillColor = live.fillColor; l.strokeColor = live.strokeColor
+        if config.tool != .highlighter, !pts.isEmpty {
+            // 펜을 뗀 뒤 모양(끝 가늘어짐 포함)으로 바꿔 둬요. 웹이 그린 선과 똑같아서 넘어갈 때 달라 보이지 않아요
+            var flat: [Double] = []
+            for p in pts { flat += [p.x, p.y, p.z] }
+            let st = LumenStroke(tool: config.tool, style: config.style, opts: config.opts, color: config.color,
+                                 width: config.width * Double(config.scale), pts: flat)
+            l.path = lumenPenPath(st, live: false)
+        }
         l.lineWidth = live.lineWidth; l.lineCap = live.lineCap; l.lineJoin = live.lineJoin
         l.compositingFilter = live.compositingFilter
         l.mask = clipMask()
