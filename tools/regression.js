@@ -188,6 +188,30 @@ export async function run() {
     return ok || '인용이 안 골라짐';
   });
 
+  await check('올가미로 인용 두 개 옮기기 · 되돌리기 (가볍게)', async () => {
+    se.scrollTop = 0; await wait(100);
+    $('.verse[data-n="20"]')?.click(); await wait(300);
+    $$('.bp-action button').find((b) => /인용으로|노트에 넣기/.test(b.textContent))?.click(); await settle();
+    const blocks = $$('.page')[0].querySelectorAll('.cite-block');
+    if (blocks.length < 2) return '인용이 2개가 아님 ' + blocks.length;
+    const pr = $$('.page')[0].getBoundingClientRect();
+    const tops = () => [...$$('.page')[0].querySelectorAll('.cite-block')].map((b) => Math.round(b.getBoundingClientRect().top - pr.top));
+    const t0 = tops(), y0 = Math.min(...t0) - 10, y1 = Math.max(...t0) + 40;
+    tool('lasso'); await settle();
+    stroke(box(480, y0, 560, y1)); await settle();
+    if (!$('.lasso-menu')) return '두 인용이 안 골라짐';
+    const c = base(), r = c.getBoundingClientRect();
+    const t1 = performance.now();
+    pe(c, 'pointerdown', r.left + 520, r.top + y0 + 20); pe(c, 'pointermove', r.left + 520, r.top + y0 + 80); pe(c, 'pointerup', r.left + 520, r.top + y0 + 80);
+    const cost = performance.now() - t1; await settle();
+    const moved = tops();
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
+    undo(); await settle();
+    const back = tops();
+    if (moved.join() === t0.join()) return '안 움직임';
+    if (back.join() !== t0.join()) return '되돌리기 후 자리 다름 ' + [t0, back];
+    return cost < 60 || '손 뗄 때 처리가 무거움 ' + Math.round(cost) + 'ms';
+  });
   await check('종이 종류 바꿔도 확대·스크롤 유지 · 마지막 종이 기억', async () => {
     se.scrollTop = 300; await wait(100);
     const st = se.scrollTop;

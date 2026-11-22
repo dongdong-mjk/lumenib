@@ -656,7 +656,9 @@ export class Paper {
       } else if (k.kind === 'move') {
         if (Math.abs(k.dx) + Math.abs(k.dy) > 1) {
           const sel = this.selection;
-          if (sel.cites?.size) this.pushHistory(); else this.pagePush(sel.page); // 인용이 섞이면 노트 전체로 기억
+          // 인용이 섞이면: 노트 전체를 저장하면 손을 뗀 뒤 한동안 버벅여서, 인용 자리와 그 장 획 목록만 기억해요
+          if (sel.cites?.size) this._push({ t: 'cites', items: [...sel.cites].map((c) => ({ ci: this.note.citations.indexOf(c), page: c.page, y: c.y })), strokes: { [sel.page]: this.note.pages[sel.page].strokes.slice() } });
+          else this.pagePush(sel.page);
           this.cloneSelection();
           for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + k.dy); } }
           if (sel.cites?.size) {
@@ -959,6 +961,9 @@ export class Paper {
     this.redoStack = [];
   }
   _now(e) {
+    if (e.t === 'cites') {
+      return { t: 'cites', items: e.items.map(({ ci }) => { const c = this.note.citations[ci]; return { ci, page: c?.page, y: c?.y }; }), strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
+    }
     if (e.t === 'cite') {
       const c = this.note.citations[e.ci];
       return { t: 'cite', ci: e.ci, page: c?.page, y: c?.y, strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
@@ -969,6 +974,16 @@ export class Paper {
   }
   _apply(e) {
     if (e.t === 'full') return this.restore(e.json);
+    if (e.t === 'cites') {
+      // 올가미로 인용 여러 개 옮기기를 되돌려요 (빠름)
+      const touched = new Set(Object.keys(e.strokes).map(Number));
+      for (const it of e.items) { const c = this.note.citations[it.ci]; if (!c) continue; touched.add(c.page); c.page = it.page; c.y = it.y; touched.add(it.page); }
+      for (const k of Object.keys(e.strokes)) if (this.note.pages[k]) this.note.pages[k].strokes = e.strokes[k].slice();
+      if (this.selection) { this.selection = null; this.hideLassoMenu(); }
+      for (const i of touched) { const pg = this.pages[i]; if (pg) { this.renderCitations(pg); this.drawPage(pg); } }
+      this.onChange({}); this.onHistory();
+      return;
+    }
     if (e.t === 'cite') {
       // 인용 옮기기: 인용 자리와 관련된 장의 획만 되돌려요 (빠름)
       const c = this.note.citations[e.ci];
