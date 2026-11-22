@@ -781,7 +781,7 @@ final class WebInkOverlay: UIView {
     private var holdAnchor: CGPoint = .zero
     private(set) var shaped = false
     private var shapeLine = false, shapeBase: [SIMD3<Double>] = [], shapeC = CGPoint.zero, shapeRef = CGPoint.zero
-    private var shapeOpen: [CGPoint]? = nil, shapeMerge: Double = 14
+    private var shapeOpen: [CGPoint]? = nil, shapeMerge: Double = 14, shapeRot: Double = 0
     private var drawOpts: [String: Double] { shaped ? config.opts.merging(["_raw": 1]) { a, _ in a } : config.opts }
     private func armHold(_ p: CGPoint) {
         holdAnchor = p
@@ -791,9 +791,9 @@ final class WebInkOverlay: UIView {
             self.onHold?(self.pts)
         }
     }
-    func applyShape(line: Bool, open: [CGPoint]? = nil, merge: Double = 14, _ list: [SIMD3<Double>]) {
+    func applyShape(line: Bool, open: [CGPoint]? = nil, merge: Double = 14, rot: Double = 0, _ list: [SIMD3<Double>]) {
         guard !list.isEmpty, let last = pts.last else { return }
-        shaped = true; shapeLine = line; shapeBase = list; shapeOpen = open; shapeMerge = merge
+        shaped = true; shapeLine = line; shapeBase = list; shapeOpen = open; shapeMerge = merge; shapeRot = rot
         let n = Double(list.count)
         shapeC = line ? CGPoint(x: list[0].x, y: list[0].y) : CGPoint(x: list.reduce(0) { $0 + $1.x } / n, y: list.reduce(0) { $0 + $1.y } / n)
         shapeRef = CGPoint(x: last.x, y: last.y)
@@ -824,12 +824,19 @@ final class WebInkOverlay: UIView {
             }
             return (0...24).map { i in let t = Double(i) / 24; return SIMD3(c.x + (e.x - c.x) * t, c.y + (e.y - c.y) * t, z) }
         }
-        let v0 = CGPoint(x: shapeRef.x - c.x, y: shapeRef.y - c.y), v1 = CGPoint(x: p.x - c.x, y: p.y - c.y)
-        let d0 = hypot(v0.x, v0.y), d1 = hypot(v1.x, v1.y)
-        if d0 < 4 { return shapeBase }
-        let k = max(0.05, min(40, d1 / d0)), a = atan2(v1.y, v1.x) - atan2(v0.y, v0.x) // 크기 한계를 넉넉히 (웹과 같음)
-        let cs = cos(a) * k, sn = sin(a) * k
-        return shapeBase.map { q in let dx = q.x - c.x, dy = q.y - c.y; return SIMD3(c.x + dx * cs - dy * sn, c.y + dx * sn + dy * cs, q.z) }
+        // 닫힌 도형·원 (굿노트처럼, 웹 stretchShape 와 같음): 펜 반대쪽을 고정하고 가로·세로를 따로 늘려요
+        let cs = cos(shapeRot), sn = sin(shapeRot)
+        let A = CGPoint(x: 2 * c.x - shapeRef.x, y: 2 * c.y - shapeRef.y)
+        func toL(_ q: CGPoint) -> (Double, Double) { let dx = q.x - A.x, dy = q.y - A.y; return (dx * cs + dy * sn, -dx * sn + dy * cs) }
+        let r0 = toL(shapeRef), r1 = toL(p)
+        func lim(_ v: Double) -> Double { (v < 0 ? -1 : 1) * min(40, max(0.02, abs(v))) }
+        var sx: Double? = abs(r0.0) > 4 ? r1.0 / r0.0 : nil, sy: Double? = abs(r0.1) > 4 ? r1.1 / r0.1 : nil
+        if sx == nil { sx = sy ?? 1 }; if sy == nil { sy = sx }
+        let kx = lim(sx!), ky = lim(sy!)
+        return shapeBase.map { q in
+            let (u, v) = toL(CGPoint(x: q.x, y: q.y)); let X = u * kx, Y = v * ky
+            return SIMD3(A.x + X * cs - Y * sn, A.y + X * sn + Y * cs, q.z)
+        }
     }
 
     func begin(_ p: SIMD3<Double>) {

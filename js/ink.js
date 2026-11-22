@@ -1443,7 +1443,10 @@ function snapShape(raw) {
       vs.forEach((q, i) => { if (Math.hypot(q[0] - a[0], q[1] - a[1]) < Math.hypot(vs[k][0] - a[0], vs[k][1] - a[1])) k = i; });
       const loop = [...vs.slice(k), ...vs.slice(0, k)];
       loop.push(loop[0].slice());
-      return out(chainPts(loop), 'closed-poly', loop);
+      const po = out(chainPts(loop), 'closed-poly', loop);
+      // 늘리는 방향 기준: 네모면 그 기울기, 아니면 가로·세로
+      po.rot = vs.length === 4 ? (((Math.atan2(vs[1][1] - vs[0][1], vs[1][0] - vs[0][0]) % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2)) : 0;
+      return po;
     }
     const vs = poly.vs.map((q) => q.slice());
     vs[0] = a.slice(); vs[vs.length - 1] = b.slice();
@@ -1457,7 +1460,7 @@ function snapShape(raw) {
   const start = Math.atan2(a[1] - c[1], a[0] - c[0]) - rot, dir = turnDir(P), cs = Math.cos(rot), sn = Math.sin(rot);
   const o = [];
   for (let i = 0; i <= n; i++) { const t = start + dir * (i / n) * Math.PI * 2, ex = rx * Math.cos(t), ey = ry * Math.sin(t); o.push([c[0] + ex * cs - ey * sn, c[1] + ex * sn + ey * cs]); }
-  return out(o, 'ellipse', null);
+  const eo = out(o, 'ellipse', null); eo.rot = rot; return eo;
 }
 // 꼭짓점 사이를 촘촘한 점으로 (그리기·지우개가 정확하게 닿도록)
 function chainPts(vs) {
@@ -1657,7 +1660,7 @@ function shapeState(pts, raw) {
   for (let i = 0; i < pts.length; i += 3) { cx += pts[i]; cy += pts[i + 1]; }
   const kind = pts.kind || 'closed';
   const ref = [raw[raw.length - 3], raw[raw.length - 2]];
-  return { kind, line: kind === 'line', verts: pts.verts, base: pts.slice(), c: kind === 'line' ? [pts[0], pts[1]] : [cx / n, cy / n], ref, p: pts[2] };
+  return { kind, line: kind === 'line', verts: pts.verts, rot: pts.rot || 0, base: pts.slice(), c: kind === 'line' ? [pts[0], pts[1]] : [cx / n, cy / n], ref, p: pts[2] };
 }
 const MERGE_DIST = 14; // 끝점을 시작점에 이만큼(종이 단위) 가까이 대면 붙어요
 function shapeAt(sh, x, y) {
@@ -1676,14 +1679,23 @@ function shapeAt(sh, x, y) {
     for (const q of chainPts(vs)) out.push(round(q[0]), round(q[1]), sh.p);
     return out;
   }
-  const v0x = sh.ref[0] - cx, v0y = sh.ref[1] - cy, v1x = x - cx, v1y = y - cy;
-  const d0 = Math.hypot(v0x, v0y), d1 = Math.hypot(v1x, v1y);
-  if (d0 < 4) return sh.base.slice();
-  const k = Math.max(0.05, Math.min(40, d1 / d0)), a = Math.atan2(v1y, v1x) - Math.atan2(v0y, v0x); // 크기 한계를 넉넉히 (종이 끝까지 키울 수 있게)
-  const cos = Math.cos(a) * k, sin = Math.sin(a) * k, out = [];
-  for (let i = 0; i < sh.base.length; i += 3) {
-    const dx = sh.base[i] - cx, dy = sh.base[i + 1] - cy;
-    out.push(round(cx + dx * cos - dy * sin), round(cy + dx * sin + dy * cos), sh.base[i + 2]);
+  // 닫힌 도형·원 (굿노트처럼): 펜 반대쪽을 고정하고, 펜 쪽을 잡아당기듯 가로·세로를 따로 늘려요 (비율이 펜 위치대로 바뀜)
+  return stretchShape(sh.base, [cx, cy], sh.ref, [x, y], sh.rot || 0);
+}
+function stretchShape(base, c, ref, pen, rot) {
+  const cs = Math.cos(rot), sn = Math.sin(rot);
+  const A = [2 * c[0] - ref[0], 2 * c[1] - ref[1]]; // 펜 반대쪽(고정점)
+  const toL = (x, y) => { const dx = x - A[0], dy = y - A[1]; return [dx * cs + dy * sn, -dx * sn + dy * cs]; };
+  const r0 = toL(ref[0], ref[1]), r1 = toL(pen[0], pen[1]);
+  const lim = (v) => Math.sign(v || 1) * Math.min(40, Math.max(0.02, Math.abs(v)));
+  let sx = Math.abs(r0[0]) > 4 ? r1[0] / r0[0] : null, sy = Math.abs(r0[1]) > 4 ? r1[1] / r0[1] : null;
+  if (sx == null) sx = sy ?? 1; if (sy == null) sy = sx;
+  sx = lim(sx); sy = lim(sy);
+  const out = [];
+  for (let i = 0; i < base.length; i += 3) {
+    const [u, v] = toL(base[i], base[i + 1]), X = u * sx, Y = v * sy;
+    const f = (v) => Math.round(v * 100) / 100; // 원도 매끄럽게 (0.01 단위)
+    out.push(f(A[0] + X * cs - Y * sn), f(A[1] + X * sn + Y * cs), base[i + 2]);
   }
   return out;
 }
@@ -1694,7 +1706,7 @@ export function snapForNative(flat, scale) {
   const pts = snapShape(P);
   if (!pts) return null;
   const back = (a) => a.map((v, i) => (i % 3 === 2 ? v : v * scale));
-  return { line: pts.kind === 'line', kind: pts.kind, verts: pts.verts ? pts.verts.flatMap(([x, y]) => [x * scale, y * scale]) : null, merge: MERGE_DIST * scale, pts: back(pts) };
+  return { line: pts.kind === 'line', kind: pts.kind, rot: pts.rot || 0, verts: pts.verts ? pts.verts.flatMap(([x, y]) => [x * scale, y * scale]) : null, merge: MERGE_DIST * scale, pts: back(pts) };
 }
 // 예전 획: np(필압 끔) → 볼펜, 표시 없음 → 만년필(그때 기본이 필압 켜짐)
 const penStyleOf = (s) => s.ps || (s.np ? 'ball' : 'fountain');

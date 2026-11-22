@@ -251,6 +251,24 @@ export async function run() {
     const top = ys.filter((y) => y < Math.min(...ys) + 3).length, ok = corners >= 3 && corners <= 4;
     return ok || '꼭짓점 수가 이상해요 ' + corners;
   });
+  await check('멈춘 뒤 펜을 옆으로 움직이면 네모가 가로로만 늘어남 (굿노트처럼 비율이 펜 위치대로)', async () => {
+    tool('pen'); await settle();
+    const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
+    const L = (a, b, n = 12) => Array.from({ length: n + 1 }, (_, i) => [a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]);
+    const pts = [...L([320, 300], [420, 300]), ...L([420, 300], [420, 380]), ...L([420, 380], [320, 380]), ...L([320, 380], [320, 302])];
+    pe(c, 'pointerdown', r.left + 320, r.top + 300);
+    for (const [x, y] of pts.slice(1)) pe(c, 'pointermove', r.left + x, r.top + y);
+    await wait(750);
+    pe(c, 'pointermove', r.left + 240, r.top + 302); // 펜(왼쪽 위 모서리)을 왼쪽으로 80
+    pe(c, 'pointerup', r.left + 240, r.top + 302); await settle();
+    const s = P.note.pages[0].strokes.at(-1);
+    undo(); await settle();
+    if (!s?.sh) return '도형으로 안 바뀜';
+    const xs = s.pts.filter((_, i) => i % 3 === 0), ys = s.pts.filter((_, i) => i % 3 === 1);
+    const k = r.width / 726, w = (Math.max(...xs) - Math.min(...xs)) * k, h = (Math.max(...ys) - Math.min(...ys)) * k;
+    if (Math.abs(h - 80) > 8) return '세로도 바뀌었어요 ' + Math.round(h);
+    return Math.abs(w - 180) < 10 || '가로가 펜 위치만큼 안 늘었어요 ' + Math.round(w);
+  });
   await check('그리고 멈추면 직선 (형광펜)', async () => {
     tool('hl'); await settle();
     const c = base(), r = c.getBoundingClientRect();

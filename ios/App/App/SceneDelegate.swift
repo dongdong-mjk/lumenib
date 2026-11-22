@@ -77,7 +77,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             if (obj["kind"] as? String) == "open", let v = obj["verts"] as? [Double], v.count >= 4 {
                 open = stride(from: 0, to: v.count - 1, by: 2).map { CGPoint(x: v[$0], y: v[$0 + 1]) }
             }
-            self.inkOverlay.applyShape(line: (obj["line"] as? Bool) ?? false, open: open, merge: (obj["merge"] as? Double) ?? 14, list)
+            self.inkOverlay.applyShape(line: (obj["line"] as? Bool) ?? false, open: open, merge: (obj["merge"] as? Double) ?? 14, rot: (obj["rot"] as? Double) ?? 0, list)
         }
     }
     private var inkConfig = WebInkConfig()
