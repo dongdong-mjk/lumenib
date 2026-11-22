@@ -194,7 +194,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         unlockScrolls()
         if relaying { relay("up", [inkLastPoint ?? SIMD3(0, 0, 0.5)]); relaying = false; return }
         do {
-            let pts = inkOverlay.pts.map { [($0.x * 10).rounded() / 10, ($0.y * 10).rounded() / 10, ($0.z * 100).rounded() / 100] }
+            let q: Double = inkOverlay.shaped ? 100 : 10 // 도형(원)은 더 촘촘하게 (확대 시 지글거림)
+            let pts = inkOverlay.pts.map { [($0.x * q).rounded() / q, ($0.y * q).rounded() / q, ($0.z * 100).rounded() / 100] }
             guard let data = try? JSONSerialization.data(withJSONObject: pts), let json = String(data: data, encoding: .utf8) else { inkOverlay.clear(); return }
             // 웹이 노트에 넣어 다시 그린 다음에 지워서 깜빡이지 않게
             let shaped = inkOverlay.shaped

@@ -307,7 +307,7 @@ button { touch-action: manipulation; }
 .page canvas.bg { z-index: -1; }
 .page-ui { position: absolute; left: 0; top: 0; width: 726px; transform-origin: 0 0; pointer-events: none; z-index: 3; }
 /* 옮기기·빼기: 32×32 (WCAG 2.2 최소 24×24 이상), 아이콘 간격을 좁혀 한 묶음으로 보이게 (11/23, 전 40×40) */
-.cite-ui { position: absolute; right: 22px; display: flex; gap: 0; padding-top: 4px; pointer-events: auto; }
+.cite-ui { position: absolute; right: 22px; display: flex; gap: 0; padding-top: 5px; pointer-events: auto; } /* 피그마: 상자 오른쪽 위에서 5·5 */
 .cite-ui button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; touch-action: none; }
 .cite-ui button:active { background: #eee; }
 .cite-grip { cursor: grab; }

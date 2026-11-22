@@ -295,7 +295,7 @@ export class Paper {
     u.className = 'cite-ui';
     citeUis.set(c, u);
     u.style.top = c.y + 'px';
-    u.style.right = (PAGE_W - citeX(c) - citeW(c) + 2) + 'px';
+    u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
     u.innerHTML = `<button class="cite-grip" aria-label="옮기기"><svg width="18" height="18" viewBox="0 0 24 24" fill="#555"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button><button class="cite-x" aria-label="빼기"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
     page.ui.appendChild(u);
     // 오른쪽 아래 손잡이로 인용 상자 너비 조절 (높이는 내용만큼 따라와요)
@@ -318,7 +318,7 @@ export class Paper {
       const w = Math.round(Math.max(220, Math.min(PAGE_W - 20 - citeX(c), rz.w0 + (e.clientX - rz.x0) / this.scale)));
       c.w = w >= PAGE_W - 41 && citeX(c) <= 20 ? undefined : w; // 끝까지 늘리면 원래대로(가로 전체)
       el.style.right = c.w ? 'auto' : ''; el.style.width = c.w ? c.w + 'px' : '';
-      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 2) + 'px';
+      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
       placeRs();
     });
     const rsEnd = (e) => {
@@ -393,7 +393,7 @@ export class Paper {
       if (nx !== d.cx || c.x != null) c.x = nx;
       if (Math.abs(nx - d.cx) > 1) d.moved = true;
       el.style.left = citeX(c) + 'px';
-      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 2) + 'px';
+      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
       el.style.top = u.style.top = c.y + 'px';
       const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.top = (c.y + el.offsetHeight - 28) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 28) + 'px'; }
       if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
@@ -1241,7 +1241,8 @@ export class Paper {
     const page = this.pages[hit.page];
     if (this.selection) this.clearSelection();
     const r = page.base.getBoundingClientRect();
-    const loc = ([cx, cy, pr]) => [round((cx - r.left) / this.scale), round((cy - r.top) / this.scale), Math.round(pr * 100) / 100];
+    const fine = (v) => (opts?.shape ? Math.round(v * 100) / 100 : round(v)); // 도형(원)은 더 촘촘한 단위로 (확대 시 지글거림)
+    const loc = ([cx, cy, pr]) => [fine((cx - r.left) / this.scale), fine((cy - r.top) / this.scale), Math.round(pr * 100) / 100];
     const [x0, y0, p0] = loc(pts[0]);
     const shaped = !!opts?.shape;
     const s = tool.type === 'pen'
@@ -1383,7 +1384,7 @@ function penKey(s) {
 const round = (v) => Math.round(v * 10) / 10;
 
 // ---------- 그리고 멈추면 도형으로 ----------
-const HOLD_MS = 500, HOLD_SLOP = 3;
+const HOLD_MS = 500, HOLD_SLOP = 5; // 펜슬을 멈춰도 아주 조금 흔들려서 3이면 멈춤으로 안 잡힐 때가 있었어요
 // 손으로 그린 점들을 직선 · 원(정원) · 타원 · 다각형(삼각형 · 사각형 · 오각형 …) · 별 중 맞는 것으로 바꿔요. 맞는 게 없으면 null.
 function snapShape(raw) {
   // 그리고 멈추면 (11/23 다시):
@@ -1402,7 +1403,8 @@ function snapShape(raw) {
   const xs = P.map((q) => q[0]), ys = P.map((q) => q[1]);
   const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
   const a = P[0], b = P[P.length - 1];
-  const out = (list, kind, verts) => { const o = []; for (const [x, y] of list) o.push(round(x), round(y), pr); o.kind = kind; o.verts = verts; return o; };
+  // 원은 0.01 단위까지 (0.1로 반올림하면 크게 확대했을 때 계단처럼 지글거렸어요)
+  const out = (list, kind, verts) => { const o = [], rr = kind === 'ellipse' ? (v) => Math.round(v * 100) / 100 : round; for (const [x, y] of list) o.push(rr(x), rr(y), pr); o.kind = kind; o.verts = verts; return o; };
   const ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
   // 1) 직선
   if (ab > 0.75 * len) {
