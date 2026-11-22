@@ -81,6 +81,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     // 예전엔 스크롤 장치(제스처)를 껐다 켰는데, 그러면 웹킷이 다음 펜슬 터치를 붙잡아 둬서 툴바가 한동안 안 눌렸어요.
     // 이제 장치는 건드리지 않고, 손으로 끌려서 움직이면 원래 자리로 되돌려 놓기만 해요 (자동 스크롤처럼 코드로 움직이는 건 그대로 둬요)
     private var lockedScrolls: [(sv: UIScrollView, at: CGPoint)] = []
+    // 맨 위 제목줄(툴바·뒤로·완료)만: 종이·성경 목록 위의 펜슬은 건드리지 않아요
+    func isTopBar(_ p: CGPoint) -> Bool { inkConfig.area.isEmpty ? p.y < 100 : p.y < inkConfig.area.minY - 4 }
     func unlockScrollsIfIdle() { lockedScrolls = [] }
     private func unlockScrolls() { lockedScrolls = [] }
     private func holdScrolls() {
@@ -419,7 +421,7 @@ final class InkWindow: UIWindow {
             } else if pencil.phase == .began, tracked == nil, b.inkShouldTake(pencil.location(in: web)) {
                 tracked = pencil
                 b.inkBegin(point(pencil, in: web))
-            } else if pencil.phase == .began, tracked == nil, web.hitTest(pencil.location(in: web), with: nil)?.isDescendant(of: web.scrollView) == true {
+            } else if pencil.phase == .began, tracked == nil, b.isTopBar(pencil.location(in: web)), web.hitTest(pencil.location(in: web), with: nil)?.isDescendant(of: web.scrollView) == true {
                 // (앱이 얹은 창·슬라이더 위를 누른 건 제외)
                 // 종이 밖(툴바 등)을 펜슬로 톡 누른 것: 웹킷이 가끔 이 탭을 웹에 안 넘기거나 늦게 넘겨서(올가미 직후 등),
                 // 닿는 순간 앱이 직접 알려요. 툴바 도구·색·굵기는 이걸로 바로 바뀌고, 나머지는 뗄 때 웹이 못 받았으면 대신 눌러요

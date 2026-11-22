@@ -967,25 +967,33 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   //  - 툴바 도구·색·굵기·지우개 방식: 닿는 순간(down) 앱 신호로 바로 눌러요. 웹킷이 따로 주는 펜슬 누름은 무시해요(두 번 눌림 방지)
   //  - 그 밖의 버튼: 뗄 때(up) 웹이 그 탭을 못 받았으면 대신 눌러요
   const TB_CTRL = '[data-tool], [data-color], [data-size], [data-em]';
-  let lastPenDown = 0;
-  document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'pen') lastPenDown = performance.now(); }, true);
+  let lastPenDown = 0, lastClick = 0, nativeDownAt = 0, tapStart = 0;
+  document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'pen' && e.pointerId !== 78) lastPenDown = performance.now(); }, true);
+  document.addEventListener('click', () => { lastClick = performance.now(); }, true);
+  // 앱 신호로 이미 누른 툴바 버튼을 웹킷이 늦게 또 누르면 막아요 (펜이 한 번에 두 번 눌려 펜 설정까지 열리던 것)
   if (nativeInk) tbSlot.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'pen' && e.pointerId !== 78 && e.target.closest?.(TB_CTRL)) { e.stopImmediatePropagation(); e.preventDefault(); }
+    if (e.pointerId === 78 || !e.target.closest?.(TB_CTRL)) return;
+    if (e.pointerType === 'pen' || performance.now() - nativeDownAt < 800) { e.stopImmediatePropagation(); e.preventDefault(); }
   }, true);
   window.lumenibTap = (x, y, phase = 'up') => {
     const el = document.elementFromPoint(x, y);
-    if (!el) return;
+    if (!el || !el.closest('.topbar')) return; // 맨 위 제목줄만
     const o = { clientX: x, clientY: y, bubbles: true, cancelable: true, pointerType: 'pen', pointerId: 78, isPrimary: true, button: 0 };
     const ctrl = el.closest(TB_CTRL);
-    if (ctrl && tbSlot.contains(ctrl)) {
-      if (phase === 'down') ctrl.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
-      else window.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+    if (phase === 'down') {
+      tapStart = performance.now();
+      if (ctrl && tbSlot.contains(ctrl)) { nativeDownAt = performance.now(); ctrl.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 })); }
       return;
     }
-    if (phase !== 'up' || performance.now() - lastPenDown < 600) return; // 웹이 이미 받았어요
-    el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
-    el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
-    el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    if (ctrl && tbSlot.contains(ctrl)) { window.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 })); return; }
+    // 그 밖의 제목줄 버튼(되돌리기·더보기·뒤로·완료): 잠깐 기다려 웹이 그 탭을 받았는지 보고, 못 받았을 때만 대신 눌러요
+    const t0 = tapStart;
+    setTimeout(() => {
+      if (lastPenDown >= t0 - 50 || lastClick >= t0 - 50) return;
+      el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
+      el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+      el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    }, 250);
   };
   // 펜슬로 종이에 쓰기 시작하면 열려 있던 툴바 창을 닫아요 (굿노트처럼 바로 써지게)
   window.lumenibCloseMenus = () => { toolbarEl?.querySelector('.tb-menu')?.remove(); };
