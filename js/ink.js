@@ -281,7 +281,7 @@ export class Paper {
       e.preventDefault(); e.stopPropagation();
       try { grip.setPointerCapture(e.pointerId); } catch {}
       // 인용 안에 쓴 밑줄·메모도 같이 옮겨요 (11/21). 원래 획은 되돌리기 기록에 두고, 새 획으로 바꿔 끼워 옮겨요
-      const pg = this.note.pages[page.i], inside = this.strokesInCite(page.i, c), carry = [];
+      const pg = this.note.pages[page.i], inside = this.strokesInCite(page.i, c), carry = [], preStrokes = pg.strokes.slice();
       if (inside.size) pg.strokes = pg.strokes.map((s) => {
         if (!inside.has(s)) return s;
         const cl = { ...s, pts: s.pts.slice() };
@@ -289,7 +289,8 @@ export class Paper {
         return cl;
       });
       const pr = page.el.getBoundingClientRect();
-      d = { id: e.pointerId, lastY: e.clientY, cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, snap: this.snapshot(), moved: false, carry };
+      // 되돌리기용으로 노트 전체를 저장하면 누르는 순간이 느려서, 이 인용 자리와 그 장 획 목록만 기억해요
+      d = { id: e.pointerId, lastY: e.clientY, cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', up, true);
       window.addEventListener('pointercancel', up, true);
@@ -353,6 +354,7 @@ export class Paper {
         const delta = c.y - d.cy;
         for (const { s, ys } of d.carry) { _dense.delete(s); for (let i = 1, j = 0; i < s.pts.length; i += 3, j++) s.pts[i] = round(ys[j] + delta); }
         if (to !== from) {
+          d.before[to.i] = this.note.pages[to.i].strokes.slice();
           // 같이 가는 글씨도 새 페이지의 글씨로 옮겨요
           const set = new Set(d.carry.map((x) => x.s));
           this.note.pages[from.i].strokes = this.note.pages[from.i].strokes.filter((q) => !set.has(q));
@@ -362,14 +364,15 @@ export class Paper {
         d.layers?.forEach((l) => l.remove());
         this.drawPage(from); if (to !== from) this.drawPage(to);
       }
-      const moved = d.moved, snap = d.snap;
+      if (to !== from && !d.before[to.i]) d.before[to.i] = this.note.pages[to.i].strokes.slice();
+      const moved = d.moved, entry = { t: 'cite', ci: this.note.citations.indexOf(c), page: d.page0, y: d.cy, strokes: d.before };
       d = null;
       if (to !== from) {
         this.renderCitations(from); this.renderCitations(to);
         // 마지막 페이지로 옮겼으면 뒤에 빈 페이지를 하나 더 둬요
         if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
       }
-      if (moved) { this._push({ t: 'full', json: snap }); this.onChange({}); this.onHistory(); }
+      if (moved) { this._push(entry); this.onChange({}); this.onHistory(); }
     };
     u.querySelector('.cite-x').addEventListener('click', () => {
       this.pushHistory();
@@ -901,12 +904,29 @@ export class Paper {
     this.redoStack = [];
   }
   _now(e) {
+    if (e.t === 'cite') {
+      const c = this.note.citations[e.ci];
+      return { t: 'cite', ci: e.ci, page: c?.page, y: c?.y, strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
+    }
     return e.t === 'page'
       ? { t: 'page', i: e.i, strokes: (this.note.pages[e.i]?.strokes || []).slice() }
       : { t: 'full', json: this.snapshot() };
   }
   _apply(e) {
     if (e.t === 'full') return this.restore(e.json);
+    if (e.t === 'cite') {
+      // 인용 옮기기: 인용 자리와 관련된 장의 획만 되돌려요 (빠름)
+      const c = this.note.citations[e.ci];
+      if (!c) return;
+      const touched = new Set([c.page, e.page, ...Object.keys(e.strokes).map(Number)]);
+      c.page = e.page; c.y = e.y;
+      for (const k of Object.keys(e.strokes)) if (this.note.pages[k]) this.note.pages[k].strokes = e.strokes[k].slice();
+      if (this.selection) { this.selection = null; this.hideLassoMenu(); }
+      for (const i of touched) { const pg = this.pages[i]; if (pg) { this.renderCitations(pg); this.drawPage(pg); } }
+      this.trimTrailing();
+      this.onChange({}); this.onHistory();
+      return;
+    }
     const pages = this.note.pages;
     while (pages.length <= e.i) { pages.push({ strokes: [] }); this.buildPage(pages.length - 1); this.layout(); }
     pages[e.i].strokes = e.strokes.slice();

@@ -777,7 +777,10 @@ final class WebInkOverlay: UIView {
             let a = CABasicAnimation(keyPath: "opacity"); a.fromValue = 1; a.toValue = 0; a.duration = 0.16
             l.opacity = 0; l.add(a, forKey: "fade")
             CATransaction.commit()
-        } else { remove(l) }
+        } else {
+            // 웹 그림이 화면에 실제로 올라오기까지 조금 걸릴 때가 있어서, 아주 잠깐 겹쳐 둔 뒤 지워요 (펜은 불투명해서 겹쳐도 티가 안 나요)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.remove(l) }
+        }
     }
     func drop(_ l: CAShapeLayer) { if let i = pending.firstIndex(of: l) { pending.remove(at: i); remove(l) } }
     private func remove(_ l: CAShapeLayer) {
