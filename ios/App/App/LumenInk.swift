@@ -213,6 +213,15 @@ func lumenParams(_ st: LumenPenStyle, _ po: [String: Double]) -> LumenStyleParam
 /// 펜 획 → 종이 단위 외곽선 경로 (웹의 drawStroke 와 같은 계산)
 func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
     let o = lumenParams(s.style, s.opts)
+    if s.opts["_raw"] != nil, s.pts.count >= 6 {
+        // 도형: 필압 없이 고른 굵기, 모서리는 둥글게 (웹 drawStroke 의 s.sh 와 같음)
+        let line = CGMutablePath()
+        line.move(to: CGPoint(x: s.pts[0], y: s.pts[1]))
+        var i = 3
+        while i + 1 < s.pts.count { line.addLine(to: CGPoint(x: s.pts[i], y: s.pts[i + 1])); i += 3 }
+        let w = s.width * 1.25 * o.scale * (1 - o.thinning * 0.5)
+        return line.copy(strokingWithWidth: CGFloat(w), lineCap: .round, lineJoin: .round, miterLimit: 10)
+    }
     let size = s.width * 1.25 * o.scale, k = REF_SIZE / size
     var pts: [SIMD3<Double>] = []
     var i = 0
@@ -791,7 +800,13 @@ final class WebInkOverlay: UIView {
     private func shapeAt(_ p: CGPoint) -> [SIMD3<Double>] {
         let c = shapeC, z = shapeBase.first?.z ?? 0.5
         if shapeLine {
-            return (0...24).map { i in let t = Double(i) / 24; return SIMD3(c.x + (p.x - c.x) * t, c.y + (p.y - c.y) * t, z) }
+            // 수평·수직에서 8° 안쪽이면 딱 맞춰요 (웹 axisSnap 과 같음)
+            var e = p
+            let dx = p.x - c.x, dy = p.y - c.y, L = hypot(dx, dy), t = atan2(dy, dx)
+            for k in [0, Double.pi / 2, Double.pi, -Double.pi / 2, -Double.pi] where abs(t - k) < 8 * Double.pi / 180 {
+                e = CGPoint(x: c.x + L * cos(k).rounded(), y: c.y + L * sin(k).rounded()); break
+            }
+            return (0...24).map { i in let t = Double(i) / 24; return SIMD3(c.x + (e.x - c.x) * t, c.y + (e.y - c.y) * t, z) }
         }
         let v0 = CGPoint(x: shapeRef.x - c.x, y: shapeRef.y - c.y), v1 = CGPoint(x: p.x - c.x, y: p.y - c.y)
         let d0 = hypot(v0.x, v0.y), d1 = hypot(v1.x, v1.y)

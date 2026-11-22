@@ -1326,6 +1326,16 @@ function drawStroke(ctx, s, live = false) {
   // 펜: 필압을 부드럽게 다듬은 외곽선을 만들어 면으로 채워요 (선 가장자리가 매끈하게)
   // 굵기마다 다듬는 정도가 달라지지 않게, 가운데 굵기 기준으로 좌표를 키웠다 줄여서 계산해요
   // 다 쓴 획은 모양(외곽선) 계산을 기억해 두고 다시 그릴 때 그대로 써요 (장 전체를 다시 그릴 때 가장 무거운 부분)
+  if (s.sh) {
+    // 도형: 필압 없이 고른 굵기, 모서리는 둥글게 이어요 (꼭짓점에 점이 뭉치거나 꺾여 보이던 것)
+    const o2 = styleOpts(penStyleOf(s), s.po, !s.sv);
+    ctx.save();
+    ctx.strokeStyle = s.color; ctx.lineWidth = shapeWidth(s.w, o2); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+    for (let i = 3; i < p.length; i += 3) ctx.lineTo(p[i], p[i + 1]);
+    ctx.stroke(); ctx.restore();
+    return;
+  }
   const key = live ? null : penKey(s);
   if (key) { const c = _penPath.get(s); if (c && c.key === key) { ctx.fillStyle = s.color; ctx.fill(c.path); return; } }
   const st = penStyleOf(s), o = styleOpts(st, s.po, !s.sv);
@@ -1350,6 +1360,8 @@ function drawStroke(ctx, s, live = false) {
   ctx.fill(path);
 }
 // 획이 바뀌면(옮기기·크기 바꾸기 등) 다시 계산하도록, 모양을 정하는 값들로 열쇠를 만들어요
+// 도형 선 굵기: 같은 펜으로 보통 세기로 그은 선과 비슷하게
+const shapeWidth = (w, o) => w * 1.25 * o.scale * (1 - (o.thinning || 0) * 0.5);
 const _penPath = new WeakMap();
 const citeRs = new WeakMap();
 const citeW = (c) => c.w || PAGE_W - 40; // 인용 상자 너비 (종이 단위, 기본은 가로 전체)
@@ -1381,7 +1393,7 @@ function snapShape(raw) {
   const ab = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (ab > 0.8 * len) {
     const dev = Math.max(...P.map((q) => segDist(q, a, b)));
-    return dev < Math.max(4, ab * 0.08) ? out(sampleSeg(a, b)) : null;
+    return dev < Math.max(4, ab * 0.08) ? out(sampleSeg(a, axisSnap(a, b))) : null;
   }
   // 닫힌 도형만: 끝이 시작 근처로 돌아옴 (조금 모자라거나 겹쳐도 괜찮아요)
   if (ab > Math.max(16, size * 0.35)) return null;
@@ -1498,6 +1510,15 @@ function polyVertices(P, eps) {
   }
   return vs;
 }
+// 직선이 수평·수직에서 8° 안쪽이면 딱 수평·수직으로 (시작점 기준, 길이는 그대로)
+const AXIS_SNAP = (8 * Math.PI) / 180;
+function axisSnap(a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), t = Math.atan2(dy, dx);
+  for (const k of [0, Math.PI / 2, Math.PI, -Math.PI / 2, -Math.PI]) {
+    if (Math.abs(t - k) < AXIS_SNAP) return [a[0] + L * Math.round(Math.cos(k)), a[1] + L * Math.round(Math.sin(k))];
+  }
+  return b;
+}
 function sampleSeg(a, b, step = 4) {
   const n = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
   const o = [];
@@ -1534,6 +1555,7 @@ function shapeAt(sh, x, y) {
   const [cx, cy] = sh.c;
   if (sh.line) {
     const out = [], N = 24;
+    [x, y] = axisSnap([cx, cy], [x, y]);
     for (let i = 0; i <= N; i++) out.push(round(cx + ((x - cx) * i) / N), round(cy + ((y - cy) * i) / N), sh.p);
     return out;
   }

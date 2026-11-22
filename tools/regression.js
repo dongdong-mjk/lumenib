@@ -171,9 +171,12 @@ export async function run() {
     // 처음과 끝을 이은 선에서 벗어난 정도 (곧은 선이면 거의 0)
     const q = last.pts, ax = q[0], ay = q[1], bx = q[q.length - 3], by = q[q.length - 2], L = Math.hypot(bx - ax, by - ay) || 1;
     let off = 0; for (let i = 0; i < q.length; i += 3) off = Math.max(off, Math.abs((q[i] - ax) * (by - ay) - (q[i + 1] - ay) * (bx - ax)) / L);
+    const ys = q.filter((_, i) => i % 3 === 1);
     undo(); await settle(); tool('pen'); await settle();
     if (!last.sh) return '직선으로 안 바뀜';
-    return off < 0.6 || '곧은 선이 아니에요 ' + off.toFixed(2);
+    if (off >= 0.6) return '곧은 선이 아니에요 ' + off.toFixed(2);
+    // 수평에서 조금 기운 선은 딱 수평으로
+    return Math.max(...ys) - Math.min(...ys) < 0.01 || '수평으로 안 맞춰짐 ' + (Math.max(...ys) - Math.min(...ys)).toFixed(2);
   });
   await check('올가미: 획 일부만 둘러도 고름 · 선택 해제', async () => {
     tool('lasso'); await settle();
