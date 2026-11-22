@@ -637,6 +637,7 @@ export class Paper {
 
     const end = (e) => {
       if (!cur) return;
+      const _t0 = performance.now(); queueMicrotask(() => console.log('[dbg] end ' + cur?.kind + ' ' + Math.round(performance.now() - _t0) + 'ms t=' + Math.round(performance.now())));
       const k = cur;
       cur = null;
       if (k.hold) clearTimeout(k.hold.t);
