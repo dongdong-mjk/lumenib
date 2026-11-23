@@ -342,6 +342,7 @@ button { touch-action: manipulation; }
 .pal-alpha input { flex: 1; accent-color: #111; height: 28px; }
 .pa-val { float: right; font-weight: 400; color: #555; font-variant-numeric: tabular-nums; }
 .pa-ends { display: flex; justify-content: space-between; margin: 0 0 0 76px; font-size: 11px; color: #8a8a8a; }
+.pal-stab + .pa-ends { margin-left: 0; } /* 손떨림 보정은 왼쪽 견본이 없어서 슬라이더 양 끝에 맞춰요 */
 .pal-tip { margin: 8px 0 0; font-size: 11px; color: #8a8a8a; }
 .pk-sv { position: relative; height: 150px; border-radius: 10px; touch-action: none; cursor: crosshair; }
 .pk-hue { position: relative; height: 14px; margin: 14px 7px 0; border-radius: 999px; touch-action: none; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }

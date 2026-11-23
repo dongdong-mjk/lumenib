@@ -972,10 +972,25 @@ export class Paper {
       c.style.width = page.base.style.width; c.style.height = page.base.style.height;
       this.ctxFor(c, page).clearRect(0, 0, PAGE_W, PAGE_H);
       c.style.opacity = String(s.a ?? HL_ALPHA_DEFAULT);
-      page._hlS = s; page._hlN = 0;
+      page._hlS = s; page._hlN = 0; page._hlBox = null;
     }
     const ctx = this.ctxFor(c, page), p = s.pts, n = p.length / 3;
     ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (typeof s.st === 'number' && !s.sh) {
+      // 손떨림 보정이 있는 새 획: 펜처럼 지나온 길을 통째로 다시 다듬어요 (펜 끝은 펜에 붙어 있어요). 완성본과 같은 계산
+      const q = hlSmooth(p, s), m = s.w / 2 + 3;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let i = 0; i < q.length; i += 2) { if (q[i] < x0) x0 = q[i]; if (q[i] > x1) x1 = q[i]; if (q[i + 1] < y0) y0 = q[i + 1]; if (q[i + 1] > y1) y1 = q[i + 1]; }
+      const pb = page._hlBox;
+      if (pb) ctx.clearRect(pb[0], pb[1], pb[2] - pb[0], pb[3] - pb[1]);
+      page._hlBox = [x0 - m, y0 - m, x1 + m, y1 + m];
+      ctx.beginPath(); ctx.moveTo(q[0], q[1]);
+      for (let i = 2; i < q.length; i += 2) ctx.lineTo(q[i], q[i + 1]);
+      if (q.length === 2) ctx.lineTo(q[0] + 0.01, q[1]);
+      ctx.stroke();
+      page._hlN = n;
+      return;
+    }
     ctx.beginPath();
     // 완성본(hlSmooth)과 같은 방식으로 새 점만 이어서 다듬어요
     if (page._hlN === 0) { page._hlX = p[0]; page._hlY = p[1]; }
@@ -2073,23 +2088,42 @@ function hlScratchDone() { if (_hlOff && _hlOff.width * _hlOff.height > 4e6) { _
 const HL_EASE = 0.35;
 function hlRaw(p) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
 // 획마다 보정 세기(st)를 기억해요. 예전 획(st 없음)은 원래 방식(점마다 0.35) 그대로
-// 새 획은 '거리' 기준으로 다듬어요: 펜슬은 점이 아주 촘촘해서(초당 240개) 점마다 다듬으면 세기를 올려도 티가 안 났어요 (11/23)
 function hlStepEase(s, dx, dy) {
   if (s.sh) return 1;
-  if (typeof s.st !== 'number') return HL_EASE;
-  const L = (Math.max(0, Math.min(100, s.st)) / 100) * 20; // 따라가는 거리 (종이 단위): 0 → 그대로, 100 → 20
-  if (L < 0.01) return 1;
-  return 1 - Math.exp(-Math.hypot(dx, dy) / L);
+  return HL_EASE;
 }
+// 새 획(st 있음): 펜처럼 '지나온 거리' 기준 가우시안으로 다듬어요. 양 끝은 고정이라 펜 끝은 펜에 붙어 있고,
+// 세기를 올리면 손 떨림(물결)이 확실히 펴져요 (점마다 조금씩 다듬던 방식은 펜슬 점이 촘촘해서 티가 안 났어요, 11/23)
 export const hlSmoothPath = (p, s) => hlSmooth(p, s); // 점검용
 function hlSmooth(p, s = {}) {
   const n = p.length / 3;
   if (!n) return [];
-  let x = p[0], y = p[1];
-  const q = [x, y];
-  for (let i = 1; i < n; i++) { const e = hlStepEase(s, p[i * 3] - x, p[i * 3 + 1] - y); x += (p[i * 3] - x) * e; y += (p[i * 3 + 1] - y) * e; q.push(x, y); }
-  q.push(p[(n - 1) * 3], p[(n - 1) * 3 + 1]); // 끝은 펜을 뗀 자리까지
+  if (typeof s.st !== 'number' || s.sh) {
+    let x = p[0], y = p[1];
+    const q = [x, y];
+    for (let i = 1; i < n; i++) { const e = hlStepEase(s, p[i * 3] - x, p[i * 3 + 1] - y); x += (p[i * 3] - x) * e; y += (p[i * 3 + 1] - y) * e; q.push(x, y); }
+    q.push(p[(n - 1) * 3], p[(n - 1) * 3 + 1]); // 끝은 펜을 뗀 자리까지
+    return q;
+  }
+  // 1) 너무 촘촘한 점은 0.8 간격으로 솎아요 (계산을 가볍게)
+  const X = [p[0]], Y = [p[1]];
+  for (let i = 1; i < n; i++) { const x = p[i * 3], y = p[i * 3 + 1]; if (Math.hypot(x - X[X.length - 1], y - Y[Y.length - 1]) >= 0.8 || i === n - 1) { X.push(x); Y.push(y); } }
+  const m = X.length, S = [0];
+  for (let i = 1; i < m; i++) S.push(S[i - 1] + Math.hypot(X[i] - X[i - 1], Y[i] - Y[i - 1]));
+  const sig = (Math.max(0, Math.min(100, s.st)) / 100) * 18; // 0 → 그대로, 100 → 18 (종이 단위)
+  const total = S[m - 1], q = [];
+  let lo = 0;
+  for (let i = 0; i < m; i++) {
+    const sg = Math.min(sig, S[i] / 2, (total - S[i]) / 2); // 끝으로 갈수록 덜 다듬어서 양 끝은 그대로
+    if (sg < 0.05) { q.push(X[i], Y[i]); continue; }
+    const r = sg * 2.5;
+    while (S[lo] < S[i] - r) lo++;
+    let sx = 0, sy = 0, sw = 0;
+    for (let j = lo; j < m && S[j] <= S[i] + r; j++) { const d = S[j] - S[i], w = Math.exp(-(d * d) / (2 * sg * sg)); sx += X[j] * w; sy += Y[j] * w; sw += w; }
+    q.push(sx / sw, sy / sw);
+  }
   return q;
+}
 }
 function hlPoints(p, w) {
   const n = p.length / 3;
