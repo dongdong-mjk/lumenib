@@ -3,7 +3,7 @@
 import { esc, toast } from './util.js';
 import { refText } from './bible.js';
 import { settings } from './store.js';
-import { getStroke } from './vendor/perfect-freehand.js';
+import { getStroke, getStrokePoints } from './vendor/perfect-freehand.js';
 
 export const PAGE_W = 726;
 export const PAGE_H = 1027; // A4 비율
@@ -1709,7 +1709,14 @@ function drawStroke(ctx, s, live = false) {
     return;
   }
   const key = live ? null : penKey(s);
-  if (key) { const c = _penPath.get(s); if (c && c.key === key) { ctx.fillStyle = s.color; ctx.fill(c.path); return; } }
+  if (key) {
+    const c = _penPath.get(s);
+    if (c && c.key === key) {
+      if (c.lw) { ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = c.lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(c.path); ctx.restore(); }
+      else { ctx.fillStyle = s.color; ctx.fill(c.path); }
+      return;
+    }
+  }
   const st = penStyleOf(s), o = styleOpts(st, s.po, !s.sv);
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   let pts = [];
@@ -1718,7 +1725,21 @@ function drawStroke(ctx, s, live = false) {
   if (s.po && !o.legacy && st !== 'ball' && !s.sh) startPressure(pts);
   if (o.sigma && !s.sh) { gaussSmooth(pts, o.sigma); smoothPressure(pts); }
   if (o.flat) applyFlatNib(pts, o.flat);
-  const raw = getStroke(pts, strokeOpts(o, live));
+  if (s.sv && st === 'ball') {
+    // 볼펜(굵기 일정): 가운데 선을 둥근 끝으로 한 번에 그어요. 굵은 선으로 작은 원을 그려도 테두리가 떨리지 않아요 (11/23)
+    const sp = getStrokePoints(pts, strokeOpts(o, live, true));
+    const path = new Path2D();
+    const P0 = sp[0].point;
+    path.moveTo(P0[0] / k, P0[1] / k);
+    if (sp.length === 1) path.lineTo(P0[0] / k + 0.01, P0[1] / k);
+    for (let i = 1; i < sp.length - 1; i++) { const a = sp[i].point, b = sp[i + 1].point; path.quadraticCurveTo(a[0] / k, a[1] / k, (a[0] + b[0]) / 2 / k, (a[1] + b[1]) / 2 / k); }
+    if (sp.length > 1) { const z = sp[sp.length - 1].point; path.lineTo(z[0] / k, z[1] / k); }
+    const lw = (2 * REF_SIZE * Math.sin(Math.PI / 4)) / k; // 외곽선 방식과 같은 굵기
+    if (key) _penPath.set(s, { key, path, lw });
+    ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(path); ctx.restore();
+    return;
+  }
+  const raw = getStroke(pts, strokeOpts(o, live, !!s.sv));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
   if (!outline.length) return;
   const path = new Path2D();
@@ -2160,12 +2181,13 @@ function gaussSmooth(pts, sigma) {
     pts[i][0] = sx / sw; pts[i][1] = sy / sw;
   }
 }
-function strokeOpts(o, live) {
+function strokeOpts(o, live, sv = false) {
+  // 새 획(sv): 쓰는 중과 뗀 뒤가 같게 끝은 늘 같은 방식 (끝 가늘어짐은 펜을 들며 약해지는 힘으로). 예전 획은 그때 방식 그대로 (11/23)
   return {
     size: REF_SIZE, thinning: o.thinning, smoothing: o.smooth ?? 0.6, streamline: o.stream, // 쓰는 중과 완성본이 같은 보정
-    simulatePressure: false, last: !live,
+    simulatePressure: false, last: sv ? true : !live,
     easing: (t) => Math.sin((t * Math.PI) / 2),
-    start: { taper: o.taper, cap: true }, end: { taper: live ? 0 : o.taper, cap: true },
+    start: { taper: o.taper, cap: true }, end: { taper: sv ? 0 : live ? 0 : o.taper, cap: true },
   };
 }
 // 평평함: 펜촉이 45° 기울어진 납작한 만년필처럼, 긋는 방향에 따라 굵기가 달라져요 (누르는 힘에 섞어 넣어요)
