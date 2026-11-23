@@ -753,6 +753,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <input type="range" min="0" max="100" step="5" value="${S.settings.hlStab}" aria-label="형광펜 손떨림 보정" data-k="stab"></div>
       <div class="pa-ends"><span>그대로</span><span>많이 다듬기</span></div>`;
     toolbarEl.appendChild(m);
+    // 형광펜 도구 바로 아래에 (펜 설정처럼 도구에 붙어서)
+    const hb = toolbarEl.querySelector('[data-tool="hl"]');
+    if (hb) { m.style.left = Math.max(8, hb.offsetLeft - 8) + 'px'; m.style.transform = 'none'; m.style.width = '260px'; }
     const sr = m.querySelector('[data-k="stab"]');
     sr.addEventListener('input', () => { S.settings.hlStab = +sr.value; m.querySelector('[data-v="stab"]').textContent = sr.value + '%'; });
     sr.addEventListener('change', () => { S.saveSettings(); track('hl_stab_changed'); });
