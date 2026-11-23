@@ -1579,6 +1579,7 @@ function drawStroke(ctx, s, live = false) {
     ctx.globalCompositeOperation = 'multiply';
     ctx.drawImage(off, 0, 0, bw, bh, bx, by, bw, bh);
     ctx.restore();
+    hlScratchDone();
     return;
   }
   // 펜: 필압을 부드럽게 다듬은 외곽선을 만들어 면으로 채워요 (선 가장자리가 매끈하게)
@@ -2058,12 +2059,16 @@ export function penSamplePath(style, w = 84, h = 22, po = settings.penOpts[style
 // 펜슬은 대고 뗄 때 펜촉이 아주 조금씩 흔들린 점을 많이 보내서, 그 방향대로 끝이 비뚤게 잘렸어요.
 // 시작점·끝점 근처(굵기의 절반 안쪽)의 흔들린 점과 너무 촘촘한 점을 빼고 그려요. 저장된 점은 그대로예요.
 let _hlOff = null;
+// 형광펜 한 획을 따로 그리는 판. 가로·세로를 따로 키우면 (넓은 획 + 긴 획) 아이패드 캔버스 한도를 넘어 판이 망가지고,
+// 예전 획 조각이 엉뚱하게 찍혀 형광펜이 뾰족뾰족해졌어요. 이번 획에 맞는 크기로 새로 만들고, 큰 판은 쓰고 나면 버려요 (11/23)
 function hlScratch(w, h) {
-  if (!_hlOff) _hlOff = document.createElement('canvas');
-  if (_hlOff.width < w) _hlOff.width = w;
-  if (_hlOff.height < h) _hlOff.height = h;
+  if (!_hlOff || _hlOff.width < w || _hlOff.height < h) {
+    _hlOff = document.createElement('canvas');
+    _hlOff.width = w; _hlOff.height = h;
+  }
   return _hlOff;
 }
+function hlScratchDone() { if (_hlOff && _hlOff.width * _hlOff.height > 4e6) { _hlOff.width = _hlOff.height = 1; _hlOff = null; } }
 // 형광펜 선: 들어온 점을 살짝 늦게 따라가게 다듬어요 (굿노트처럼 부드럽게). 쓰는 중과 뗀 뒤가 같은 선이에요
 const HL_EASE = 0.35;
 function hlRaw(p) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
