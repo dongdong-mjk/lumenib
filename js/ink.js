@@ -136,7 +136,8 @@ export class Paper {
     };
     this._onScroll = () => {
       if (this.pages?.some((q) => q?.dirty)) this.flushPages(); // 아직 안 그린 장이 보이면 바로 그려요
-      cancelAnimationFrame(this._sbRaf); this._sbRaf = requestAnimationFrame(() => { this.updateBars(); this.positionLassoMenu(); });
+      cancelAnimationFrame(this._sbRaf); this._sbRaf = requestAnimationFrame(() => this.updateBars());
+      if (this.lassoMenu) this.positionLassoMenu(); // 선택 메뉴는 스크롤과 같이 바로 (화면 밖으로 밀려나지 않게)
     };
     scrollEl.addEventListener('scroll', this._onScroll, { passive: true });
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
