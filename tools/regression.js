@@ -617,7 +617,13 @@ export async function run() {
     let minA = 255;
     for (let x = 215; x <= 255; x += 2) for (let y = 950; y <= 958; y += 1) { const a = ctx.getImageData(Math.round(x * rr), Math.round(y * rr), 1, 1).data[3]; if (a < minA) minA = a; }
     arr.splice(arr.indexOf(hs), 1); P.drawPage(pg);
-    return minA > 40 || '꺾인 안쪽에 흰 틈이 있어요 ' + minA;
+    if (minA <= 40) return '꺾인 안쪽에 흰 틈이 있어요 ' + minA;
+    // 펜을 떼며 끝이 짧게 꺾인 형광펜: 그 꺾인 조각은 빼요 (끝 뭉침)
+    const { hlSmoothPath } = await import('../js/ink.js');
+    const hp = []; for (let i = 0; i <= 80; i++) hp.push(100 + i, 300, 0.5);
+    for (let i = 1; i <= 8; i++) hp.push(180 - i * 0.3, 300 + i, 0.5); // 끝에서 아래로 8 꺾임 (굵기 18의 0.7배 안)
+    const q = hlSmoothPath(hp, { st: 0, w: 18 }), ly = q[q.length - 1];
+    return ly < 302 || '끝에서 꺾인 조각이 남아 있어요 ' + ly.toFixed(1);
   });
 
   await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {

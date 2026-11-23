@@ -344,7 +344,33 @@ private extension SIMD2 where Scalar == Double { var magnitude: Double { (x * x 
 
 /// 형광펜 (웹 노트 위, 11/23): 웹 js/ink.js 의 hlSmooth + hlCurve 와 같은 계산이라 쓰는 중과 웹이 그린 완성본이 같아요.
 /// 지나온 거리 기준 가우시안(양 끝 고정) → 점 사이 2차 곡선. k = 종이 단위 → 화면 배율
-func lumenHlWebPath(_ flat: [Double], stab: Double, k: Double, shaped: Bool) -> CGPath {
+func lumenHlTrimEnds(_ X: inout [Double], _ Y: inout [Double], w: Double) {
+    let lim = w * 0.7, look = w * 1.5
+    func trim(_ rev: Bool) {
+        let n = X.count
+        if n < 4 { return }
+        func at(_ i: Int) -> Int { rev ? n - 1 - i : i }
+        var j = 0, d = 0.0
+        while j < n - 1 && d < lim { d += hypot(X[at(j + 1)] - X[at(j)], Y[at(j + 1)] - Y[at(j)]); j += 1 }
+        var i0 = j; d = 0
+        while i0 < n - 1 && d < look { d += hypot(X[at(i0 + 1)] - X[at(i0)], Y[at(i0 + 1)] - Y[at(i0)]); i0 += 1 }
+        let dx = X[at(j)] - X[at(i0)], dy = Y[at(j)] - Y[at(i0)], dl = hypot(dx, dy)
+        if dl < 1e-6 || i0 == j { return }
+        var cut = 0
+        var k = j
+        while k > 0 {
+            let sx = X[at(k - 1)] - X[at(k)], sy = Y[at(k - 1)] - Y[at(k)], sl = max(hypot(sx, sy), 1e-9)
+            if (sx * dx + sy * dy) / (dl * sl) < 0.5 { cut = k; break }
+            k -= 1
+        }
+        if cut > 0 {
+            if rev { X.removeLast(cut); Y.removeLast(cut) } else { X.removeFirst(cut); Y.removeFirst(cut) }
+        }
+    }
+    trim(false); trim(true)
+}
+
+func lumenHlWebPath(_ flat: [Double], stab: Double, k: Double, shaped: Bool, hlWidth: Double = 12) -> CGPath {
     let path = CGMutablePath()
     var X: [Double] = [], Y: [Double] = []
     var i = 0
@@ -354,6 +380,7 @@ func lumenHlWebPath(_ flat: [Double], stab: Double, k: Double, shaped: Bool) -> 
         i += 3
     }
     guard !X.isEmpty else { return path }
+    if !shaped { lumenHlTrimEnds(&X, &Y, w: hlWidth) } // 끝 뭉침·흰 틈 (웹 hlTrimEnds 와 같음)
     if shaped {
         path.move(to: CGPoint(x: X[0], y: Y[0]))
         for j in 1..<max(1, X.count) { path.addLine(to: CGPoint(x: X[j], y: Y[j])) }
@@ -975,7 +1002,7 @@ final class WebInkOverlay: UIView {
             // 펜을 뗀 모양(예측 점 없이)으로 바꿔 둬요. 웹이 그릴 완성본과 같아요
             var flat: [Double] = []
             for p in pts { flat += [p.x, p.y, 0.5] }
-            l.path = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped)
+            l.path = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped, hlWidth: config.width * Double(config.scale))
         }
         l.lineWidth = live.lineWidth; l.lineCap = live.lineCap; l.lineJoin = live.lineJoin
         l.compositingFilter = live.compositingFilter
@@ -1030,7 +1057,7 @@ final class WebInkOverlay: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         let color = UIColor(hexString: config.color)
         if config.tool == .highlighter {
-            live.path = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped)
+            live.path = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped, hlWidth: config.width * Double(config.scale))
             live.fillColor = nil
             live.strokeColor = color.withAlphaComponent(config.hlAlpha).cgColor
             live.lineWidth = CGFloat(s.width)

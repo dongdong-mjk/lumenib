@@ -2226,6 +2226,29 @@ function hlStepEase(s, dx, dy) {
 // 새 획(st 있음): 펜처럼 '지나온 거리' 기준 가우시안으로 다듬어요. 양 끝은 고정이라 펜 끝은 펜에 붙어 있고,
 // 세기를 올리면 손 떨림(물결)이 확실히 펴져요 (점마다 조금씩 다듬던 방식은 펜슬 점이 촘촘해서 티가 안 났어요, 11/23)
 export const hlSmoothPath = (p, s) => hlSmooth(p, s); // 점검용
+// 형광펜 양 끝 정리 (앱 lumenHlTrimEnds 와 같음): 끝에서 굵기의 0.7배 안쪽에서 진행 방향과 60° 넘게 꺾인 짧은 조각은 빼요
+function hlTrimEnds(X, Y, w) {
+  const lim = w * 0.7, look = w * 1.5;
+  const trim = (rev) => {
+    const n = X.length;
+    if (n < 4) return;
+    const at = (i) => (rev ? n - 1 - i : i);
+    // 끝에서 lim 지난 지점(j)과 거기서 look 더 간 지점(i0)으로 진행 방향
+    let j = 0, d = 0;
+    while (j < n - 1 && d < lim) { d += Math.hypot(X[at(j + 1)] - X[at(j)], Y[at(j + 1)] - Y[at(j)]); j++; }
+    let i0 = j; d = 0;
+    while (i0 < n - 1 && d < look) { d += Math.hypot(X[at(i0 + 1)] - X[at(i0)], Y[at(i0 + 1)] - Y[at(i0)]); i0++; }
+    const dx = X[at(j)] - X[at(i0)], dy = Y[at(j)] - Y[at(i0)], dl = Math.hypot(dx, dy); // 끝 쪽을 향하는 방향
+    if (dl < 1e-6 || i0 === j) return;
+    let cut = 0;
+    for (let k = j; k > 0; k--) {
+      const sx = X[at(k - 1)] - X[at(k)], sy = Y[at(k - 1)] - Y[at(k)], sl = Math.hypot(sx, sy) || 1e-9;
+      if ((sx * dx + sy * dy) / (dl * sl) < 0.5) { cut = k; break; }
+    }
+    if (cut > 0) { if (rev) { X.splice(n - cut, cut); Y.splice(n - cut, cut); } else { X.splice(0, cut); Y.splice(0, cut); } }
+  };
+  trim(false); trim(true);
+}
 // 굵기의 절반보다 좁은 거리 안에서 60° 넘게 꺾이는 곳이 있는지
 function hlTightTurn(q, w) {
   const n = q.length / 2;
@@ -2236,7 +2259,7 @@ function hlTightTurn(q, w) {
     let a = i, b = i, da = 0, db = 0;
     while (a > 0 && da < win) { da += Math.hypot(q[a * 2] - q[a * 2 - 2], q[a * 2 + 1] - q[a * 2 - 1]); a--; }
     while (b < n - 1 && db < win) { db += Math.hypot(q[b * 2 + 2] - q[b * 2], q[b * 2 + 3] - q[b * 2 + 1]); b++; }
-    if (da < win * 0.5 || db < win * 0.5) continue;
+    if (da < 0.3 || db < 0.3) continue;
     const ux = q[i * 2] - q[a * 2], uy = q[i * 2 + 1] - q[a * 2 + 1], vx = q[b * 2] - q[i * 2], vy = q[b * 2 + 1] - q[i * 2 + 1];
     const c = (ux * vx + uy * vy) / ((Math.hypot(ux, uy) * Math.hypot(vx, vy)) || 1);
     if (c < 0.5) return true;
@@ -2263,6 +2286,7 @@ function hlSmooth(p, s = {}) {
   // 1) 너무 촘촘한 점은 0.8 간격으로 솎아요 (계산을 가볍게)
   const X = [p[0]], Y = [p[1]];
   for (let i = 1; i < n; i++) { const x = p[i * 3], y = p[i * 3 + 1]; if (Math.hypot(x - X[X.length - 1], y - Y[Y.length - 1]) >= 0.8 || i === n - 1) { X.push(x); Y.push(y); } }
+  hlTrimEnds(X, Y, s.w || 12); // 펜을 대고 떼는 순간 생긴 짧은 꺾임(끝 뭉침·흰 틈)은 빼요 (11/23)
   const m = X.length, S = [0];
   for (let i = 1; i < m; i++) S.push(S[i - 1] + Math.hypot(X[i] - X[i - 1], Y[i] - Y[i - 1]));
   // 테두리는 늘 매끈하게(기본 4), 슬라이더는 펜 손떨림 보정처럼 선의 흐름을 더 부드럽게 (0% 4 → 100% 22, 종이 단위) (11/23 민정님)
