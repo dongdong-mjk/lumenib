@@ -340,6 +340,28 @@ export async function run() {
     return Math.abs(pixels(ink()) - before) < before * 0.05 || '되돌리기 후 그림이 달라요 ' + [before, pixels(ink()), moved.width];
   });
 
+  await check('올가미 회전: 위 손잡이를 끌면 고른 글씨가 가운데를 중심으로 돌고, 90° 근처에서 딱 맞음 · 되돌리기', async () => {
+    tool('pen'); await settle();
+    const P = window.__lumenibPaper, c = base(), r = c.getBoundingClientRect(), k = r.width / 726;
+    stroke(line(200 * k, 600 * k, 300 * k, 600 * k)); await settle();
+    const s0 = P.note.pages[0].strokes.at(-1);
+    tool('lasso'); await settle();
+    stroke(box(180 * k, 585 * k, 320 * k, 615 * k)); await settle();
+    if (!P.selection?.set.size) { undo(); await settle(); return '안 골라짐'; }
+    const b = P.selection.box, cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, hy = b[1] - 28 / P.scale;
+    // 손잡이(위)를 오른쪽으로 끌어 약 88° 돌리기 → 90°에 딱 맞음
+    const R = cy - hy, ang = 88 * Math.PI / 180, tx = cx + R * Math.sin(ang), ty = cy - R * Math.cos(ang);
+    pe(c, 'pointerdown', r.left + cx * k, r.top + hy * k); pe(c, 'pointermove', r.left + tx * k, r.top + ty * k); pe(c, 'pointerup', r.left + tx * k, r.top + ty * k); await settle();
+    const s1 = P.note.pages[0].strokes.at(-1), xs = s1.pts.filter((_, i) => i % 3 === 0), ys = s1.pts.filter((_, i) => i % 3 === 1);
+    const wdt = Math.max(...xs) - Math.min(...xs), hgt = Math.max(...ys) - Math.min(...ys);
+    $$('.lasso-menu button').find((x) => x.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
+    undo(); await settle();
+    const back = P.note.pages[0].strokes.at(-1) === s0;
+    undo(); await settle();
+    if (!(hgt > 90 && wdt < 3)) return '세로로 딱 안 돌아갔어요 ' + [wdt.toFixed(1), hgt.toFixed(1)];
+    return back || '되돌리기가 안 돼요';
+  });
+
   await check('구절 고르기: 9→10→11 누적', async () => {
     for (const n of [9, 10, 11]) { $(`.verse[data-n="${n}"]`)?.click(); await settle(); }
     const sel = $$('.verse.sel').map((v) => +v.dataset.n);

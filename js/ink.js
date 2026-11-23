@@ -762,6 +762,16 @@ export class Paper {
       const pr = e.pointerType === 'pen' ? e.pressure : 0.5;
       const t = tool.type;
       // 선택 상자 네 모서리 손잡이: 반대쪽 모서리를 고정하고 비율 유지하며 크기 조절
+      if (this.selection && t === 'lasso' && this.selection.page === page.i && !this.selection.cites?.size) {
+        // 선택 상자 위 회전 손잡이 (굿노트처럼, 11/23): 상자 가운데를 중심으로 돌려요
+        const rh = rotHandle(this.selection.box, this.scale);
+        if (Math.hypot(x - rh.x, y - rh.y) <= 22 / this.scale) {
+          const c0 = [(this.selection.box[0] + this.selection.box[2]) / 2, (this.selection.box[1] + this.selection.box[3]) / 2];
+          cur = { kind: 'rotate', c: c0, a0: Math.atan2(y - c0[1], x - c0[0]), ang: 0 };
+          this.hideLassoMenu();
+          return;
+        }
+      }
       if (this.selection && t === 'lasso' && this.selection.page === page.i) {
         const hr = 22 / this.scale;
         const h = this.selection.cites?.size ? null : selHandles(this.selection.box).find((q) => Math.hypot(x - q.x, y - q.y) <= hr); // 인용이 섞이면 크기 조절은 없어요
@@ -841,6 +851,13 @@ export class Paper {
             };
             cur.raf = requestAnimationFrame(tick);
           }
+        } else if (cur.kind === 'rotate') {
+          let a = Math.atan2(y - cur.c[1], x - cur.c[0]) - cur.a0;
+          a = Math.atan2(Math.sin(a), Math.cos(a));
+          // 0°·90°·180°·270° 근처(5° 안)에서는 딱 맞춰요
+          const q90 = Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
+          if (Math.abs(a - q90) < 5 * Math.PI / 180) a = q90;
+          cur.ang = a;
         } else if (cur.kind === 'scale') {
           const h = cur.h, clamp = (v) => Math.max(0.2, Math.min(5, v));
           const fx = h.dx ? clamp((x - h.ax) / (h.x - h.ax)) : 1;
@@ -852,6 +869,7 @@ export class Paper {
       else if (cur.kind === 'lasso') this.drawLasso(page, cur.pts);
       else if (cur.kind === 'move') this.moveGhost(page, cur);
       else if (cur.kind === 'scale') this.drawSelection(page, 0, 0, cur);
+      else if (cur.kind === 'rotate') this.drawSelection(page, 0, 0, null, cur);
     });
 
     const end = (e) => {
@@ -919,6 +937,23 @@ export class Paper {
           this.changed(page, false);
         }
         for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.transform = '';
+        this.drawSelection(page);
+        this.showLassoMenu();
+      } else if (k.kind === 'rotate') {
+        if (Math.abs(k.ang) > 0.001) {
+          this.pagePush(this.selection.page);
+          this.cloneSelection();
+          const [cx, cy] = k.c, cs = Math.cos(k.ang), sn = Math.sin(k.ang);
+          const rot = (x0, y0) => [cx + (x0 - cx) * cs - (y0 - cy) * sn, cy + (x0 - cx) * sn + (y0 - cy) * cs];
+          for (const s of this.selection.set) {
+            _dense.delete(s);
+            for (let i = 0; i < s.pts.length; i += 3) { const [nx, ny] = rot(s.pts[i], s.pts[i + 1]); s.pts[i] = s.sh ? Math.round(nx * 100) / 100 : round(nx); s.pts[i + 1] = s.sh ? Math.round(ny * 100) / 100 : round(ny); }
+          }
+          this.selection.box = bbox([...this.selection.set]);
+          if (this.selection.poly) this.selection.poly = this.selection.poly.map(([px, py]) => rot(px, py));
+          this.drawPage(page);
+          this.changed(page, false);
+        }
         this.drawSelection(page);
         this.showLassoMenu();
       } else if (k.kind === 'scale') {
@@ -1184,7 +1219,7 @@ export class Paper {
     return [citeX(c), c.y, citeX(c) + citeW(c), c.y + el.offsetHeight];
   }
 
-  drawSelection(page, dx = 0, dy = 0, sc = null) {
+  drawSelection(page, dx = 0, dy = 0, sc = null, rt = null) {
     const sel = this.selection;
     const ctx = this.clearLive(page);
     // 고른 인용 블록은 옮기는 동안 위아래로 같이 따라와요 (인용은 가로로는 안 움직여요)
@@ -1194,6 +1229,7 @@ export class Paper {
     const b = sel.box;
     const ox = sc ? sc.h.ax : 0, oy = sc ? sc.h.ay : 0, kx = sc ? sc.kx : 1, ky = sc ? sc.ky : 1;
     ctx.save(); ctx.translate(dx, dy);
+    if (rt) { ctx.translate(rt.c[0], rt.c[1]); ctx.rotate(rt.ang); ctx.translate(-rt.c[0], -rt.c[1]); } // 돌리는 중: 글씨와 상자를 같이 돌려 보여요
     ctx.save(); ctx.translate(ox, oy); ctx.scale(kx, ky); ctx.translate(-ox, -oy);
     for (const s of sel.set) if (s.tool === 'hl') drawStroke(ctx, s);
     for (const s of sel.set) if (s.tool !== 'hl') drawStroke(ctx, s);
@@ -1203,7 +1239,16 @@ export class Paper {
     const u = 1 / this.scale;
     ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]); // 고른 뒤엔 사각형 (11/23 결정)
     ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 2 * u;
-    if (!sel.cites?.size) for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    if (!sel.cites?.size) {
+      if (!rt) for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      // 회전 손잡이: 상자 위 가운데, 가는 선으로 이어진 동그라미 안에 둥근 화살표
+      const rh = rotHandle(nb, this.scale), mx = (nb[0] + nb[2]) / 2;
+      ctx.lineWidth = 1.4 * u; ctx.beginPath(); ctx.moveTo(mx, nb[1]); ctx.lineTo(rh.x, rh.y + 11 * u); ctx.stroke();
+      ctx.lineWidth = 2 * u; ctx.beginPath(); ctx.arc(rh.x, rh.y, 11 * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.lineWidth = 1.6 * u; ctx.beginPath(); ctx.arc(rh.x, rh.y, 5 * u, -Math.PI * 0.9, Math.PI * 0.5); ctx.stroke();
+      const ex = rh.x + 5 * u * Math.cos(Math.PI * 0.5), ey = rh.y + 5 * u * Math.sin(Math.PI * 0.5);
+      ctx.beginPath(); ctx.moveTo(ex - 3.2 * u, ey - 1.6 * u); ctx.lineTo(ex, ey); ctx.lineTo(ex - 0.6 * u, ey - 3.6 * u); ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1307,7 +1352,8 @@ export class Paper {
     let left = b[0] * s;
     if (left + mw > vis.r - pad) left = b[2] * s - mw;
     left = Math.max(vis.l + pad, Math.min(left, vis.r - mw - pad));
-    let top = b[1] * s - mh - 8; // 기본: 선택 영역 위
+    const rotGap = this.selection.cites?.size ? 0 : 44; // 회전 손잡이 자리만큼 더 위로
+    let top = b[1] * s - mh - 8 - rotGap; // 기본: 선택 영역 위
     if (top < vis.t + pad) top = b[3] * s + 8 <= vis.b - mh - pad ? b[3] * s + 8 : vis.t + pad; // 위가 안 보이면 아래, 그것도 안 되면 화면 맨 위
     top = Math.max(vis.t + pad, Math.min(top, vis.b - mh - pad));
     m.style.left = left + 'px';
@@ -2267,6 +2313,8 @@ function bbox(strokes) {
   return [a - 10, b - 10, c + 10, d + 10];
 }
 // 선택 상자 손잡이: 위치(x,y), 늘리는 방향(dx,dy), 고정되는 반대쪽 점(ax,ay)
+// 회전 손잡이 자리: 선택 상자 위 가운데에서 화면 기준 28px 위
+function rotHandle(b, scale) { return { x: (b[0] + b[2]) / 2, y: b[1] - 28 / scale }; }
 function selHandles(b) {
   const mx = (b[0] + b[2]) / 2, my = (b[1] + b[3]) / 2, out = [];
   for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
