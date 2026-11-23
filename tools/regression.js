@@ -557,7 +557,7 @@ export async function run() {
     // 펜슬처럼 촘촘하고 떨리는 점: 보정 0과 100의 모양 차이가 확실해야 해요 (점마다 다듬던 땐 거의 같았어요)
     const { hlSmoothPath } = await import('../js/ink.js');
     const pts = []; for (let i = 0; i < 400; i++) pts.push(100 + i * 0.5, 300 + (i % 2 ? 2.5 : -2.5), 0.5);
-    const wig = (q) => { let m = 0, n = 0; for (let i = q.length >> 1; i < q.length - 2; i += 2) { m += Math.abs(q[i + 1] - 300); n++; } return m / n; }; // 뒤쪽 절반의 평균 흔들림
+    const wig = (q) => { let m = 0, n = 0; for (let i = (q.length >> 2) * 2; i < q.length - 2; i += 2) { m += Math.abs(q[i + 1] - 300); n++; } return m / n; }; // 뒤쪽 절반의 평균 흔들림
     const w0 = wig(hlSmoothPath(pts, { st: 0 })), w100 = wig(hlSmoothPath(pts, { st: 100 }));
     return (w0 > 2 && w100 < w0 * 0.3) || '형광펜 손떨림 보정이 거의 안 먹어요 ' + [w0.toFixed(2), w100.toFixed(2)];
   });
