@@ -722,9 +722,10 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   };
   // 툴바 밖을 새로 누르면 툴바 누름은 끝난 거예요
   const tbOutside = (e) => { if (tbPressing && !tbSlot.contains(e.target)) tbRelease(); };
-  document.addEventListener('pointerdown', tbOutside, true);
-  window.addEventListener('pointerup', tbRelease, true);
-  window.addEventListener('pointercancel', tbRelease, true);
+  const PC = { capture: true, passive: true }; // 화면 전체 감시는 수동으로 (스크롤이 JS를 기다리지 않게)
+  document.addEventListener('pointerdown', tbOutside, PC);
+  window.addEventListener('pointerup', tbRelease, PC);
+  window.addEventListener('pointercancel', tbRelease, PC);
 
   // 툴바에서 연 창(펜 설정 · 색 · 굵기 · 더 보기)은 바깥을 누르면 닫혀요
   const closeMenusOutside = (e) => {
@@ -734,7 +735,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (toolbarEl.contains(e.target) && e.target.closest('[data-tool], [data-color], [data-size], [data-act="more"]')) return;
     m.remove();
   };
-  document.addEventListener('pointerdown', closeMenusOutside, true);
+  document.addEventListener('pointerdown', closeMenusOutside, { capture: true, passive: true });
 
   // 굵기 슬라이더 (굿노트처럼): 고른 칸의 굵기를 바꾸고, 종이 위에 실제 크기를 보여 줘요
   function openSizeSlider(t, idx) {
@@ -968,7 +969,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   //  - 그 밖의 버튼: 뗄 때(up) 웹이 그 탭을 못 받았으면 대신 눌러요
   const TB_CTRL = '[data-tool], [data-color], [data-size], [data-em]';
   let lastPenDown = 0, lastClick = 0, nativeDownAt = 0, tapStart = 0;
-  document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'pen' && e.pointerId !== 78) lastPenDown = performance.now(); }, true);
+  document.addEventListener('pointerdown', (e) => { if (e.pointerType === 'pen' && e.pointerId !== 78) lastPenDown = performance.now(); }, { capture: true, passive: true });
   document.addEventListener('click', () => { lastClick = performance.now(); }, true);
   // 앱 신호로 이미 누른 툴바 버튼을 웹킷이 늦게 또 누르면 막아요 (펜이 한 번에 두 번 눌려 펜 설정까지 열리던 것)
   if (nativeInk) tbSlot.addEventListener('pointerdown', (e) => {

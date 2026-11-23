@@ -107,11 +107,13 @@ let saveTimer;
 // 손을 대고 있지 않을 때까지 기다렸다가(마지막 터치 뒤 0.8초) 저장해요. 앱을 닫거나 화면을 떠날 땐 바로 저장해요.
 let lastTouchAt = 0, savePending = false;
 if (typeof document !== 'undefined') {
-  document.addEventListener('pointerdown', () => { lastTouchAt = performance.now(); }, true);
-  document.addEventListener('pointerup', () => { lastTouchAt = performance.now(); }, true);
+  // passive: 화면 전체에 붙는 감시라, 수동(passive)이 아니면 웹킷이 모든 터치마다 JS를 기다렸다가 스크롤을 시작해요
+  document.addEventListener('pointerdown', () => { lastTouchAt = performance.now(); }, { capture: true, passive: true });
+  document.addEventListener('pointerup', () => { lastTouchAt = performance.now(); }, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && savePending) saveNotes(true); });
   window.addEventListener('pagehide', () => { if (savePending) saveNotes(true); });
 }
+export const quietMs = () => performance.now() - lastTouchAt; // 마지막 터치 뒤 지난 시간
 export function saveNotes(now = false) {
   clearTimeout(saveTimer);
   savePending = true;

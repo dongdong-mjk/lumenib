@@ -319,6 +319,17 @@ export async function run() {
     const sel = $$('.verse.sel').map((v) => +v.dataset.n);
     return (sel.join() === '9,10,11') || '고른 절: ' + sel.join();
   });
+  await check('구절 고르기·풀기가 가벼움: 목록을 다시 만들지 않고 스크롤 자리 그대로', async () => {
+    const body = $('.bp-body'), v12 = $('.verse[data-n="12"]');
+    body.scrollTop = 120; await wait(50);
+    const st = body.scrollTop, t0 = performance.now();
+    v12.click(); v12.click();
+    const ms = performance.now() - t0;
+    if ($('.verse[data-n="12"]') !== v12) return '고를 때마다 목록을 통째로 다시 만들어요';
+    if (body.scrollTop !== st) return '스크롤 자리가 바뀌어요';
+    if (v12.classList.contains('sel')) return '다시 눌러도 안 풀려요';
+    return ms < 30 || '고르기가 무거워요 ' + Math.round(ms) + 'ms';
+  });
   await check('고른 구절 위: 세로는 목록 스크롤 · 노트 화면 선택 취소(×)', async () => {
     const v = $('.verse.sel'), body = v.closest('.bp-body'), r = v.getBoundingClientRect(), st0 = body.scrollTop;
     const ev = (t, x, y, tg) => (tg || body).dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, pointerId: 901, pointerType: 'touch', bubbles: true, cancelable: true, button: 0, buttons: t === 'pointerup' ? 0 : 1 }));

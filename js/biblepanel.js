@@ -35,7 +35,20 @@ export class BiblePanel {
   get selection() {
     return this.sel ? { book: this.book, ch: this.ch, from: this.sel.from, to: this.sel.to } : null;
   }
-  clearSel() { this.sel = null; this.render({ keepScroll: true }); this.o.onChange?.(); }
+  clearSel() { this.sel = null; if (!this.paintSel()) this.render({ keepScroll: true }); this.o.onChange?.(); }
+  // 고른 구절만 바꿀 땐 목록을 다시 만들지 않고 표시만 바꿔요 (다시 만들면 스크롤이 끊기고 무거웠어요)
+  paintSel() {
+    const body = this.view === 'verses' && this.el.querySelector('.bp-body');
+    if (!body || this._painted !== `${this.book}:${this.ch}`) return false;
+    const s = this.sel;
+    for (const v of body.querySelectorAll('.verse')) {
+      const n = +v.dataset.n, inSel = !!s && n >= s.from && n <= s.to, c = v.classList;
+      c.toggle('sel', inSel); c.toggle('first', inSel && n === s.from); c.toggle('last', inSel && n === s.to);
+      c.toggle('today', v.dataset.today === '1' && !inSel);
+    }
+    this.renderFloat();
+    return true;
+  }
 
   render({ scrollTo, keepScroll } = {}) {
     const prevScroll = this.el.querySelector('.bp-body')?.scrollTop || 0;
@@ -155,7 +168,7 @@ export class BiblePanel {
       ${verses.map((v) => {
         const inSel = sel && v.n >= sel.from && v.n <= sel.to;
         const cls = ['verse', isToday(v.n) && !inSel ? 'today' : '', inSel ? 'sel' : '', inSel && v.n === sel.from ? 'first' : '', inSel && v.n === sel.to ? 'last' : ''].join(' ');
-        return `<div class="${cls}" data-n="${v.n}">${noteVerses.has(v.n) ? '<i class="has-note"></i>' : ''}<span class="vn">${v.n}</span><span class="vt">${esc(v.t)}</span></div>`;
+        return `<div class="${cls}" data-n="${v.n}"${isToday(v.n) ? ' data-today="1"' : ''}>${noteVerses.has(v.n) ? '<i class="has-note"></i>' : ''}<span class="vn">${v.n}</span><span class="vt">${esc(v.t)}</span></div>`;
       }).join('')}
       <div class="chapter-nav">
         ${this.ch > 1 ? `<button class="btn btn-text" data-ch="${this.ch - 1}">${icon.arrowLeft} ${this.ch - 1}장</button>` : '<span></span>'}
@@ -167,6 +180,7 @@ export class BiblePanel {
       const t = body.querySelector(`.verse[data-n="${scrollTo}"]`);
       if (t) body.scrollTop = Math.max(0, t.offsetTop - body.clientHeight * 0.3);
     } else if (keepScroll != null) body.scrollTop = keepScroll;
+    this._painted = `${this.book}:${this.ch}`;
     this.renderFloat();
     this.bindCommon();
     this.bindVerses(body);
@@ -235,19 +249,20 @@ export class BiblePanel {
       else if (n === s.to) this.sel = { from: s.from, to: n - 1 };
       else if (n === s.from) this.sel = { from: n + 1, to: s.to };
       else this.sel = { from: s.from, to: n };
-      this.render({ keepScroll: true });
+      if (!this.paintSel()) this.render({ keepScroll: true });
       this.o.onChange?.();
     });
     if (!this.o.onDrag) return;
     // 고른 구절 위에서: 세로로 움직이면 목록 스크롤, 옆으로(비스듬히 포함) 움직이면 노트로 끌기.
     // 브라우저에 맡기면 방향을 잘못 읽어 끌기가 중간에 끊겨서, 방향 판단과 스크롤을 직접 해요 (11/21)
     body.addEventListener('pointerdown', (e) => {
+      suppressClick = false;
       const v = e.target.closest('.verse.sel');
       if (!v || e.button > 0) return;
       drag = { x0: e.clientX, y0: e.clientY, mode: null, id: e.pointerId, ly: e.clientY, lt: e.timeStamp, vy: 0 };
       cancelAnimationFrame(this._fling);
       try { body.setPointerCapture(e.pointerId); } catch {}
-    });
+    }, { passive: true });
     const move = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
       if (!drag.mode) {
@@ -257,8 +272,7 @@ export class BiblePanel {
         suppressClick = true;
         if (drag.mode === 'drag') this.o.onDrag.start?.(this.selection);
       }
-      e.preventDefault();
-      if (drag.mode === 'scroll') {
+      if (drag.mode === 'scroll') { // 고른 구절은 touch-action: none 이라 막을 필요 없어요
         const dt = Math.max(1, e.timeStamp - drag.lt);
         body.scrollTop -= e.clientY - drag.ly;
         drag.vy = (e.clientY - drag.ly) / dt;
@@ -283,8 +297,9 @@ export class BiblePanel {
         this._fling = requestAnimationFrame(step);
       }
     };
-    body.addEventListener('pointermove', move);
-    body.addEventListener('pointerup', up);
-    body.addEventListener('pointercancel', up);
+    // 수동(passive)으로 붙여요: 목록 어디를 만져도 웹킷이 JS를 기다렸다가 스크롤하던 것 (가끔 늦던 원인)
+    body.addEventListener('pointermove', move, { passive: true });
+    body.addEventListener('pointerup', up, { passive: true });
+    body.addEventListener('pointercancel', up, { passive: true });
   }
 }

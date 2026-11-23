@@ -178,7 +178,7 @@ async function gunzip(blob) {
 }
 
 async function upload(n) {
-  const body = await gzip(JSON.stringify(packNote(n)));
+  const packed = packNote(n), body = await gzip(JSON.stringify(packed));
   if (!n.deleted) {
     const { error } = await sb.storage.from(BUCKET).upload(path(n.id), body, { upsert: true, contentType: 'application/gzip' });
     if (error) throw error;
@@ -187,7 +187,7 @@ async function upload(n) {
   }
   const row = {
     id: n.id, user_id: user.id, title: n.title || '', preacher: n.preacher || '', note_date: n.date || null,
-    passages: packNote(n).passages, done: !!n.done, deleted: !!n.deleted,
+    passages: packed.passages, done: !!n.done, deleted: !!n.deleted,
     file_bytes: n.deleted ? 0 : body.size, updated_ms: Number(n.updatedAt) || Date.now(),
   };
   const { error } = await sb.from('notes').upsert(row);
@@ -208,7 +208,9 @@ let running = null;
 function schedulePush() {
   if (!user) return;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(pushNow, 3000);
+  // 올리기(노트 전체를 글자로 바꾸고 압축)는 무거워서, 화면을 만지는 중이면 손을 뗀 뒤 2초까지 미뤄요 (말씀 목록 스크롤·선택이 가끔 늦던 것)
+  const later = () => { const q = S.quietMs(); if (q < 2000) pushTimer = setTimeout(later, 2000 - q); else pushNow(); };
+  pushTimer = setTimeout(later, 3000);
   emit('status');
 }
 export async function pushNow() {
@@ -226,7 +228,7 @@ export async function pushNow() {
         if (n.updatedAt === stamp) delete n._dirty; // 올리는 사이에 또 고쳤으면 다음에 다시 올려요
         if (n.deleted && !n._dirty) S.removeLocal(user.id, n.id);
       }
-      S.saveNotes(true);
+      S.saveNotes();
       lastSync = Date.now();
       setStatus('ok');
     } catch (e) {
