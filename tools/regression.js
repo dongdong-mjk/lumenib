@@ -575,7 +575,11 @@ export async function run() {
     for (let i = 1; i <= 4; i++) pts.push([0.2 * i, y - 0.5 * i, 0.5]); // 끝에서 살짝 되돌아옴
     const out = f(pts), last = out.at(-1);
     if (out.length > 45) return '몰린 점이 안 정리돼요 ' + out.length;
-    return last[1] >= y - 0.3 || '되돌아온 끝이 남아 있어요 ' + last[1].toFixed(2);
+    if (last[1] < y - 0.3) return '되돌아온 끝이 남아 있어요 ' + last[1].toFixed(2);
+    // 옆으로 살짝 꺾이며 뗀 끝도 빼요
+    const side = pts.slice(0, 40).concat([1, 2, 3, 4].map((i) => [0.55 * i, 80 + 0.05 * i, 0.5]));
+    const o2 = f(side).at(-1);
+    return o2[0] < 0.3 || '옆으로 꺾인 끝이 남아 있어요 ' + o2[0].toFixed(2);
   });
 
   await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {

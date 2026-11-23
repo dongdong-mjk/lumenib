@@ -232,7 +232,8 @@ func lumenCleanPenEnd(_ pts: [SIMD3<Double>]) -> [SIMD3<Double>] {
     var m = n - 1
     while m > j {
         let sx = out[m].x - out[m - 1].x, sy = out[m].y - out[m - 1].y
-        if (sx * dx + sy * dy) / dl < 0 { back += hypot(sx, sy); cut = m } else { break }
+        let sl = max(hypot(sx, sy), 1e-9)
+        if (sx * dx + sy * dy) / (dl * sl) < 0.5 { back += sl; cut = m } else { break } // 60° 넘게 꺾인 끝 (웹과 같음)
         m -= 1
     }
     return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? Array(out[0..<cut]) : out

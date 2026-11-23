@@ -2034,7 +2034,7 @@ function smoothPressure(pts) {
 // 지나온 점을 앞뒤로 고르게 다듬기 (양 끝 점은 그대로, 끝에 가까울수록 덜 다듬어서 펜촉 쪽은 바로 붙어 있어요)
 // 획 끝 정리 (앱 LumenInk.swift cleanPenEnd 와 같음): 좌표는 REF_SIZE 기준 단위
 //  1) 거의 같은 자리에 몰린 점은 하나로 (멈추며 뗄 때 끝에 점이 몰려 방향이 흔들렸어요)
-//  2) 끝에서 진행 방향과 반대로 살짝 되돌아온 점은 빼요 (그 자리에 둥근 끝이 한 번 더 생겨 뭉쳐 보였어요)
+//  2) 끝에서 진행 방향과 크게 꺾이거나 되돌아온 짧은 점은 빼요 (그 자리에서 선이 잘록해졌다 뭉쳐 보였어요)
 export const cleanPenEndForTest = (pts) => cleanPenEnd(pts); // 점검용
 function cleanPenEnd(pts) {
   if (pts.length < 4) return pts;
@@ -2056,7 +2056,9 @@ function cleanPenEnd(pts) {
   let cut = n, back = 0;
   for (let m = n - 1; m > j; m--) {
     const sx = out[m][0] - out[m - 1][0], sy = out[m][1] - out[m - 1][1];
-    if ((sx * dx + sy * dy) / dl < 0) { back += Math.hypot(sx, sy); cut = m; } else break;
+    const sl = Math.hypot(sx, sy) || 1e-9;
+    // 진행 방향에서 60° 넘게 꺾인 끝(되돌아옴·옆으로 꺾임)은 펜을 떼며 생긴 잔떨림이에요
+    if ((sx * dx + sy * dy) / (dl * sl) < 0.5) { back += sl; cut = m; } else break;
   }
   return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? out.slice(0, cut) : out;
 }
