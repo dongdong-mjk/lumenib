@@ -159,7 +159,7 @@ export async function run() {
     undo(); await settle();
     return w > 20 || '도형 크기가 이상해요 ' + w;
   });
-  await check('도형: 그린 모양대로 · 대충 그린 네모 인식 · 덜 닫힌 원도 원(매끄럽게) · 꺾은선 끝을 시작점에 대면 붙고, 붙은 뒤엔 닫힌 채로 늘어남', async () => {
+  await check('도형: 그린 모양대로 · 대충 그린 네모 인식 · 덜 닫힌 원도 원(매끄럽게) · 꺾은선 끝을 시작점에 대면 붙고, 붙은 뒤엔 그 꼭짓점만 펜을 따라감', async () => {
     tool('pen'); await settle();
     const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
     const drawHold = async (pts, after) => {
@@ -205,13 +205,14 @@ export async function run() {
     if (!poly?.sh) return '꺾은선이 도형으로 안 바뀜';
     const q = poly.pts, d = Math.hypot(q[q.length - 3] - q[0], q[q.length - 2] - q[1]);
     if (d >= 0.5) return '끝점이 시작점에 안 붙어요 ' + d.toFixed(1) + ' (배율 ' + k.toFixed(2) + ')';
-    // 4) 붙은 다음 펜을 더 움직이면 떨어지지 않고, 닫힌 채로 늘어나요
+    // 4) 붙은 다음 펜을 더 움직이면 떨어지지 않고, 붙은 꼭짓점(시작=끝)만 펜을 따라가요. 다른 꼭짓점은 그대로
     const poly2 = await drawHold(open, [[S[0] + 4, S[1] + 4], [S[0] - 60, S[1] - 50]]);
     undo(); await settle();
     const q2 = poly2.pts, d2 = Math.hypot(q2[q2.length - 3] - q2[0], q2[q2.length - 2] - q2[1]);
     if (d2 >= 0.5) return '붙은 뒤 펜을 움직이니 다시 떨어져요';
-    const xs2 = q2.filter((_, i) => i % 3 === 0), xs1 = q.filter((_, i) => i % 3 === 0);
-    return (Math.max(...xs2) - Math.min(...xs2)) > (Math.max(...xs1) - Math.min(...xs1)) + 30 || '붙은 뒤 펜을 따라 안 늘어나요';
+    if (Math.hypot(q2[0] * k - (S[0] - 60), q2[1] * k - (S[1] - 50)) > 3) return '붙은 꼭짓점이 펜을 안 따라가요';
+    const has = (x, y) => { for (let i = 0; i < q2.length; i += 3) if (Math.hypot(q2[i] * k - x, q2[i + 1] * k - y) < 6) return true; return false; };
+    return (has(300, 450) && has(300, 560)) || '다른 꼭짓점까지 움직였어요';
   });
   await check('펜슬처럼 떨리는 손으로 그은 선도 멈추면 직선 (펜·형광펜)', async () => {
     const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;

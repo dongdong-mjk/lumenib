@@ -566,7 +566,8 @@ export class Paper {
     this.scale = w / PAGE_W;
     const h0 = Math.round(PAGE_H * this.scale);
     // 크게 확대하면 캔버스가 너무 커져서(아이패드 한도 넘음) 버벅이고 그림이 빠질 수 있어요. 한 장 크기를 한도 안으로
-    const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(14e6 / (w * h0)));
+    // 장마다 캔버스가 여러 장이라, 한 장 한도를 낮추고(1000만 화소) 화면에서 먼 장은 비워 둬요 (아이패드 메모리가 넘쳐 그림이 사라지던 것, 11/23)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(10e6 / (w * h0)));
     this.pagesEl.style.width = w + 'px';
     for (const p of this.pages) {
       if (!p) continue;
@@ -574,12 +575,11 @@ export class Paper {
       p.el.style.width = w + 'px';
       p.el.style.height = h + 'px';
       p.inner.style.transform = p.ui.style.transform = `scale(${this.scale})`;
-      for (const c of [p.bg, p.base, p.ink, p.live]) {
-        c.width = Math.round(w * dpr);
-        c.height = Math.round(h * dpr);
-        c.style.width = w + 'px';
-        c.style.height = h + 'px';
-      }
+      p.pw = Math.round(w * dpr); p.ph = Math.round(h * dpr);
+      for (const c of [p.bg, p.base, p.ink, p.live]) { c.style.width = w + 'px'; c.style.height = h + 'px'; }
+      for (const c of [p.bg, p.base, p.ink]) { c.width = 1; c.height = 1; } // 실제 화소는 그릴 때 (allocPage)
+      p.live.width = 1; p.live.height = 1; p._liveBox = 'clean'; // 쓰는 중 판은 쓸 때만
+      p.released = true;
       p.dpr = dpr;
       p.dirty = true; // 그림은 보이는 장부터 그려요 (아래 flushPages)
     }
@@ -591,20 +591,46 @@ export class Paper {
   flushPages(all = false) {
     if (!this.pages) return;
     const r = this.scrollEl.getBoundingClientRect(), m = r.height; // 화면 위아래로 한 화면씩 여유
-    let rest = false;
     for (const p of this.pages) {
-      if (!p?.dirty) continue;
+      if (!p) continue;
       const b = p.el.getBoundingClientRect();
-      if (all || (b.bottom > r.top - m && b.top < r.bottom + m)) this.drawPage(p); else rest = true;
+      const near = b.bottom > r.top - m && b.top < r.bottom + m;
+      const far = b.bottom < r.top - m * 2 || b.top > r.bottom + m * 2;
+      if (p.dirty && (all || near)) this.drawPage(p);
+      else if (far && !all && !p.released && this.selection?.page !== p.i) this.releasePage(p); // 멀어진 장은 화소를 비워요
     }
-    if (rest && !all) {
-      cancelAnimationFrame(this._flushRaf);
-      this._flushRaf = requestAnimationFrame(() => { const p = this.pages?.find((q) => q?.dirty); if (p) { this.drawPage(p); this.flushPages(); } });
-    }
+  }
+  // 장의 캔버스에 실제 화소를 잡아요 (보이기 직전에)
+  allocPage(p) {
+    if (!p.released) return;
+    for (const c of [p.bg, p.base, p.ink]) { if (c.width !== p.pw) c.width = p.pw; if (c.height !== p.ph) c.height = p.ph; }
+    p.released = false;
+  }
+  releasePage(p) {
+    for (const c of [p.bg, p.base, p.ink, p.live]) { c.width = 1; c.height = 1; }
+    if (p.hlLive) { p.hlLive.width = 1; p.hlLive.height = 1; }
+    p._liveBox = 'clean';
+    p.released = true; p.dirty = true;
+  }
+  // 쓰는 중 판(live)은 쓸 때만 화소를 잡고, 잠시 안 쓰면 비워요
+  liveFor(page) {
+    clearTimeout(page._liveFree);
+    if (page.live.width !== page.pw || page.live.height !== page.ph) { page.live.width = page.pw; page.live.height = page.ph; page._liveBox = 'clean'; }
+    return page.live;
+  }
+  freeLiveSoon(page) {
+    clearTimeout(page._liveFree);
+    page._liveFree = setTimeout(() => {
+      if (this.selection?.page === page.i || page._liveBusy) return;
+      page.live.width = 1; page.live.height = 1; page._liveBox = 'clean';
+      if (page.hlLive && !page._hlS) { page.hlLive.width = 1; page.hlLive.height = 1; }
+    }, 2000);
   }
 
   // ---------- 그리기 ----------
   ctxFor(canvas, page) {
+    if (canvas === page.live) this.liveFor(page);
+    else if (page.released && (canvas === page.base || canvas === page.ink || canvas === page.bg)) this.allocPage(page);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(page.dpr * this.scale, 0, 0, page.dpr * this.scale, 0, 0);
     return ctx;
@@ -636,6 +662,7 @@ export class Paper {
 
   // rect(종이 단위 [x0,y0,x1,y1])를 주면 그 부분만 지우고 그 부분에 걸친 획만 다시 그려요 (지우개처럼 자주 다시 그릴 때 가볍게, 11/23)
   drawPage(page, rect = null) {
+    if (page.released) { this.allocPage(page); page.dirty = true; }
     if (page.dirty) { page.dirty = false; this.drawBackground(page); rect = null; }
     const ctx = this.ctxFor(page.base, page), ictx = this.ctxFor(page.ink, page);
     if (rect) {
@@ -661,7 +688,7 @@ export class Paper {
     for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s) && near(s)) draw(ctx, s);
     for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s) && near(s)) draw(ictx, s);
     if (rect) { ctx.restore(); ictx.restore(); return; } // 부분만 다시 그릴 땐 위 층(쓰는 중·선택)은 그대로 둬요
-    this.clearLive(page);
+    this.clearLive(page, false);
     this.clearHlLive(page);
     if (sel) this.drawSelection(page);
   }
@@ -686,12 +713,13 @@ export class Paper {
     const sel = this.selection && this.selection.page === page.i;
     if (page.dirty || sel || this._hidden || this._hlFading?.size) return this.drawPage(page);
     drawStroke(this.ctxFor(s.tool === 'hl' ? page.base : page.ink, page), s);
-    this.clearLive(page);
+    this.clearLive(page, false);
     this.clearHlLive(page);
   }
 
   // 쓰는 중 판(live)은 큰 캔버스라 통째로 지우면 무거워요. 지난번에 그린 상자만 알면 그만큼만 지워요 (지우개·올가미가 버벅이던 것, 11/23)
-  clearLive(page) {
+  clearLive(page, draw = true) {
+    if (!draw && (page.live.width <= 1 || page._liveBox === 'clean')) { page._liveBox = page.live.width <= 1 ? 'clean' : page._liveBox; return null; } // 지우기만 할 땐 화소를 새로 잡지 않아요
     const ctx = this.ctxFor(page.live, page);
     const lb = page._liveBox;
     if (lb === 'clean') { /* 그린 게 없어요 */ }
@@ -719,11 +747,12 @@ export class Paper {
       return e.pointerType !== 'touch' || (this.fingerDraw && !this._pan);
     };
     // 두 손가락 스크롤이 시작되면 손가락으로 쓰던 획은 버려요
-    this._cancels.push(() => { if (cur && cur.touch && cur.kind !== 'erase') { const hl = cur.s?.tool === 'hl'; cur = null; if (hl) this.drawPage(page); else this.clearLive(page); } });
+    this._cancels.push(() => { if (cur && cur.touch && cur.kind !== 'erase') { const hl = cur.s?.tool === 'hl'; cur = null; if (hl) this.drawPage(page); else this.clearLive(page, false); } });
 
     c.addEventListener('pointerdown', (e) => {
       if (!accept(e) || e.button > 0) return;
       e.preventDefault();
+      page._liveBusy = true;
       try { c.setPointerCapture(e.pointerId); } catch {} // 앱에서 넘겨준 펜슬(가짜 포인터)은 잡을 수 없어요
       const [x, y] = this.toLocal(page, e);
       const pr = e.pointerType === 'pen' ? e.pressure : 0.5;
@@ -822,6 +851,7 @@ export class Paper {
     });
 
     const end = (e) => {
+      page._liveBusy = false; this.freeLiveSoon(page);
       if (!cur) return;
       const k = cur;
       cur = null;
@@ -837,7 +867,7 @@ export class Paper {
         this.changed(page);
       } else if (k.kind === 'erase') {
         this.flushDrawSoon(page);
-        this.clearLive(page);
+        this.clearLive(page, false);
         if (k.removed.length) { this._push({ t: 'page', i: page.i, strokes: k.before }); this.changed(page); }
       } else if (k.kind === 'lasso') {
         this.finishLasso(page, k.pts);
@@ -1060,7 +1090,7 @@ export class Paper {
       for (const c of cites) for (const q of this.strokesInCite(page.i, c)) set.add(q);
       for (const c of [...cites].sort((a, b) => (a.z || 0) - (b.z || 0))) this.raiseCite(page, c);
     }
-    if (!set.size && !cites.size) { this.clearLive(page); return; }
+    if (!set.size && !cites.size) { this.clearLive(page, false); return; }
     let box = set.size ? bbox([...set]) : null;
     for (const c of cites) { const b = this.citeBox(c); box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b; }
     this.selection = { page: page.i, set, cites, box, poly, hit, full: cites.size ? { set, cites, box } : null };
@@ -1187,7 +1217,7 @@ export class Paper {
       for (const q of sel.set) if (q.tool !== 'hl') drawStroke(ctx, q);
       { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
       this.pagesEl.appendChild(g);
-      this.clearLive(page); // 원래 자리의 선택 그림은 지워요
+      this.clearLive(page, false); // 원래 자리의 선택 그림은 지워요
       k.ghost = g;
     }
     k.ghost.style.transform = `translate(${k.dx * this.scale}px, ${k.dy * this.scale}px)`;
@@ -1894,17 +1924,12 @@ function shapeAt(sh, x, y) {
   if (sh.kind === 'open' && sh.verts) {
     // 마지막 꼭짓점(펜 끝)이 펜을 따라와요. 시작점에 가까이 대면 붙어서 닫혀요
     const vs = sh.verts.slice(0, -1).map((q) => q.slice()), s0 = vs[0];
-    const merged = Math.hypot(x - s0[0], y - s0[1]) < MERGE_DIST;
-    vs.push(merged ? s0.slice() : [x, y]);
+    // 시작점에 한 번 붙으면 계속 붙어 있어요. 그다음부터는 붙은 꼭짓점(시작=끝)만 펜을 따라 움직여요 (굿노트처럼, 11/23)
+    if (!sh.joined && Math.hypot(x - s0[0], y - s0[1]) < MERGE_DIST) sh.joined = true;
+    if (sh.joined) { vs[0] = [x, y]; vs.push(vs[0]); }
+    else vs.push([x, y]);
     const out = [];
     for (const q of chainPts(vs)) out.push(round(q[0]), round(q[1]), sh.p);
-    if (merged) {
-      // 시작점에 붙으면 닫힌 도형이 돼요. 그다음부터는 떨어지지 않고, 닫힌 도형처럼 펜 위치대로 늘어나요 (11/23)
-      sh.kind = 'closed-poly'; sh.verts = vs; sh.base = out.slice(); sh.ref = [x, y]; sh.rot = 0;
-      let cx = 0, cy = 0; const n = out.length / 3;
-      for (let i = 0; i < out.length; i += 3) { cx += out[i]; cy += out[i + 1]; }
-      sh.c = [cx / n, cy / n];
-    }
     return out;
   }
   // 닫힌 도형·원 (굿노트처럼): 펜 반대쪽을 고정하고, 펜 쪽을 잡아당기듯 가로·세로를 따로 늘려요 (비율이 펜 위치대로 바뀜)
