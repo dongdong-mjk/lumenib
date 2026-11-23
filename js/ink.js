@@ -373,7 +373,7 @@ export class Paper {
     rs.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       try { rs.setPointerCapture(e.pointerId); } catch {}
-      rz = { x0: e.clientX, cx: e.clientX, w0: citeW(c), id: e.pointerId, snap: this.snapshot(), cov: this.citeCoverBoxes(page).size };
+      rz = { x0: e.clientX, cx: e.clientX, w0: citeW(c), cw0: c.w, id: e.pointerId, cov: this.citeCoverBoxes(page).size };
       this.raiseCite(page, c);
     });
     const rsApply = () => {
@@ -395,7 +395,8 @@ export class Paper {
     const rsEnd = (e) => {
       if (!rz || e.pointerId !== rz.id) return;
       if (rz.raf) { cancelAnimationFrame(rz.raf); rsApply(); }
-      if (citeW(c) !== rz.w0) { this._push({ t: 'full', json: rz.snap }); this.onChange({}); this.onHistory(); if (this.citeCoverBoxes(page).size || rz.cov) this.drawPage(page); }
+      // 되돌리기 기록은 이 인용 자리·너비만 (노트 전체를 글자로 바꿔 두면 누르는 순간 느렸어요)
+      if (citeW(c) !== rz.w0) { this._push({ t: 'cite', ci: this.note.citations.indexOf(c), page: c.page, y: c.y, x: c.x, w: rz.cw0, hasW: true, strokes: {} }); this.onChange({}); this.onHistory(); if (this.citeCoverBoxes(page).size || rz.cov) this.drawPage(page); }
       rz = null;
     };
     rs.addEventListener('pointerup', rsEnd);
@@ -1087,7 +1088,12 @@ export class Paper {
     for (let i = 0; i < pts.length; i += 2) poly.push([pts[i], pts[i + 1]]);
     const set = new Set(), cites = new Set();
     if (poly.length > 4) {
+      let lx0 = Infinity, ly0 = Infinity, lx1 = -Infinity, ly1 = -Infinity;
+      for (const [x, y] of poly) { if (x < lx0) lx0 = x; if (x > lx1) lx1 = x; if (y < ly0) ly0 = y; if (y > ly1) ly1 = y; }
       for (const s of this.note.pages[page.i].strokes) {
+        // 올가미 상자 밖의 획은 바로 건너뛰어요 (글씨가 많을 때 올가미가 느리던 것, 11/23)
+        const sb = strokeBox(s);
+        if (sb[2] < lx0 || sb[0] > lx1 || sb[3] < ly0 || sb[1] > ly1) continue;
         // 굿노트처럼: 획의 일부만 올가미 안에 들어와도 그 획 전체를 골라요 (점 사이도 촘촘히 보고)
         const d = denseOf(s);
         for (let j = 0; j < d.length; j += 3) if (pip(poly, d[j], d[j + 1])) { set.add(s); break; }
@@ -1350,7 +1356,7 @@ export class Paper {
     }
     if (e.t === 'cite') {
       const c = this.note.citations[e.ci];
-      return { t: 'cite', ci: e.ci, page: c?.page, y: c?.y, x: c?.x, strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
+      return { t: 'cite', ci: e.ci, page: c?.page, y: c?.y, x: c?.x, w: c?.w, hasW: e.hasW, strokes: Object.fromEntries(Object.keys(e.strokes).map((k) => [k, (this.note.pages[k]?.strokes || []).slice()])) };
     }
     return e.t === 'page'
       ? { t: 'page', i: e.i, strokes: (this.note.pages[e.i]?.strokes || []).slice() }
@@ -1374,6 +1380,7 @@ export class Paper {
       if (!c) return;
       const touched = new Set([c.page, e.page, ...Object.keys(e.strokes).map(Number)]);
       c.page = e.page; c.y = e.y; if (e.x == null) delete c.x; else c.x = e.x;
+      if (e.hasW) { if (e.w == null) delete c.w; else c.w = e.w; }
       for (const k of Object.keys(e.strokes)) if (this.note.pages[k]) this.note.pages[k].strokes = e.strokes[k].slice();
       if (this.selection) { this.selection = null; this.hideLassoMenu(); }
       for (const i of touched) { const pg = this.pages[i]; if (pg) { this.renderCitations(pg); this.drawPage(pg); } }
@@ -1383,12 +1390,22 @@ export class Paper {
     }
     const pages = this.note.pages;
     while (pages.length <= e.i) { pages.push({ strokes: [] }); this.buildPage(pages.length - 1); this.layout(); }
+    const before = pages[e.i].strokes;
     pages[e.i].strokes = e.strokes.slice();
+    const hadSel = !!this.selection;
     if (this.selection) { this.selection = null; this.hideLassoMenu(); }
     this.trimTrailing();
     const page = this.pages[e.i];
     if (!page) { this.onChange({}); this.onHistory(); return; } // 빈 장이라 정리돼 사라진 경우
-    this.drawPage(page);
+    // 바뀐 획이 있던 자리만 다시 그려요 (글씨가 많을수록 되돌리기가 느려지던 것, 11/23)
+    const a = new Set(before), b = new Set(pages[e.i].strokes);
+    let rect = null;
+    for (const q of [...before.filter((x) => !b.has(x)), ...pages[e.i].strokes.filter((x) => !a.has(x))]) {
+      const bx = strokeBox(q), m = (q.w || 2) + 4;
+      rect = rect ? [Math.min(rect[0], bx[0] - m), Math.min(rect[1], bx[1] - m), Math.max(rect[2], bx[2] + m), Math.max(rect[3], bx[3] + m)] : [bx[0] - m, bx[1] - m, bx[2] + m, bx[3] + m];
+    }
+    if (hadSel || page.dirty || page.released || !rect || (rect[2] - rect[0]) * (rect[3] - rect[1]) > PAGE_W * PAGE_H * 0.5) this.drawPage(page);
+    else { this.drawPage(page, rect); this.clearLive(page, false); }
     this.changed(page);
   }
   // 되돌리면서 끝에 빈 장이 두 장 이상 남으면 한 장만 남겨요
@@ -1588,6 +1605,22 @@ function drawStroke(ctx, s, live = false) {
     // 일부만 다시 그릴 땐(지우개) 그 부분만큼만 따로 그려요. 큰 형광펜일수록 통째로 그려서 오래 멈췄어요
     const cr = ctx.__clip;
     if (cr) { const pd = s.w / 2 + 2; x0 = Math.max(x0, cr[0] - pd); y0 = Math.max(y0, cr[1] - pd); x1 = Math.min(x1, cr[2] + pd); y1 = Math.min(y1, cr[3] + pd); if (x0 > x1 || y0 > y1) return; }
+    if (hc.loops === undefined) {
+      // 스스로 겹치는 획(돼지꼬리)만 따로 그려 겹친 곳이 진해지지 않게. 대부분의 곧은 형광펜은 바로 그려요 (다시 그리기가 무거웠어요)
+      let L = 0; for (let i = 2; i < q.length; i += 2) L += Math.hypot(q[i] - q[i - 2], q[i + 1] - q[i - 1]);
+      const bw0 = hc.box[2] - hc.box[0], bh0 = hc.box[3] - hc.box[1];
+      hc.loops = L > (bw0 + bh0) * 1.15 + s.w;
+    }
+    if (!hc.loops) {
+      ctx.save();
+      ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT; ctx.globalCompositeOperation = 'multiply';
+      ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      if (typeof s.st === 'number' && !s.sh) hlCurve(ctx, q);
+      else { ctx.moveTo(q[0], q[1]); for (let i = 2; i < q.length; i += 2) ctx.lineTo(q[i], q[i + 1]); if (q.length === 2) ctx.lineTo(q[0] + 0.01, q[1]); }
+      ctx.stroke(); ctx.restore();
+      return;
+    }
     const m = ctx.getTransform(), k = m.a, pad = s.w / 2 + 2;
     const bx = Math.floor((x0 - pad) * k + m.e), by = Math.floor((y0 - pad) * k + m.f);
     const bw = Math.ceil((x1 - x0 + pad * 2) * k) + 2, bh = Math.ceil((y1 - y0 + pad * 2) * k) + 2;

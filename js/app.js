@@ -1312,8 +1312,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     track('task_done_note_saved');
     main.done = true;
     S.touch(main);
-    S.saveNotes(true);
+    // 홈으로 먼저 넘어가고 저장은 바로 다음에 (노트가 클수록 나가는 순간이 늦던 것, 11/23). 앱을 닫을 땐 그때 바로 저장돼요
     go('home', { highlight: main.id });
+    setTimeout(() => S.saveNotes(true), 0);
   }
 
   // 본문 없이 완료하려 할 때: 본문 후보 제안
