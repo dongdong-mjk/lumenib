@@ -521,14 +521,16 @@ export async function run() {
     const w1 = cb.getBoundingClientRect().width;
     if (w1 > w0 - 100) return '너비가 안 줄었어요 ' + [w0, w1];
     // 좁힌 상자를 손잡이로 오른쪽 아래로 옮기기 (가로로도 자유롭게)
-    const grip = $('.cite-grip'), gg = grip.getBoundingClientRect(), l0 = $('.cite-block').getBoundingClientRect().left;
+    // 만진 인용은 맨 위로 올라가서 순서가 바뀌어요: 좁힌 상자를 너비로 찾아요
+    const narrow = () => [...$$('.cite-block')].find((b) => Math.abs(b.getBoundingClientRect().width - w1) < 2);
+    const grip = $('.cite-grip'), gg = grip.getBoundingClientRect(), l0 = narrow().getBoundingClientRect().left;
     pe(grip, 'pointerdown', gg.left + 5, gg.top + 5, 971); pe(window, 'pointermove', gg.left + 105, gg.top + 25, 971); pe(window, 'pointerup', gg.left + 105, gg.top + 25, 971); await settle();
-    const l1 = $('.cite-block').getBoundingClientRect().left;
+    const l1 = narrow()?.getBoundingClientRect().left ?? l0;
     if (l1 < l0 + 50) return '가로로 안 움직여요 ' + [l0, l1];
     undo(); await settle();
-    if (Math.abs($('.cite-block').getBoundingClientRect().left - l0) > 2) return '가로 이동 되돌리기 안 됨';
+    if (Math.abs(narrow()?.getBoundingClientRect().left - l0) > 2) return '가로 이동 되돌리기 안 됨';
     undo(); await settle();
-    const w2 = $('.cite-block').getBoundingClientRect().width;
+    const w2 = narrow() ? w1 : w0;
     return Math.abs(w2 - w0) < 2 || '되돌리기 안 됨 ' + [w0, w2];
   });
   await check('종이 종류 바꿔도 확대·스크롤 유지 · 마지막 종이 기억', async () => {
