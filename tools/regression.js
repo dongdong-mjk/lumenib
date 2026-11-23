@@ -498,10 +498,14 @@ export async function run() {
     const top = order().at(-1);
     const ok = top === Math.round(a.y) && !ui(a).classList.contains('covered') && ui(b).classList.contains('covered');
     const inA1 = P.strokesInCite(0, a).has(st), inB1 = P.strokesInCite(0, b).has(st);
+    // a가 위로 오면 b 묶음 글씨는 a 자리에서 안 보여요
+    const cv = ink(), rr = cv.width / 726, alpha = (x, y) => cv.getContext('2d').getImageData(Math.round(x * rr), Math.round(y * rr), 1, 1).data[3];
+    const hiddenUnderA = alpha(bb[0] + 110, bb[1] + 20) === 0;
     undo(); await settle();
     await restore();
     if (!inB0 || inA0) return '겹친 곳에 쓴 글씨가 위 인용 묶음이 아니에요';
     if (!inB1 || inA1) return '아래 인용을 위로 올리니 글씨 묶음이 바뀌었어요';
+    if (!hiddenUnderA) return '위 인용 자리에 아래 인용의 글씨가 보여요';
     return ok || '만진 인용이 위로 안 올라와요 ' + order();
   });
 
