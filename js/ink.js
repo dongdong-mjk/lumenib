@@ -2003,11 +2003,13 @@ function styleOpts(st, po, legacy = false) {
   if (!po) return { ball: { scale: 1, thinning: 0, taper: 0, stream: 0.5 }, fountain: { scale: 1, thinning: 0.6, taper: 0, stream: 0.5 }, brush: { scale: 1.4, thinning: 0.75, taper: 14, stream: 0.5 } }[st];
   // 손떨림 보정 (11/22, 굿노트처럼): 선 끝은 펜촉에 바로 붙어 따라오고(stream 작게), 지나온 부분을 앞뒤 점과 고르게 다듬어요(sigma).
   // 예전 획(sv 없음)은 그때 방식(늦게 따라오는 stream) 그대로 그려요
-  const stream = legacy ? 0.25 + (po.stab / 100) * 0.6 : 0.15;
+  // 0%면 쓰는 그대로 (굿노트처럼): 따라오는 지연(stream)과 외곽 다듬기(smooth)를 보정 값에 맞춰요. 50%가 예전 기본값과 같아요 (11/23)
+  const stream = legacy ? 0.25 + (po.stab / 100) * 0.6 : (po.stab / 100) * 0.3;
   // 보정 0%여도 아주 약하게(1)는 다듬어요. 펜슬 점의 미세한 떨림 때문에 선이 군데군데 끊겨 보였어요
   const sigma = legacy ? 0 : Math.max(1, (po.stab / 100) * 6);
-  if (legacy) return { ...styleOptsBody(st, po, stream, sigma), legacy: true };
-  return styleOptsBody(st, po, stream, sigma);
+  const smooth = legacy ? 0.6 : 0.3 + (po.stab / 100) * 0.6;
+  if (legacy) return { ...styleOptsBody(st, po, stream, sigma), legacy: true, smooth };
+  return { ...styleOptsBody(st, po, stream, sigma), smooth };
 }
 function styleOptsBody(st, po, stream, sigma) {
   if (st === 'ball') return { scale: 1, thinning: 0, taper: 0, stream, sigma };
@@ -2074,7 +2076,7 @@ function gaussSmooth(pts, sigma) {
 }
 function strokeOpts(o, live) {
   return {
-    size: REF_SIZE, thinning: o.thinning, smoothing: 0.6, streamline: o.stream, // 쓰는 중과 완성본이 같은 보정
+    size: REF_SIZE, thinning: o.thinning, smoothing: o.smooth ?? 0.6, streamline: o.stream, // 쓰는 중과 완성본이 같은 보정
     simulatePressure: false, last: !live,
     easing: (t) => Math.sin((t * Math.PI) / 2),
     start: { taper: o.taper, cap: true }, end: { taper: live ? 0 : o.taper, cap: true },

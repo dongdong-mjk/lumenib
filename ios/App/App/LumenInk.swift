@@ -195,12 +195,18 @@ struct LumenStroke: Codable {
 
 private let REF_SIZE = 2.6 * 1.25
 
-struct LumenStyleParams { var scale: Double; var thinning: Double; var taper: Double; var stream: Double; var flat: Double; var sigma: Double = 0 }
+struct LumenStyleParams { var scale: Double; var thinning: Double; var taper: Double; var stream: Double; var flat: Double; var sigma: Double = 0; var smooth: Double = 0.6 }
 
 func lumenParams(_ st: LumenPenStyle, _ po: [String: Double]) -> LumenStyleParams {
     let v = { (k: LumenPenOption) in po[k.rawValue] ?? k.defaultValue }
     // 손떨림 보정 (웹 styleOpts 와 같음): 선 끝은 펜촉에 바로 붙고, 지나온 부분을 앞뒤 점과 고르게 다듬어요
-    let stream = 0.15, sigma = po["_raw"] != nil ? 0 : max(1, (v(.stab) / 100) * 6) // 도형(_raw)은 다듬지 않아요. 보정 0%여도 아주 약하게(1) (웹과 같음)
+    // 0%면 쓰는 그대로 (굿노트처럼): 지연(stream)·외곽 다듬기(smooth)도 보정 값에 맞춰요. 50%가 예전 기본값 (웹과 같음, 11/23)
+    let stream = (v(.stab) / 100) * 0.3, sigma = po["_raw"] != nil ? 0 : max(1, (v(.stab) / 100) * 6) // 도형(_raw)은 다듬지 않아요. 보정 0%여도 아주 약하게(1) (웹과 같음)
+    var r = lumenParamsBody(st, v, stream, sigma)
+    r.smooth = 0.3 + (v(.stab) / 100) * 0.6
+    return r
+}
+private func lumenParamsBody(_ st: LumenPenStyle, _ v: (LumenPenOption) -> Double, _ stream: Double, _ sigma: Double) -> LumenStyleParams {
     switch st {
     case .ball: return .init(scale: 1, thinning: 0, taper: 0, stream: stream, flat: 0, sigma: sigma)
     case .fountain:
@@ -289,7 +295,7 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
         for j in 0..<n { pts[j].z = pts[j].z * (1 - o.flat) + f[j] * o.flat }
     }
     var opt = Freehand.Options()
-    opt.size = REF_SIZE; opt.thinning = o.thinning; opt.smoothing = 0.6
+    opt.size = REF_SIZE; opt.thinning = o.thinning; opt.smoothing = o.smooth
     opt.streamline = o.stream // 쓰는 중에도 완성본과 같은 보정 (떼는 순간 선 모양이 바뀌던 것)
     opt.easing = { sin($0 * Double.pi / 2) }
     opt.taperStart = o.taper; opt.taperEnd = live ? 0 : o.taper
