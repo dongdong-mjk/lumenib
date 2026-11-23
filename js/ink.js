@@ -319,9 +319,11 @@ export class Paper {
   }
   // 인용마다 그 위를 덮고 있는 인용 상자들 (겹친 것만). 그 인용 묶음 글씨를 그릴 때 이 자리는 비워요
   citeCoverBoxes(page) {
+    if (!page?.inner) return new Map();
+    this.tagCiteStrokes(page.i); // 새 글씨 묶음 정하기 (다 정해져 있으면 바로 끝나요)
+    if (page._coverCache) return page._coverCache;
     const out = new Map();
-    if (!page?.inner) return out;
-    this.tagCiteStrokes(page.i);
+    page._coverCache = out; // 인용이 바뀔 때(updateCiteCover·renderCitations) 다시 재요
     const list = [...page.inner.querySelectorAll('.cite-block')].map((el) => this.note.citations.find((c) => citeEls.get(c) === el)).filter(Boolean);
     const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
     list.forEach((c, i) => {
@@ -335,6 +337,7 @@ export class Paper {
   // 아이콘(옮기기·빼기·너비 조절)은 맨 위 층에 있어서, 위에 겹친 인용이 덮는 자리면 숨겨요
   updateCiteCover(page) {
     if (!page?.inner) return;
+    page._coverCache = null;
     const els = [...page.inner.querySelectorAll('.cite-block')];
     const list = els.map((el) => this.note.citations.find((c) => citeEls.get(c) === el)).filter(Boolean);
     const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
@@ -666,7 +669,7 @@ export class Paper {
     if (page.dirty) { page.dirty = false; this.drawBackground(page); rect = null; }
     const ctx = this.ctxFor(page.base, page), ictx = this.ctxFor(page.ink, page);
     if (rect) {
-      for (const cx of [ctx, ictx]) { cx.save(); cx.beginPath(); cx.rect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.clip(); cx.clearRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); }
+      for (const cx of [ctx, ictx]) { cx.save(); cx.beginPath(); cx.rect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.clip(); cx.clearRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.__clip = rect; }
     } else {
       ctx.clearRect(0, 0, PAGE_W, PAGE_H);
       ictx.clearRect(0, 0, PAGE_W, PAGE_H);
@@ -687,7 +690,7 @@ export class Paper {
     };
     for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s) && near(s)) draw(ctx, s);
     for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s) && near(s)) draw(ictx, s);
-    if (rect) { ctx.restore(); ictx.restore(); return; } // 부분만 다시 그릴 땐 위 층(쓰는 중·선택)은 그대로 둬요
+    if (rect) { ctx.restore(); ictx.restore(); ctx.__clip = ictx.__clip = null; return; } // 부분만 다시 그릴 땐 위 층(쓰는 중·선택)은 그대로 둬요
     this.clearLive(page, false);
     this.clearHlLive(page);
     if (sel) this.drawSelection(page);
@@ -1571,9 +1574,20 @@ function drawStroke(ctx, s, live = false) {
   if (s.tool === 'hl') {
     // 형광펜: 획을 따로 불투명하게 그린 뒤 한 번에 반투명·곱하기로 얹어요.
     // 돼지꼬리처럼 스스로 겹치는 곳이 더 진해지지 않게 (쓰는 중 모습과도 같아요)
-    const q = s.sh ? hlRaw(p) : hlSmooth(p, s);
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (let i = 0; i < q.length; i += 2) { x0 = Math.min(x0, q[i]); x1 = Math.max(x1, q[i]); y0 = Math.min(y0, q[i + 1]); y1 = Math.max(y1, q[i + 1]); }
+    // 다듬은 점은 획마다 기억해요 (다시 그릴 때마다 계산하면 지우개가 형광펜에 닿을 때 멈칫했어요, 11/23)
+    let hc = _hlCache.get(s);
+    if (!hc || hc.pts !== p || hc.n !== p.length || hc.st !== s.st) {
+      const qq = s.sh ? hlRaw(p) : hlSmooth(p, s);
+      let a0 = Infinity, b0 = Infinity, a1 = -Infinity, b1 = -Infinity;
+      for (let i = 0; i < qq.length; i += 2) { if (qq[i] < a0) a0 = qq[i]; if (qq[i] > a1) a1 = qq[i]; if (qq[i + 1] < b0) b0 = qq[i + 1]; if (qq[i + 1] > b1) b1 = qq[i + 1]; }
+      hc = { pts: p, n: p.length, st: s.st, q: qq, box: [a0, b0, a1, b1] };
+      _hlCache.set(s, hc);
+    }
+    const q = hc.q;
+    let [x0, y0, x1, y1] = hc.box;
+    // 일부만 다시 그릴 땐(지우개) 그 부분만큼만 따로 그려요. 큰 형광펜일수록 통째로 그려서 오래 멈췄어요
+    const cr = ctx.__clip;
+    if (cr) { const pd = s.w / 2 + 2; x0 = Math.max(x0, cr[0] - pd); y0 = Math.max(y0, cr[1] - pd); x1 = Math.min(x1, cr[2] + pd); y1 = Math.min(y1, cr[3] + pd); if (x0 > x1 || y0 > y1) return; }
     const m = ctx.getTransform(), k = m.a, pad = s.w / 2 + 2;
     const bx = Math.floor((x0 - pad) * k + m.e), by = Math.floor((y0 - pad) * k + m.f);
     const bw = Math.ceil((x1 - x0 + pad * 2) * k) + 2, bh = Math.ceil((y1 - y0 + pad * 2) * k) + 2;
@@ -2146,6 +2160,7 @@ function hlPoints(p, w) {
 }
 // 점 사이가 멀면 사이 점을 채워 넣어요 (부분 지우개가 정확하게 닿도록)
 const _dense = new WeakMap();
+const _hlCache = new WeakMap(); // 형광펜 획마다 다듬은 점·상자
 function denseOf(stroke) { let d = _dense.get(stroke); if (!d) { d = densify(stroke.pts); _dense.set(stroke, d); } return d; }
 function densify(p) {
   const out = [p[0], p[1], p[2]];
