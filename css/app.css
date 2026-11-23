@@ -318,6 +318,7 @@ button { touch-action: manipulation; }
 .cite-rs::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 16px; height: 16px;
   background: no-repeat center / 16px 16px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 3 V5 A9 9 0 0 1 5 14 H3' fill='none' stroke='%23999' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E"); } /* 아이패드처럼 상자 안쪽에 모서리를 따라 */
 .cite-moving .cite-rs { visibility: hidden; }
+.cite-ui.covered, .cite-rs.covered { visibility: hidden; } /* 위에 겹친 인용이 덮는 자리의 아이콘은 숨김 */
 .cite-block.moving { z-index: 1; box-shadow: 0 6px 20px rgba(0,0,0,.18); border-color: #111; }
 .cite-block h5 { padding-right: 70px; }
 .mode2 { display: flex; background: #f0f0f0; border-radius: 10px; padding: 3px; }

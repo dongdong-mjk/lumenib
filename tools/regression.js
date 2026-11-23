@@ -475,6 +475,26 @@ export async function run() {
     if (back.join() !== t0.join()) return '되돌리기 후 자리 다름 ' + [t0, back];
     return cost < 60 || '손 뗄 때 처리가 무거움 ' + Math.round(cost) + 'ms';
   });
+  await check('겹친 인용: 아래 인용의 아이콘이 위 인용을 뚫고 안 보임 · 마지막에 만진 인용이 위로', async () => {
+    const P = window.__lumenibPaper, pg = P.pages[0];
+    const cs = P.note.citations.filter((c) => c.page === 0);
+    if (cs.length < 2) return '인용이 2개가 아님';
+    const [a, b] = cs, keep = cs.map((c) => [c, c.y, c.z]);
+    const restore = async () => { for (const [c, y, z] of keep) { c.y = y; if (z == null) delete c.z; else c.z = z; } P.renderCitations(pg); await settle(); };
+    // b(나중 것)를 a 위에 살짝 겹쳐 놓으면: b가 위, a의 오른쪽 위 아이콘은 b에 덮여 숨김
+    b.y = a.y + 12; delete a.z; delete b.z; P.renderCitations(pg); await settle();
+    const ui = (c) => [...pg.ui.querySelectorAll('.cite-ui')].find((u) => Math.abs(parseFloat(u.style.top) - c.y) < 1);
+    const order = () => [...pg.inner.querySelectorAll('.cite-block')].map((el) => Math.round(parseFloat(el.style.top)));
+    if (!ui(a)?.classList.contains('covered')) { await restore(); return '아래 인용의 아이콘이 위 인용 위로 보여요'; }
+    if (ui(b)?.classList.contains('covered')) { await restore(); return '위 인용의 아이콘이 숨겨졌어요'; }
+    // a를 만지면(올가미·손잡이) a가 위로 올라오고 아이콘도 다시 보여요
+    P.raiseCite(pg, a); await settle();
+    const top = order().at(-1);
+    const ok = top === Math.round(a.y) && !ui(a).classList.contains('covered') && ui(b).classList.contains('covered');
+    await restore();
+    return ok || '만진 인용이 위로 안 올라와요 ' + order();
+  });
+
   await check('올가미로 인용·글씨를 다음 장으로 옮기기 · 되돌리기', async () => {
     se.scrollTop = 0; await wait(100);
     const p0 = $$('.page')[0], pr = p0.getBoundingClientRect();

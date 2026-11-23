@@ -276,7 +276,8 @@ export class Paper {
   renderCitations(page) {
     page.inner.querySelectorAll('.cite-block').forEach((e) => e.remove());
     page.ui.querySelectorAll('.cite-ui, .cite-rs').forEach((e) => e.remove());
-    this.note.citations.filter((c) => c.page === page.i).forEach((c) => {
+    // 겹치면 마지막에 만진 인용이 위로 (z가 클수록 위, 같으면 넣은 순서)
+    this.note.citations.filter((c) => c.page === page.i).map((c, i) => [c, i]).sort((a, b) => (a[0].z || 0) - (b[0].z || 0) || a[1] - b[1]).forEach(([c]) => {
       const el = document.createElement('div');
       el.className = 'cite-block';
       el.style.top = c.y + 'px';
@@ -286,6 +287,31 @@ export class Paper {
       el.innerHTML = `<h5>${esc(refText(c))}</h5>${(c.text || []).map((v) => `<div class="row"><span class="vn">${v.n}</span><span>${esc(v.t)}</span></div>`).join('')}`;
       page.inner.appendChild(el);
       if (!this.readonly) this.addCiteHandle(page, c, el);
+    });
+    this.updateCiteCover(page);
+  }
+
+  // 인용을 맨 위로: 겹친 인용 중 마지막에 만진 것이 위에 보여요 (11/23)
+  raiseCite(page, c) {
+    const top = Math.max(0, ...this.note.citations.map((q) => q.z || 0));
+    if ((c.z || 0) !== top || this.note.citations.some((q) => q !== c && q.page === c.page && (q.z || 0) === top)) c.z = top + 1;
+    const el = citeEls.get(c);
+    if (el?.isConnected) el.parentElement.appendChild(el);
+    this.updateCiteCover(page);
+  }
+  // 아이콘(옮기기·빼기·너비 조절)은 맨 위 층에 있어서, 위에 겹친 인용이 덮는 자리면 숨겨요
+  updateCiteCover(page) {
+    if (!page?.inner) return;
+    const els = [...page.inner.querySelectorAll('.cite-block')];
+    const list = els.map((el) => this.note.citations.find((c) => citeEls.get(c) === el)).filter(Boolean);
+    const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+    list.forEach((c, i) => {
+      const above = list.slice(i + 1).map((q) => this.citeBox(q)).filter(Boolean);
+      const b = this.citeBox(c);
+      if (!b) return;
+      const r = b[2] - 5, icons = [r - 64, b[1] + 5, r, b[1] + 37], rsBox = [b[2] - 28, b[3] - 28, b[2], b[3]];
+      citeUis.get(c)?.classList.toggle('covered', above.some((a) => hit(icons, a)));
+      citeRs.get(c)?.classList.toggle('covered', above.some((a) => hit(rsBox, a)));
     });
   }
 
@@ -312,6 +338,7 @@ export class Paper {
       e.preventDefault(); e.stopPropagation();
       try { rs.setPointerCapture(e.pointerId); } catch {}
       rz = { x0: e.clientX, w0: citeW(c), id: e.pointerId, snap: this.snapshot() };
+      this.raiseCite(page, c);
     });
     rs.addEventListener('pointermove', (e) => {
       if (!rz || e.pointerId !== rz.id) return;
@@ -321,6 +348,7 @@ export class Paper {
       u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
       placeRs();
       if (this.selection?.cites?.has(c)) this.refreshSelBox(); // 올가미로 고른 인용이면 선택 테두리도 같이 (11/23)
+      this.updateCiteCover(page);
     });
     const rsEnd = (e) => {
       if (!rz || e.pointerId !== rz.id) return;
@@ -334,6 +362,7 @@ export class Paper {
     grip.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       try { grip.setPointerCapture(e.pointerId); } catch {}
+      this.raiseCite(page, c);
       // 인용 안에 쓴 밑줄·메모도 같이 옮겨요 (11/21). 원래 획은 되돌리기 기록에 두고, 새 획으로 바꿔 끼워 옮겨요
       const pg = this.note.pages[page.i], inside = this.strokesInCite(page.i, c), carry = [], preStrokes = pg.strokes.slice();
       if (inside.size) pg.strokes = pg.strokes.map((s) => {
@@ -924,6 +953,7 @@ export class Paper {
       // 고른 인용 위에 쓴 글씨(인용 넣은 뒤에 쓴 것)도 같이 골라서 함께 움직여요
       var hit = new Set(set); // 올가미가 실제로 두른 글씨 ('글씨만'으로 바꿀 때 써요)
       for (const c of cites) for (const q of this.strokesInCite(page.i, c)) set.add(q);
+      for (const c of [...cites].sort((a, b) => (a.z || 0) - (b.z || 0))) this.raiseCite(page, c);
     }
     if (!set.size && !cites.size) { this.clearLive(page); return; }
     let box = set.size ? bbox([...set]) : null;
