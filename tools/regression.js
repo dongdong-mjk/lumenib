@@ -556,10 +556,15 @@ export async function run() {
     if (!(hs?.tool === 'hl' && hs.st === 80)) return '형광펜 획에 보정 값이 없어요 ' + hs?.st;
     // 펜슬처럼 촘촘하고 떨리는 점: 보정 0과 100의 모양 차이가 확실해야 해요 (점마다 다듬던 땐 거의 같았어요)
     const { hlSmoothPath } = await import('../js/ink.js');
-    const pts = []; for (let i = 0; i < 400; i++) pts.push(100 + i * 0.5, 300 + (i % 2 ? 2.5 : -2.5), 0.5);
+    // 1) 펜슬의 잔떨림(점마다 ±1): 0%에서도 테두리가 매끈해야 해요
+    const jit = []; for (let i = 0; i < 400; i++) jit.push(100 + i * 0.5, 300 + (i % 2 ? 1 : -1), 0.5);
     const wig = (q) => { let m = 0, n = 0; for (let i = (q.length >> 2) * 2; i < q.length - 2; i += 2) { m += Math.abs(q[i + 1] - 300); n++; } return m / n; }; // 뒤쪽 절반의 평균 흔들림
-    const w0 = wig(hlSmoothPath(pts, { st: 0 })), w100 = wig(hlSmoothPath(pts, { st: 100 }));
-    return (w0 > 2 && w100 < w0 * 0.3) || '형광펜 손떨림 보정이 거의 안 먹어요 ' + [w0.toFixed(2), w100.toFixed(2)];
+    const e0 = wig(hlSmoothPath(jit, { st: 0 }));
+    if (e0 > 0.3) return '보정 0%에서 형광펜 테두리가 지글거려요 ' + e0.toFixed(2);
+    // 2) 손의 큰 흔들림(물결): 올릴수록 확실히 펴져요 (펜 손떨림 보정처럼)
+    const wav = []; for (let i = 0; i < 400; i++) wav.push(100 + i * 0.5, 300 + Math.sin(i * 0.5 * 2 * Math.PI / 30) * 4, 0.5);
+    const w0 = wig(hlSmoothPath(wav, { st: 0 })), w100 = wig(hlSmoothPath(wav, { st: 100 }));
+    return (w100 < w0 * 0.4) || '형광펜 손떨림 보정을 올려도 흐름이 안 펴져요 ' + [w0.toFixed(2), w100.toFixed(2)];
   });
 
   await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {

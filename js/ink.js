@@ -2110,12 +2110,13 @@ function hlSmooth(p, s = {}) {
   for (let i = 1; i < n; i++) { const x = p[i * 3], y = p[i * 3 + 1]; if (Math.hypot(x - X[X.length - 1], y - Y[Y.length - 1]) >= 0.8 || i === n - 1) { X.push(x); Y.push(y); } }
   const m = X.length, S = [0];
   for (let i = 1; i < m; i++) S.push(S[i - 1] + Math.hypot(X[i] - X[i - 1], Y[i] - Y[i - 1]));
-  const sig = (Math.max(0, Math.min(100, s.st)) / 100) * 18; // 0 → 그대로, 100 → 18 (종이 단위)
+  // 테두리는 늘 매끈하게(기본 4), 슬라이더는 펜 손떨림 보정처럼 선의 흐름을 더 부드럽게 (0% 4 → 100% 22, 종이 단위) (11/23 민정님)
+  const sig = 4 + (Math.max(0, Math.min(100, s.st)) / 100) * 18;
   const total = S[m - 1], q = [];
   let lo = 0;
   for (let i = 0; i < m; i++) {
     const sg = Math.min(sig, S[i] / 2, (total - S[i]) / 2); // 끝으로 갈수록 덜 다듬어서 양 끝은 그대로
-    if (sg < 0.05) { q.push(X[i], Y[i]); continue; }
+    if (sg < 0.05) { q.push(X[i], Y[i]); continue; } // 양 끝 점은 그대로
     const r = sg * 2.5;
     while (S[lo] < S[i] - r) lo++;
     let sx = 0, sy = 0, sw = 0;
