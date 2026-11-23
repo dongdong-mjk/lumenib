@@ -439,7 +439,7 @@ export async function run() {
     const c = base(), r = c.getBoundingClientRect();
     const cx0 = cb.getBoundingClientRect().left, sx0 = P.note.pages[0].strokes.find((q) => q.t === t0).pts[0];
     pe(c, 'pointerdown', r.left + 170 * k, r.top + top + 30); pe(c, 'pointermove', r.left + 170 * k + 900, r.top + top + 30); pe(c, 'pointerup', r.left + 170 * k + 900, r.top + top + 30); await settle();
-    const dCite = (cb.getBoundingClientRect().left - cx0) / k, sNow = P.note.pages[0].strokes.find((q) => q.t === t0);
+    const dCite = ($('.cite-block').getBoundingClientRect().left - cx0) / k /* 놓으면 인용을 다시 그려서 새로 찾아요 */, sNow = P.note.pages[0].strokes.find((q) => q.t === t0);
     const dInk = sNow ? sNow.pts[0] - sx0 : NaN, bx = P.selection?.box;
     if (Math.abs(dCite - dInk) > 2) return done('인용과 글씨가 어긋났어요 ' + Math.round(dCite) + ' / ' + Math.round(dInk));
     if (!bx || bx[2] > 726 - 20 + 1) return done('선택 테두리가 종이 밖이에요');
