@@ -329,16 +329,28 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
     #endif
 }
 
+/// 굵기가 갑자기 부풀지 않게 (웹 smoothRadii 와 같음)
+func lumenSmoothRadii(_ r: inout [Double], _ P: [CGPoint]) {
+    let n = r.count
+    if n < 3 { return }
+    for _ in 0..<3 { let o = r; for i in 1..<(n - 1) { r[i] = (o[i - 1] + 2 * o[i] + o[i + 1]) / 4 } }
+    func d(_ i: Int) -> Double { hypot(P[i].x - P[i - 1].x, P[i].y - P[i - 1].y) }
+    for i in 1..<n { r[i] = min(r[i], r[i - 1] + 0.25 * d(i)) }
+    var i = n - 2
+    while i >= 0 { r[i] = min(r[i], r[i + 1] + 0.25 * d(i + 1)); i -= 1 }
+}
+
 func lumenCapsulePath(_ sp: [Freehand.Point], thinning: Double, taper: Double, k: Double) -> CGPath {
     let path = CGMutablePath()
     guard !sp.isEmpty else { return path }
     let ease = { (t: Double) in sin(t * Double.pi / 2) }
-    let rad: [Double] = sp.map { q in
+    var rad: [Double] = sp.map { q in
         var m = thinning != 0 ? REF_SIZE * ease(0.5 - thinning * (0.5 - q.pressure)) : REF_SIZE / 2
         if taper > 0 && q.runningLength < taper { let t = q.runningLength / taper; m *= t * (2 - t) }
         return max(0.01, m) / k
     }
     let P = sp.map { CGPoint(x: $0.point.x / k, y: $0.point.y / k) }
+    lumenSmoothRadii(&rad, P)
     func circle(_ c: CGPoint, _ r: Double) { path.move(to: CGPoint(x: c.x + r, y: c.y)); path.addArc(center: c, radius: r, startAngle: 0, endAngle: -2 * .pi, clockwise: true) }
     if P.count == 1 { circle(P[0], rad[0]); return path }
     for i in 1..<P.count {

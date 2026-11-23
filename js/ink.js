@@ -2198,6 +2198,16 @@ function gaussSmooth(pts, sigma) {
     pts[i][0] = sx / sw; pts[i][1] = sy / sw;
   }
 }
+// 굵기가 갑자기 부풀지 않게 (앱 lumenSmoothRadii 와 같음, 11/23): 작은 원을 그릴 때 방향이 바뀌는 곳마다 누르는 힘이 튀어 혹이 생겼어요
+//  1) 앞뒤와 섞기 3번  2) 지나온 거리 1당 반지름이 0.25 넘게 바뀌지 않게 (앞·뒤 두 번)
+function smoothRadii(r, P) {
+  const n = r.length;
+  if (n < 3) return;
+  for (let pass = 0; pass < 3; pass++) { const o = r.slice(); for (let i = 1; i < n - 1; i++) r[i] = (o[i - 1] + 2 * o[i] + o[i + 1]) / 4; }
+  const d = (i) => Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+  for (let i = 1; i < n; i++) r[i] = Math.min(r[i], r[i - 1] + 0.25 * d(i));
+  for (let i = n - 2; i >= 0; i--) r[i] = Math.min(r[i], r[i + 1] + 0.25 * d(i + 1));
+}
 // 펜 점(다듬은 가운데 선 + 누르는 힘) → 굵기가 바뀌는 마디들의 합. 좌표는 REF 단위, k로 나눠 종이 단위로
 export function capsulePath(sp, o, k) {
   const path = new Path2D();
@@ -2209,6 +2219,7 @@ export function capsulePath(sp, o, k) {
     return Math.max(0.01, m) / k;
   });
   const P = sp.map((q) => [q.point[0] / k, q.point[1] / k]);
+  smoothRadii(rad, P);
   const circle = (c, r) => { path.moveTo(c[0] + r, c[1]); path.arc(c[0], c[1], r, 0, -Math.PI * 2, true); };
   if (P.length === 1) { circle(P[0], rad[0]); return path; }
   for (let i = 1; i < P.length; i++) {
