@@ -918,12 +918,13 @@ export class Paper {
         if (hit) cites.add(c);
       }
       // 고른 인용 위에 쓴 글씨(인용 넣은 뒤에 쓴 것)도 같이 골라서 함께 움직여요
+      var hit = new Set(set); // 올가미가 실제로 두른 글씨 ('글씨만'으로 바꿀 때 써요)
       for (const c of cites) for (const q of this.strokesInCite(page.i, c)) set.add(q);
     }
     if (!set.size && !cites.size) { this.clearLive(page); return; }
     let box = set.size ? bbox([...set]) : null;
     for (const c of cites) { const b = this.citeBox(c); box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b; }
-    this.selection = { page: page.i, set, cites, box, poly }; // poly: 그린 올가미 모양 그대로 보여 줘요
+    this.selection = { page: page.i, set, cites, box, poly, hit, full: cites.size ? { set, cites, box } : null };
     this.drawPage(page);
     this.showLassoMenu();
   }
@@ -1048,7 +1049,10 @@ export class Paper {
     if (!this.selection) return;
     const m = document.createElement('div');
     m.className = 'lasso-menu';
-    m.innerHTML = `<button data-a="del">삭제</button><button data-a="done">선택 해제</button>`;
+    // 인용이 같이 골라졌으면 '글씨만' ↔ '인용 포함'으로 바꿀 수 있어요 (인용 안 글씨만 옮기고 싶을 때, 11/23)
+    const sel0 = this.selection, canOnly = sel0.full && sel0.hit?.size;
+    const only = canOnly ? `<button data-a="only">${sel0.cites.size ? '글씨만' : '인용 포함'}</button>` : '';
+    m.innerHTML = `${only}<button data-a="del">삭제</button><button data-a="done">선택 해제</button>`;
     // 누르는 순간 바로 실행 (click을 기다리면 빠르게 연달아 누를 때 씹혀요)
     m.addEventListener('pointerdown', (e) => {
       e.stopPropagation(); e.preventDefault();
@@ -1068,6 +1072,18 @@ export class Paper {
         this.selection = null; this.hideLassoMenu();
         this.drawPage(this.pages[sel.page]);
         this.changed(this.pages[sel.page]);
+      } else if (a === 'only') {
+        const sel = this.selection, pg = this.pages[sel.page];
+        for (const c of sel.cites || []) for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.transform = '';
+        if (sel.cites.size) { sel.set = new Set(sel.hit); sel.cites = new Set(); sel.box = bbox([...sel.set]); }
+        else {
+          sel.set = sel.full.set; sel.cites = sel.full.cites;
+          let box = sel.set.size ? bbox([...sel.set]) : null;
+          for (const c of sel.cites) { const b = this.citeBox(c); if (b) box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b; }
+          sel.box = box;
+        }
+        this.drawPage(pg);
+        this.showLassoMenu();
       } else if (a === 'done') this.clearSelection();
     });
     this.pages[this.selection.page].el.appendChild(m);
@@ -1161,14 +1177,18 @@ export class Paper {
   cloneSelection() {
     const sel = this.selection;
     const pg = this.note.pages[sel.page];
-    const next = new Set();
+    const next = new Set(), map = new Map();
     pg.strokes = pg.strokes.map((s) => {
       if (!sel.set.has(s)) return s;
       const c = { ...s, pts: s.pts.slice() };
-      next.add(c);
+      next.add(c); map.set(s, c);
       return c;
     });
     sel.set = next;
+    // '글씨만 ↔ 인용 포함' 전환용 목록도 새 획으로 바꿔 둬요
+    const re = (st) => st && new Set([...st].map((q) => map.get(q) || q));
+    sel.hit = re(sel.hit);
+    if (sel.full) sel.full.set = re(sel.full.set);
   }
   restore(json) {
     const d = JSON.parse(json);

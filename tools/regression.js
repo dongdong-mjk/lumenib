@@ -387,6 +387,32 @@ export async function run() {
     return ok || '인용이 안 골라짐';
   });
 
+  await check("올가미로 인용 위 글씨를 고른 뒤 '글씨만' → 글씨만 옮겨지고 인용은 그대로 · '인용 포함'으로 되돌리기", async () => {
+    se.scrollTop = 0; await wait(100);
+    const P = window.__lumenibPaper, cb = $('.cite-block'), pr = $$('.page')[0].getBoundingClientRect(), top = cb.getBoundingClientRect().top - pr.top;
+    tool('pen'); await settle();
+    stroke(line(120, top + 30, 220, top + 30)); await settle();
+    const s0 = P.note.pages[0].strokes.at(-1), y0 = s0.pts[1];
+    tool('lasso'); await settle();
+    stroke(box(105, top + 18, 235, top + 42)); await settle();
+    const btn = () => $$('.lasso-menu button').find((b) => b.dataset.a === 'only');
+    if (!P.selection?.cites?.size) { undo(); await settle(); return '인용이 같이 안 골라짐'; }
+    if (!btn() || btn().textContent !== '글씨만') { undo(); await settle(); return "'글씨만' 버튼이 없어요"; }
+    btn().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
+    if (P.selection.cites.size || !btn() || btn().textContent !== '인용 포함') { undo(); await settle(); return "'글씨만'으로 안 바뀌어요"; }
+    btn().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
+    if (!P.selection.cites.size) { undo(); await settle(); return "'인용 포함'으로 안 돌아가요"; }
+    btn().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
+    const c = base(), r = c.getBoundingClientRect(), ct0 = cb.getBoundingClientRect().top;
+    pe(c, 'pointerdown', r.left + 170, r.top + top + 30); pe(c, 'pointermove', r.left + 170, r.top + top + 90); pe(c, 'pointerup', r.left + 170, r.top + top + 90); await settle();
+    const moved = P.note.pages[0].strokes.find((q) => q.t === s0.t && q.pts.length === s0.pts.length);
+    const citeMoved = Math.abs(cb.getBoundingClientRect().top - ct0) > 1;
+    $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle();
+    undo(); await settle(); undo(); await settle();
+    if (citeMoved) return '인용도 같이 움직였어요';
+    return (moved && moved.pts[1] - y0 > 20) || '글씨가 안 움직였어요';
+  });
+
   await check('올가미로 인용 두 개 옮기기 · 되돌리기 (가볍게) · 크기 조절 손잡이도 같이', async () => {
     se.scrollTop = 0; await wait(100);
     $('.verse[data-n="20"]')?.click(); await wait(300);
