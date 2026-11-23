@@ -662,8 +662,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (isReadonly()) { slot.innerHTML = ''; return; }
     const t = tool.type;
     // 한 번 더 누르면 설정 창이 열리는 도구는, 골랐을 때 아래에 작은 화살표가 스르륵 나타나요 (굿노트처럼, 11/23)
-    const HAS_PANEL = { pen: true };
-    const tb = (k, ic, label) => `<button class="tb-btn ${t === k ? 'on' : ''}" data-tool="${k}" aria-label="${label}">${ic}${HAS_PANEL[k] ? '<svg class="tb-more-ind" width="8" height="5" viewBox="0 0 8 5" aria-hidden="true"><path d="M1 1l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</button>`;
+    // 굿노트처럼: 고른 도구 칸이 옆으로 넓어지며 아이콘 오른쪽에 화살표가 붙어요 (펜·형광펜)
+    const HAS_PANEL = { pen: true, hl: true };
+    const tb = (k, ic, label) => `<button class="tb-btn ${HAS_PANEL[k] ? 'has-panel' : ''} ${t === k ? 'on' : ''}" data-tool="${k}" aria-label="${label}">${ic}${HAS_PANEL[k] ? '<svg class="tb-more-ind" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</button>`;
     let opts = '';
     if (t === 'pen' || t === 'hl') {
       const colors = t === 'pen' ? PEN_COLORS : HL_COLORS, sizes = t === 'pen' ? PEN_SIZES : HL_SIZES;
@@ -683,7 +684,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       <span class="tb-sep"></span><button class="tb-btn" data-act="more" aria-label="더 보기">${icon.more}</button></div>`;
     toolbarEl = slot.firstElementChild;
     fitToolbar();
-    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { if (b.dataset.tool === 'pen' && tool.type === 'pen') return openPenStyles(); slot.querySelectorAll('[data-tool]').forEach((x) => x.classList.toggle('on', x === b)); /* 누르는 순간 표시부터 바꿔요 (툴바 전체는 손을 뗀 뒤 다시 그려요) */ setTool(b.dataset.tool); track('task2_tool_' + b.dataset.tool); }));
+    slot.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('pointerdown', () => { if (b.dataset.tool === 'pen' && tool.type === 'pen') return openPenStyles(); if (b.dataset.tool === 'hl' && tool.type === 'hl') return openHlSettings(); slot.querySelectorAll('[data-tool]').forEach((x) => x.classList.toggle('on', x === b)); /* 누르는 순간 표시부터 바꿔요 (툴바 전체는 손을 뗀 뒤 다시 그려요) */ setTool(b.dataset.tool); track('task2_tool_' + b.dataset.tool); }));
     slot.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('pointerdown', () => {
       const key = t === 'pen' ? 'penColor' : 'hlColor';
       const i = +b.dataset.color;
@@ -740,6 +741,32 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   document.addEventListener('pointerdown', closeMenusOutside, { capture: true, passive: true });
 
   // 굵기 슬라이더 (굿노트처럼): 고른 칸의 굵기를 바꾸고, 종이 위에 실제 크기를 보여 줘요
+  // 형광펜 설정 (형광펜을 한 번 더 누르면): 투명도 · 손떨림 보정 (11/23)
+  function openHlSettings() {
+    const ex = toolbarEl.querySelector('.tb-menu');
+    if (ex) { const same = ex.classList.contains('hl-settings'); ex.remove(); if (same) return; }
+    const m = document.createElement('div');
+    m.className = 'tb-menu palette hl-settings';
+    const color = HL_COLORS[tool.hlColor];
+    m.innerHTML = `<div class="pal-head"><b>형광펜 설정</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>
+      <h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
+      <input type="range" min="20" max="80" step="5" value="${Math.round(S.settings.hlAlpha * 100)}" aria-label="형광펜 투명도" data-k="alpha"></div>
+      <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>
+      <h6>손떨림 보정 <span class="pa-val" data-v="stab">${S.settings.hlStab}%</span></h6><div class="pal-alpha pal-stab">
+      <input type="range" min="0" max="100" step="5" value="${S.settings.hlStab}" aria-label="형광펜 손떨림 보정" data-k="stab"></div>
+      <div class="pa-ends"><span>그대로</span><span>많이 다듬기</span></div>`;
+    toolbarEl.appendChild(m);
+    const ar = m.querySelector('[data-k="alpha"]'), sr = m.querySelector('[data-k="stab"]');
+    const paint = () => { const i = m.querySelector('.pa-sample i'); i.style.background = color; i.style.opacity = ar.value / 100; };
+    ar.addEventListener('input', () => { S.settings.hlAlpha = ar.value / 100; paint(); });
+    ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); sendInkConfig(); });
+    sr.addEventListener('input', () => { S.settings.hlStab = +sr.value; m.querySelector('[data-v="stab"]').textContent = sr.value + '%'; });
+    sr.addEventListener('change', () => { S.saveSettings(); track('hl_stab_changed'); });
+    m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
+    paint();
+    nativeRange(ar); nativeRange(sr);
+  }
+
   function openSizeSlider(t, idx) {
     if (nativeInk) {
       const b = toolbarEl.querySelector(`[data-size="${idx}"]`).getBoundingClientRect();

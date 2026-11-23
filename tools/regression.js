@@ -83,14 +83,22 @@ export async function run() {
     await wait(800); // 툴바 표시도 따라오는지
     return $('[data-tool].on')?.dataset.tool === 'pen' || '툴바 표시가 안 바뀜';
   });
-  await check('설정 창이 있는 도구(펜)를 고르면 아래 작은 화살표가 나타남 · 다른 도구엔 없음', async () => {
+  await check('설정 창이 있는 도구(펜·형광펜)를 고르면 칸이 넓어지며 오른쪽 화살표 · 형광펜 한 번 더 누르면 설정 창 · 다른 도구엔 없음', async () => {
     tool('eraser'); await settle();
     const penInd = () => { const e = $('[data-tool="pen"] .tb-more-ind'); if (e) e.style.transition = 'none'; /* 숨은 창에선 애니메이션이 멈춰 있어서 끝 상태로 봐요 */ return e; };
     if (!penInd()) return '펜 버튼에 화살표가 없어요';
     if (+getComputedStyle(penInd()).opacity > 0.05) return '펜을 안 골랐는데 화살표가 보여요';
     if ($('[data-tool="eraser"] .tb-more-ind')) return '설정 창 없는 지우개에도 화살표가 있어요';
     tool('pen'); await settle();
-    return +getComputedStyle(penInd()).opacity > 0.5 || '펜을 골라도 화살표가 안 보여요';
+    if (+getComputedStyle(penInd()).opacity < 0.5) return '펜을 골라도 화살표가 안 보여요';
+    const pb = $('[data-tool="pen"]'); pb.style.transition = 'none';
+    if (pb.getBoundingClientRect().width < 56) return '고른 펜 칸이 옆으로 안 넓어져요';
+    // 형광펜도: 고르면 화살표, 한 번 더 누르면 형광펜 설정(투명도·손떨림 보정)
+    if (!$('[data-tool="hl"] .tb-more-ind')) return '형광펜에 화살표가 없어요';
+    tool('hl'); await settle(); tool('hl'); await settle();
+    const panel = $('.tb-menu.hl-settings'), n = panel ? panel.querySelectorAll('input[type=range]').length : 0;
+    panel?.remove(); tool('pen'); await settle();
+    return n === 2 || '형광펜을 한 번 더 눌러도 설정 창(슬라이더 2개)이 안 열려요 ' + n;
   });
   await check('툴바 가운데 영역 너비 고정(268)', () => Math.round($('.tb-opts').getBoundingClientRect().width) === 268 || $('.tb-opts').getBoundingClientRect().width);
 
