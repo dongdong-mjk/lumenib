@@ -394,6 +394,10 @@ button { touch-action: manipulation; }
 .tb-btn.on::before { background: #f0f0f0; }
 .tb-btn > * { position: relative; }
 .tb-btn[disabled] { opacity: .3; }
+/* 설정 창이 있는 도구: 골랐을 때 아이콘 아래 작은 화살표가 위에서 살짝 내려오며 나타나요 */
+.tb-btn > .tb-more-ind { position: absolute; left: 50%; bottom: 3px; opacity: 0; transform: translate(-50%, -3px); transition: opacity .18s ease-out, transform .22s cubic-bezier(.2, .8, .2, 1); pointer-events: none; }
+.tb-btn.on > .tb-more-ind { opacity: .75; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .tb-btn > .tb-more-ind { transition: none; } }
 .tb-sep { width: 1px; height: 24px; background: #e8e8e8; margin: 0 6px; }
 .tb-opts { display: flex; align-items: center; gap: 2px; width: 268px; justify-content: center; }
 .swatch { width: 36px; height: 44px; display: grid; place-items: center; }

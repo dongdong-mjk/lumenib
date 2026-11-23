@@ -83,6 +83,15 @@ export async function run() {
     await wait(800); // 툴바 표시도 따라오는지
     return $('[data-tool].on')?.dataset.tool === 'pen' || '툴바 표시가 안 바뀜';
   });
+  await check('설정 창이 있는 도구(펜)를 고르면 아래 작은 화살표가 나타남 · 다른 도구엔 없음', async () => {
+    tool('eraser'); await settle();
+    const penInd = () => $('[data-tool="pen"] .tb-more-ind');
+    if (!penInd()) return '펜 버튼에 화살표가 없어요';
+    if (+getComputedStyle(penInd()).opacity > 0.05) return '펜을 안 골랐는데 화살표가 보여요';
+    if ($('[data-tool="eraser"] .tb-more-ind')) return '설정 창 없는 지우개에도 화살표가 있어요';
+    tool('pen'); await settle();
+    return +getComputedStyle(penInd()).opacity > 0.5 || '펜을 골라도 화살표가 안 보여요';
+  });
   await check('툴바 가운데 영역 너비 고정(268)', () => Math.round($('.tb-opts').getBoundingClientRect().width) === 268 || $('.tb-opts').getBoundingClientRect().width);
 
   await check('펜 쓰기 · 되돌리기 · 다시 하기', async () => {

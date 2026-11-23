@@ -661,7 +661,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     const slot = app.querySelector('.topbar .tb-slot');
     if (isReadonly()) { slot.innerHTML = ''; return; }
     const t = tool.type;
-    const tb = (k, ic, label) => `<button class="tb-btn ${t === k ? 'on' : ''}" data-tool="${k}" aria-label="${label}">${ic}</button>`;
+    // 한 번 더 누르면 설정 창이 열리는 도구는, 골랐을 때 아래에 작은 화살표가 스르륵 나타나요 (굿노트처럼, 11/23)
+    const HAS_PANEL = { pen: true };
+    const tb = (k, ic, label) => `<button class="tb-btn ${t === k ? 'on' : ''}" data-tool="${k}" aria-label="${label}">${ic}${HAS_PANEL[k] ? '<svg class="tb-more-ind" width="8" height="5" viewBox="0 0 8 5" aria-hidden="true"><path d="M1 1l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</button>`;
     let opts = '';
     if (t === 'pen' || t === 'hl') {
       const colors = t === 'pen' ? PEN_COLORS : HL_COLORS, sizes = t === 'pen' ? PEN_SIZES : HL_SIZES;
