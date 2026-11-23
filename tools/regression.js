@@ -85,7 +85,7 @@ export async function run() {
   });
   await check('설정 창이 있는 도구(펜)를 고르면 아래 작은 화살표가 나타남 · 다른 도구엔 없음', async () => {
     tool('eraser'); await settle();
-    const penInd = () => $('[data-tool="pen"] .tb-more-ind');
+    const penInd = () => { const e = $('[data-tool="pen"] .tb-more-ind'); if (e) e.style.transition = 'none'; /* 숨은 창에선 애니메이션이 멈춰 있어서 끝 상태로 봐요 */ return e; };
     if (!penInd()) return '펜 버튼에 화살표가 없어요';
     if (+getComputedStyle(penInd()).opacity > 0.05) return '펜을 안 골랐는데 화살표가 보여요';
     if ($('[data-tool="eraser"] .tb-more-ind')) return '설정 창 없는 지우개에도 화살표가 있어요';
