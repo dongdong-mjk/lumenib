@@ -747,24 +747,17 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (ex) { const same = ex.classList.contains('hl-settings'); ex.remove(); if (same) return; }
     const m = document.createElement('div');
     m.className = 'tb-menu palette hl-settings';
-    const color = HL_COLORS[tool.hlColor];
+    // 투명도는 색을 고를 때(색 창), 여기는 손떨림 보정만 (11/23 민정님)
     m.innerHTML = `<div class="pal-head"><b>형광펜 설정</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>
-      <h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
-      <input type="range" min="20" max="80" step="5" value="${Math.round(S.settings.hlAlpha * 100)}" aria-label="형광펜 투명도" data-k="alpha"></div>
-      <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>
       <h6>손떨림 보정 <span class="pa-val" data-v="stab">${S.settings.hlStab}%</span></h6><div class="pal-alpha pal-stab">
       <input type="range" min="0" max="100" step="5" value="${S.settings.hlStab}" aria-label="형광펜 손떨림 보정" data-k="stab"></div>
       <div class="pa-ends"><span>그대로</span><span>많이 다듬기</span></div>`;
     toolbarEl.appendChild(m);
-    const ar = m.querySelector('[data-k="alpha"]'), sr = m.querySelector('[data-k="stab"]');
-    const paint = () => { const i = m.querySelector('.pa-sample i'); i.style.background = color; i.style.opacity = ar.value / 100; };
-    ar.addEventListener('input', () => { S.settings.hlAlpha = ar.value / 100; paint(); });
-    ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); sendInkConfig(); });
+    const sr = m.querySelector('[data-k="stab"]');
     sr.addEventListener('input', () => { S.settings.hlStab = +sr.value; m.querySelector('[data-v="stab"]').textContent = sr.value + '%'; });
     sr.addEventListener('change', () => { S.saveSettings(); track('hl_stab_changed'); });
     m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
-    paint();
-    nativeRange(ar); nativeRange(sr);
+    nativeRange(sr);
   }
 
   function openSizeSlider(t, idx) {
@@ -845,10 +838,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         ${mine.length ? '<p class="pal-tip">내 색을 길게 누르면 지울 수 있어요</p>' : ''}
         ${isPen ? '' : `<h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
           <input type="range" min="20" max="80" step="5" value="${Math.round(S.settings.hlAlpha * 100)}" aria-label="형광펜 투명도"></div>
-          <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>
-          <h6>손떨림 보정 <span class="pa-val" data-v="stab">${S.settings.hlStab}%</span></h6><div class="pal-alpha pal-stab">
-          <input type="range" min="0" max="100" step="5" value="${S.settings.hlStab}" aria-label="형광펜 손떨림 보정"></div>
-          <div class="pa-ends"><span>그대로</span><span>많이 다듬기</span></div>`}`;
+          <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>`}`;
       const ar = m.querySelector('.pal-alpha input');
       if (ar) {
         const paint = () => { const i = m.querySelector('.pa-sample i'); i.style.background = cur(); i.style.opacity = ar.value / 100; };
@@ -856,12 +846,6 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); sendInkConfig(); });
         paint();
         nativeRange(ar);
-      }
-      const sr = m.querySelector('.pal-stab input'); // 형광펜 손떨림 보정 (펜 설정처럼, 11/23)
-      if (sr) {
-        sr.addEventListener('input', () => { S.settings.hlStab = +sr.value; m.querySelector('[data-v="stab"]').textContent = sr.value + '%'; });
-        sr.addEventListener('change', () => { S.saveSettings(); track('hl_stab_changed'); });
-        nativeRange(sr);
       }
       m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
       m.querySelectorAll('[data-c]').forEach((b) => {
