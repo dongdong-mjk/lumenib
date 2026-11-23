@@ -433,7 +433,7 @@ export async function run() {
     const done = async (msg) => { $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle(); P.undo(); await settle(); P.undo(); await settle(); P.undo(); await settle(); return msg; };
     if (!P.selection?.cites?.size) return done('인용이 안 골라짐');
     // 1) 선택 영역 위가 화면 밖이어도 메뉴는 화면 안
-    const sv = P.scrollEl; sv.scrollTop += (cb.getBoundingClientRect().top - sv.getBoundingClientRect().top) + 40; await settle();
+    const sv = P.scrollEl; sv.scrollTop += (cb.getBoundingClientRect().top - sv.getBoundingClientRect().top) + 40; sv.dispatchEvent(new Event('scroll')); /* 숨은 창에선 스크롤 알림이 늦게 와서 바로 보내요 */ await settle();
     const mr = $('.lasso-menu').getBoundingClientRect(), vr = sv.getBoundingClientRect();
     const menuOk = mr.top >= vr.top - 1 && mr.bottom <= vr.bottom + 1;
     sv.scrollTop = 0; se.scrollTop = 0; await settle();
