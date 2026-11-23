@@ -980,9 +980,9 @@ export class Paper {
     // 완성본(hlSmooth)과 같은 방식으로 새 점만 이어서 다듬어요
     if (page._hlN === 0) { page._hlX = p[0]; page._hlY = p[1]; }
     ctx.moveTo(page._hlX, page._hlY);
-    const ease = hlEase(s);
     for (let k = Math.max(1, page._hlN); k < n; k++) {
-      page._hlX += (p[k * 3] - page._hlX) * ease; page._hlY += (p[k * 3 + 1] - page._hlY) * ease;
+      const e = hlStepEase(s, p[k * 3] - page._hlX, p[k * 3 + 1] - page._hlY);
+      page._hlX += (p[k * 3] - page._hlX) * e; page._hlY += (p[k * 3 + 1] - page._hlY) * e;
       ctx.lineTo(page._hlX, page._hlY);
     }
     if (n === 1) ctx.lineTo(p[0] + 0.01, p[1]);
@@ -1558,7 +1558,7 @@ function drawStroke(ctx, s, live = false) {
   if (s.tool === 'hl') {
     // 형광펜: 획을 따로 불투명하게 그린 뒤 한 번에 반투명·곱하기로 얹어요.
     // 돼지꼬리처럼 스스로 겹치는 곳이 더 진해지지 않게 (쓰는 중 모습과도 같아요)
-    const q = s.sh ? hlRaw(p) : hlSmooth(p, hlEase(s));
+    const q = s.sh ? hlRaw(p) : hlSmooth(p, s);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (let i = 0; i < q.length; i += 2) { x0 = Math.min(x0, q[i]); x1 = Math.max(x1, q[i]); y0 = Math.min(y0, q[i + 1]); y1 = Math.max(y1, q[i + 1]); }
     const m = ctx.getTransform(), k = m.a, pad = s.w / 2 + 2;
@@ -2072,19 +2072,22 @@ function hlScratchDone() { if (_hlOff && _hlOff.width * _hlOff.height > 4e6) { _
 // 형광펜 선: 들어온 점을 살짝 늦게 따라가게 다듬어요 (굿노트처럼 부드럽게). 쓰는 중과 뗀 뒤가 같은 선이에요
 const HL_EASE = 0.35;
 function hlRaw(p) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
-// 획마다 보정 세기(st)를 기억해요. 예전 획(st 없음)은 원래 세기(0.35) 그대로
-function hlEase(s) {
+// 획마다 보정 세기(st)를 기억해요. 예전 획(st 없음)은 원래 방식(점마다 0.35) 그대로
+// 새 획은 '거리' 기준으로 다듬어요: 펜슬은 점이 아주 촘촘해서(초당 240개) 점마다 다듬으면 세기를 올려도 티가 안 났어요 (11/23)
+function hlStepEase(s, dx, dy) {
   if (s.sh) return 1;
   if (typeof s.st !== 'number') return HL_EASE;
-  const t = Math.max(0, Math.min(100, s.st)) / 100;
-  return t <= 0.5 ? 1 - t * 1.3 : 0.35 - (t - 0.5) * 0.44; // 0 → 그대로(1), 50 → 0.35, 100 → 0.13
+  const L = (Math.max(0, Math.min(100, s.st)) / 100) * 14; // 따라가는 거리 (종이 단위): 0 → 그대로, 100 → 14
+  if (L < 0.01) return 1;
+  return 1 - Math.exp(-Math.hypot(dx, dy) / L);
 }
-function hlSmooth(p, ease = HL_EASE) {
+export const hlSmoothPath = (p, s) => hlSmooth(p, s); // 점검용
+function hlSmooth(p, s = {}) {
   const n = p.length / 3;
   if (!n) return [];
   let x = p[0], y = p[1];
   const q = [x, y];
-  for (let i = 1; i < n; i++) { x += (p[i * 3] - x) * ease; y += (p[i * 3 + 1] - y) * ease; q.push(x, y); }
+  for (let i = 1; i < n; i++) { const e = hlStepEase(s, p[i * 3] - x, p[i * 3 + 1] - y); x += (p[i * 3] - x) * e; y += (p[i * 3 + 1] - y) * e; q.push(x, y); }
   q.push(p[(n - 1) * 3], p[(n - 1) * 3 + 1]); // 끝은 펜을 뗀 자리까지
   return q;
 }

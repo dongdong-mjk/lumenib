@@ -553,7 +553,13 @@ export async function run() {
     stroke(line(80 * k, 1000 * k, 180 * k, 1000 * k)); await settle();
     const hs = P.note.pages[0].strokes.at(-1);
     undo(); await settle(); S0.hlStab = keep;
-    return (hs?.tool === 'hl' && hs.st === 80) || '형광펜 획에 보정 값이 없어요 ' + hs?.st;
+    if (!(hs?.tool === 'hl' && hs.st === 80)) return '형광펜 획에 보정 값이 없어요 ' + hs?.st;
+    // 펜슬처럼 촘촘하고 떨리는 점: 보정 0과 100의 모양 차이가 확실해야 해요 (점마다 다듬던 땐 거의 같았어요)
+    const { hlSmoothPath } = await import('../js/ink.js');
+    const pts = []; for (let i = 0; i < 400; i++) pts.push(100 + i * 0.5, 300 + (i % 2 ? 2.5 : -2.5), 0.5);
+    const wig = (q) => { let m = 0; for (let i = 2; i < q.length - 2; i += 2) m = Math.max(m, Math.abs(q[i + 1] - 300)); return m; };
+    const w0 = wig(hlSmoothPath(pts, { st: 0 })), w100 = wig(hlSmoothPath(pts, { st: 100 }));
+    return (w0 > 2 && w100 < w0 * 0.3) || '형광펜 손떨림 보정이 거의 안 먹어요 ' + [w0.toFixed(2), w100.toFixed(2)];
   });
 
   await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {
