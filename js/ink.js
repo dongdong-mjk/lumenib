@@ -1656,6 +1656,8 @@ function drawStroke(ctx, s, live = false) {
       let L = 0; for (let i = 2; i < q.length; i += 2) L += Math.hypot(q[i] - q[i - 2], q[i + 1] - q[i - 1]);
       const bw0 = hc.box[2] - hc.box[0], bh0 = hc.box[3] - hc.box[1];
       hc.loops = L > (bw0 + bh0) * 1.15 + s.w;
+      // 펜 굵기보다 좁게 급히 꺾이는 곳이 있으면 한 번에 그은 선 안쪽에 흰 틈이 생겨요 (11/23 '흐려' 형광펜). 그런 획도 따로 그려요
+      if (!hc.loops) hc.loops = hlTightTurn(q, s.w);
     }
     if (!hc.loops) {
       ctx.save();
@@ -1681,10 +1683,9 @@ function drawStroke(ctx, s, live = false) {
     o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, bw, bh);
     o.setTransform(m.a, m.b, m.c, m.d, m.e - bx, m.f - by);
     o.strokeStyle = s.color; o.lineWidth = s.w; o.lineCap = 'round'; o.lineJoin = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
-    o.beginPath();
-    if (typeof s.st === 'number' && !s.sh) hlCurve(o, q);
-    else { o.moveTo(q[0], q[1]); for (let i = 2; i < q.length; i += 2) o.lineTo(q[i], q[i + 1]); if (q.length === 2) o.lineTo(q[0] + 0.01, q[1]); }
-    o.stroke();
+    // 따로 그리는 판(불투명)에는 짧은 마디로 나눠 그어요. 한 번에 그으면 급히 꺾인 곳 안쪽이 비어 흰 틈이 생겼어요
+    if (q.length === 2) { o.beginPath(); o.moveTo(q[0], q[1]); o.lineTo(q[0] + 0.01, q[1]); o.stroke(); }
+    else for (let i = 2; i < q.length; i += 2) { o.beginPath(); o.moveTo(q[i - 2], q[i - 1]); o.lineTo(q[i], q[i + 1]); o.stroke(); }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT;
@@ -2225,6 +2226,23 @@ function hlStepEase(s, dx, dy) {
 // 새 획(st 있음): 펜처럼 '지나온 거리' 기준 가우시안으로 다듬어요. 양 끝은 고정이라 펜 끝은 펜에 붙어 있고,
 // 세기를 올리면 손 떨림(물결)이 확실히 펴져요 (점마다 조금씩 다듬던 방식은 펜슬 점이 촘촘해서 티가 안 났어요, 11/23)
 export const hlSmoothPath = (p, s) => hlSmooth(p, s); // 점검용
+// 굵기의 절반보다 좁은 거리 안에서 60° 넘게 꺾이는 곳이 있는지
+function hlTightTurn(q, w) {
+  const n = q.length / 2;
+  if (n < 3) return false;
+  const win = Math.max(1, w * 0.6);
+  for (let i = 1; i < n - 1; i++) {
+    // i 앞뒤로 win 만큼 떨어진 점의 방향 차이
+    let a = i, b = i, da = 0, db = 0;
+    while (a > 0 && da < win) { da += Math.hypot(q[a * 2] - q[a * 2 - 2], q[a * 2 + 1] - q[a * 2 - 1]); a--; }
+    while (b < n - 1 && db < win) { db += Math.hypot(q[b * 2 + 2] - q[b * 2], q[b * 2 + 3] - q[b * 2 + 1]); b++; }
+    if (da < win * 0.5 || db < win * 0.5) continue;
+    const ux = q[i * 2] - q[a * 2], uy = q[i * 2 + 1] - q[a * 2 + 1], vx = q[b * 2] - q[i * 2], vy = q[b * 2 + 1] - q[i * 2 + 1];
+    const c = (ux * vx + uy * vy) / ((Math.hypot(ux, uy) * Math.hypot(vx, vy)) || 1);
+    if (c < 0.5) return true;
+  }
+  return false;
+}
 // 점과 점 사이를 꺾지 않고 곡선으로 (가운데 점을 지나는 2차 곡선). 확대해도 각이 안 보이게, 쓰는 중과 완성본 같게
 function hlCurve(ctx, q) {
   ctx.moveTo(q[0], q[1]);

@@ -604,6 +604,22 @@ export async function run() {
     return o2[0] < 0.3 || '옆으로 꺾인 끝이 남아 있어요 ' + o2[0].toFixed(2);
   });
 
+  await check('형광펜이 급히 되돌아 꺾여도 안쪽에 흰 틈이 없음', async () => {
+    const P = window.__lumenibPaper, pg = P.pages[0], arr = P.note.pages[0].strokes;
+    // 오른쪽으로 가다 굵기보다 좁게 U턴해서 돌아오는 형광펜
+    const pts = [];
+    for (let i = 0; i <= 60; i++) pts.push(200 + i, 950, 0.5);
+    for (let i = 0; i <= 12; i++) { const a = -Math.PI / 2 + Math.PI * i / 12; pts.push(260 + Math.cos(a) * 4, 954 + Math.sin(a) * 4, 0.5); }
+    for (let i = 0; i <= 60; i++) pts.push(260 - i, 958, 0.5);
+    const hs = { tool: 'hl', color: '#7ccfa0', w: 18, a: 0.42, st: 0, pts, t: Date.now() };
+    arr.push(hs); P.drawPage(pg);
+    const cv = pg.base, rr = cv.width / 726, ctx = cv.getContext('2d');
+    let minA = 255;
+    for (let x = 215; x <= 255; x += 2) for (let y = 950; y <= 958; y += 1) { const a = ctx.getImageData(Math.round(x * rr), Math.round(y * rr), 1, 1).data[3]; if (a < minA) minA = a; }
+    arr.splice(arr.indexOf(hs), 1); P.drawPage(pg);
+    return minA > 40 || '꺾인 안쪽에 흰 틈이 있어요 ' + minA;
+  });
+
   await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {
     const P = window.__lumenibPaper, pg = P.pages[0], arr = P.note.pages[0].strokes, n0 = arr.length;
     // 글씨 400획을 아래쪽에 채워요
