@@ -750,8 +750,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     // 투명도는 색을 고를 때(색 창), 여기는 손떨림 보정만 (11/23 민정님)
     m.innerHTML = `<div class="pal-head"><b>형광펜 설정</b><button class="pal-x" data-act="close" aria-label="닫기">${icon.x}</button></div>
       <h6>손떨림 보정 <span class="pa-val" data-v="stab">${S.settings.hlStab}%</span></h6><div class="pal-alpha pal-stab">
-      <input type="range" min="0" max="100" step="5" value="${S.settings.hlStab}" aria-label="형광펜 손떨림 보정" data-k="stab"></div>
-      <div class="pa-ends"><span>그대로</span><span>많이 다듬기</span></div>`;
+      <input type="range" min="0" max="100" step="5" value="${S.settings.hlStab}" aria-label="형광펜 손떨림 보정" data-k="stab"></div>`; // 양끝 글자는 빼요 (11/23 민정님)
     toolbarEl.appendChild(m);
     // 형광펜 도구 바로 아래에 (펜 설정처럼 도구에 붙어서)
     const hb = toolbarEl.querySelector('[data-tool="hl"]');
