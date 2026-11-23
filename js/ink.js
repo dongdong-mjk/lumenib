@@ -2124,7 +2124,6 @@ function hlSmooth(p, s = {}) {
   }
   return q;
 }
-}
 function hlPoints(p, w) {
   const n = p.length / 3;
   if (n < 3) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
