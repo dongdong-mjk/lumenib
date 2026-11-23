@@ -1748,6 +1748,14 @@ function drawStroke(ctx, s, live = false) {
     ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(path); ctx.restore();
     return;
   }
+  if (s.sv) {
+    // 만년필·붓펜(새 획): 굵기가 바뀌는 짧은 마디(두 원을 잇는 모양)를 겹쳐 하나로 칠해요.
+    // 테두리를 한 줄로 따라가는 방식은 좁게 돌 때 꼬여서 떨렸어요. 쓰는 중과 뗀 뒤가 같은 계산이에요 (11/23, 앱 lumenCapsulePath 와 같음)
+    const path = capsulePath(getStrokePoints(pts, strokeOpts(o, live, true)), o, k);
+    if (key) _penPath.set(s, { key, path });
+    ctx.fillStyle = s.color; ctx.fill(path);
+    return;
+  }
   const raw = getStroke(pts, strokeOpts(o, live, !!s.sv));
   const outline = raw.map(([x, y]) => [x / k, y / k]);
   if (!outline.length) return;
@@ -2189,6 +2197,34 @@ function gaussSmooth(pts, sigma) {
     for (let j = -r; j <= r; j++) { const w = Math.exp(-(j * j) / (2 * sigma * sigma)); sx += src[i + j][0] * w; sy += src[i + j][1] * w; sw += w; }
     pts[i][0] = sx / sw; pts[i][1] = sy / sw;
   }
+}
+// 펜 점(다듬은 가운데 선 + 누르는 힘) → 굵기가 바뀌는 마디들의 합. 좌표는 REF 단위, k로 나눠 종이 단위로
+export function capsulePath(sp, o, k) {
+  const path = new Path2D();
+  if (!sp.length) return path;
+  const ease = (t) => Math.sin((t * Math.PI) / 2), g = o.taper || 0;
+  const rad = sp.map((q) => {
+    let m = o.thinning ? REF_SIZE * ease(0.5 - o.thinning * (0.5 - q.pressure)) : REF_SIZE / 2;
+    if (g && q.runningLength < g) { const t = q.runningLength / g; m *= t * (2 - t); }
+    return Math.max(0.01, m) / k;
+  });
+  const P = sp.map((q) => [q.point[0] / k, q.point[1] / k]);
+  const circle = (c, r) => { path.moveTo(c[0] + r, c[1]); path.arc(c[0], c[1], r, 0, -Math.PI * 2, true); };
+  if (P.length === 1) { circle(P[0], rad[0]); return path; }
+  for (let i = 1; i < P.length; i++) {
+    const a = P[i - 1], b = P[i], ra = rad[i - 1], rb = rad[i];
+    const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy);
+    if (d <= Math.abs(ra - rb) + 1e-6) { circle(ra > rb ? a : b, Math.max(ra, rb)); continue; }
+    const th = Math.atan2(dy, dx), ph = Math.acos((ra - rb) / d);
+    // 두 원을 감싸는 모양: 늘 같은 방향(각도가 줄어드는 쪽)으로 돌아 겹쳐도 비지 않게
+    path.moveTo(a[0] + ra * Math.cos(th + ph), a[1] + ra * Math.sin(th + ph));
+    path.lineTo(b[0] + rb * Math.cos(th + ph), b[1] + rb * Math.sin(th + ph));
+    path.arc(b[0], b[1], rb, th + ph, th - ph, true);
+    path.lineTo(a[0] + ra * Math.cos(th - ph), a[1] + ra * Math.sin(th - ph));
+    path.arc(a[0], a[1], ra, th - ph, th + ph - Math.PI * 2, true);
+    path.closePath();
+  }
+  return path;
 }
 function strokeOpts(o, live, sv = false) {
   // 새 획(sv): 쓰는 중과 뗀 뒤가 같게 끝은 늘 같은 방식 (끝 가늘어짐은 펜을 들며 약해지는 힘으로). 예전 획은 그때 방식 그대로 (11/23)

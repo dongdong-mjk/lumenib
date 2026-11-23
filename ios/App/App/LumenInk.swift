@@ -313,6 +313,9 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
         let lw = 2 * REF_SIZE * sin(Double.pi / 4) / k
         return line.copy(strokingWithWidth: CGFloat(lw), lineCap: .round, lineJoin: .round, miterLimit: 10)
     }
+    // 만년필·붓펜: 굵기가 바뀌는 마디를 겹쳐 하나로 (웹 capsulePath 와 같음, 11/23). 쓰는 중과 뗀 뒤가 같은 계산
+    return lumenCapsulePath(Freehand.strokePoints(pts, opt), thinning: o.thinning, taper: o.taper, k: k)
+    #if false
     let outline = Freehand.outline(Freehand.strokePoints(pts, opt), opt).map { $0 / k }
     let path = CGMutablePath()
     guard let first = outline.first else { return path }
@@ -322,6 +325,34 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
         path.addQuadCurve(to: CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2), control: CGPoint(x: a.x, y: a.y))
     }
     path.closeSubpath()
+    return path
+    #endif
+}
+
+func lumenCapsulePath(_ sp: [Freehand.Point], thinning: Double, taper: Double, k: Double) -> CGPath {
+    let path = CGMutablePath()
+    guard !sp.isEmpty else { return path }
+    let ease = { (t: Double) in sin(t * Double.pi / 2) }
+    let rad: [Double] = sp.map { q in
+        var m = thinning != 0 ? REF_SIZE * ease(0.5 - thinning * (0.5 - q.pressure)) : REF_SIZE / 2
+        if taper > 0 && q.runningLength < taper { let t = q.runningLength / taper; m *= t * (2 - t) }
+        return max(0.01, m) / k
+    }
+    let P = sp.map { CGPoint(x: $0.point.x / k, y: $0.point.y / k) }
+    func circle(_ c: CGPoint, _ r: Double) { path.move(to: CGPoint(x: c.x + r, y: c.y)); path.addArc(center: c, radius: r, startAngle: 0, endAngle: -2 * .pi, clockwise: true) }
+    if P.count == 1 { circle(P[0], rad[0]); return path }
+    for i in 1..<P.count {
+        let a = P[i - 1], b = P[i], ra = rad[i - 1], rb = rad[i]
+        let dx = b.x - a.x, dy = b.y - a.y, d = hypot(dx, dy)
+        if d <= abs(ra - rb) + 1e-6 { circle(ra > rb ? a : b, max(ra, rb)); continue }
+        let th = atan2(dy, dx), ph = acos((ra - rb) / d)
+        path.move(to: CGPoint(x: a.x + ra * cos(th + ph), y: a.y + ra * sin(th + ph)))
+        path.addLine(to: CGPoint(x: b.x + rb * cos(th + ph), y: b.y + rb * sin(th + ph)))
+        path.addArc(center: b, radius: rb, startAngle: th + ph, endAngle: th - ph, clockwise: true)
+        path.addLine(to: CGPoint(x: a.x + ra * cos(th - ph), y: a.y + ra * sin(th - ph)))
+        path.addArc(center: a, radius: ra, startAngle: th - ph, endAngle: th + ph - 2 * .pi, clockwise: true)
+        path.closeSubpath()
+    }
     return path
 }
 
