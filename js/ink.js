@@ -2077,7 +2077,7 @@ function hlRaw(p) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p
 function hlStepEase(s, dx, dy) {
   if (s.sh) return 1;
   if (typeof s.st !== 'number') return HL_EASE;
-  const L = (Math.max(0, Math.min(100, s.st)) / 100) * 14; // 따라가는 거리 (종이 단위): 0 → 그대로, 100 → 14
+  const L = (Math.max(0, Math.min(100, s.st)) / 100) * 20; // 따라가는 거리 (종이 단위): 0 → 그대로, 100 → 20
   if (L < 0.01) return 1;
   return 1 - Math.exp(-Math.hypot(dx, dy) / L);
 }
