@@ -567,6 +567,17 @@ export async function run() {
     return (w100 < w0 * 0.4) || '형광펜 손떨림 보정을 올려도 흐름이 안 펴져요 ' + [w0.toFixed(2), w100.toFixed(2)];
   });
 
+  await check('펜 획 끝: 멈출 때 몰린 점·살짝 되돌아온 점 정리 (세로 획 끝이 뭉치던 것)', async () => {
+    const { cleanPenEndForTest: f } = await import('../js/ink.js');
+    const pts = []; let y = 0;
+    for (let i = 0; i < 40; i++) { y += 2; pts.push([0, y, 0.5]); }
+    for (let i = 0; i < 20; i++) pts.push([0.01 * (i % 2), y + 0.01 * i, 0.5]); // 멈추며 몰린 점
+    for (let i = 1; i <= 4; i++) pts.push([0.2 * i, y - 0.5 * i, 0.5]); // 끝에서 살짝 되돌아옴
+    const out = f(pts), last = out.at(-1);
+    if (out.length > 45) return '몰린 점이 안 정리돼요 ' + out.length;
+    return last[1] >= y - 0.3 || '되돌아온 끝이 남아 있어요 ' + last[1].toFixed(2);
+  });
+
   await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {
     const P = window.__lumenibPaper, pg = P.pages[0], arr = P.note.pages[0].strokes, n0 = arr.length;
     // 글씨 400획을 아래쪽에 채워요

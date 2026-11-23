@@ -1626,8 +1626,9 @@ function drawStroke(ctx, s, live = false) {
   if (key) { const c = _penPath.get(s); if (c && c.key === key) { ctx.fillStyle = s.color; ctx.fill(c.path); return; } }
   const st = penStyleOf(s), o = styleOpts(st, s.po, !s.sv);
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
-  const pts = [];
+  let pts = [];
   for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
+  if (s.sv) pts = cleanPenEnd(pts); // 펜을 멈출 때 끝에 몰린 점·되돌아온 잔떨림 정리 (세로 획 끝이 잘록했다 뭉치던 것, 11/23)
   if (s.po && !o.legacy && st !== 'ball' && !s.sh) startPressure(pts);
   if (o.sigma && !s.sh) { gaussSmooth(pts, o.sigma); smoothPressure(pts); }
   if (o.flat) applyFlatNib(pts, o.flat);
@@ -2031,6 +2032,34 @@ function smoothPressure(pts) {
   for (let i = 1; i < pts.length - 1; i++) pts[i][2] = (z[i - 1] + 2 * z[i] + z[i + 1]) / 4;
 }
 // 지나온 점을 앞뒤로 고르게 다듬기 (양 끝 점은 그대로, 끝에 가까울수록 덜 다듬어서 펜촉 쪽은 바로 붙어 있어요)
+// 획 끝 정리 (앱 LumenInk.swift cleanPenEnd 와 같음): 좌표는 REF_SIZE 기준 단위
+//  1) 거의 같은 자리에 몰린 점은 하나로 (멈추며 뗄 때 끝에 점이 몰려 방향이 흔들렸어요)
+//  2) 끝에서 진행 방향과 반대로 살짝 되돌아온 점은 빼요 (그 자리에 둥근 끝이 한 번 더 생겨 뭉쳐 보였어요)
+export const cleanPenEndForTest = (pts) => cleanPenEnd(pts); // 점검용
+function cleanPenEnd(pts) {
+  if (pts.length < 4) return pts;
+  const gap = REF_SIZE * 0.12, out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const l = out[out.length - 1], q = pts[i];
+    if (Math.hypot(q[0] - l[0], q[1] - l[1]) >= gap) out.push(q);
+    else if (i === pts.length - 1 && out.length > 1) { /* 마지막 점이 바로 앞과 거의 같으면 앞 점으로 충분해요 */ }
+  }
+  if (out.length < 4) return out.length >= 2 ? out : pts;
+  // 끝 쪽 진행 방향: 끝에서 REF_SIZE*2 만큼 앞의 점 → 끝에서 REF_SIZE*0.8 앞의 점
+  const n = out.length, len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  let j = n - 1, d = 0;
+  while (j > 0 && d < REF_SIZE * 0.8) { d += len(out[j - 1], out[j]); j--; }
+  let i0 = j; d = 0;
+  while (i0 > 0 && d < REF_SIZE * 1.2) { d += len(out[i0 - 1], out[i0]); i0--; }
+  const dx = out[j][0] - out[i0][0], dy = out[j][1] - out[i0][1], dl = Math.hypot(dx, dy);
+  if (dl < 1e-6) return out;
+  let cut = n, back = 0;
+  for (let m = n - 1; m > j; m--) {
+    const sx = out[m][0] - out[m - 1][0], sy = out[m][1] - out[m - 1][1];
+    if ((sx * dx + sy * dy) / dl < 0) { back += Math.hypot(sx, sy); cut = m; } else break;
+  }
+  return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? out.slice(0, cut) : out;
+}
 function gaussSmooth(pts, sigma) {
   if (sigma < 0.5 || pts.length < 3) return;
   const n = pts.length, R = Math.ceil(sigma * 2), src = pts.map((q) => [q[0], q[1]]);

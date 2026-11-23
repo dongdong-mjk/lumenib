@@ -211,6 +211,33 @@ func lumenParams(_ st: LumenPenStyle, _ po: [String: Double]) -> LumenStyleParam
 }
 
 /// 펜 획 → 종이 단위 외곽선 경로 (웹의 drawStroke 와 같은 계산)
+func lumenCleanPenEnd(_ pts: [SIMD3<Double>]) -> [SIMD3<Double>] {
+    if pts.count < 4 { return pts }
+    let gap = REF_SIZE * 0.12
+    var out = [pts[0]]
+    for i in 1..<pts.count {
+        let l = out[out.count - 1], q = pts[i]
+        if hypot(q.x - l.x, q.y - l.y) >= gap { out.append(q) }
+    }
+    if out.count < 4 { return out.count >= 2 ? out : pts }
+    let n = out.count
+    func len(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { hypot(b.x - a.x, b.y - a.y) }
+    var j = n - 1, d = 0.0
+    while j > 0 && d < REF_SIZE * 0.8 { d += len(out[j - 1], out[j]); j -= 1 }
+    var i0 = j; d = 0
+    while i0 > 0 && d < REF_SIZE * 1.2 { d += len(out[i0 - 1], out[i0]); i0 -= 1 }
+    let dx = out[j].x - out[i0].x, dy = out[j].y - out[i0].y, dl = hypot(dx, dy)
+    if dl < 1e-6 { return out }
+    var cut = n, back = 0.0
+    var m = n - 1
+    while m > j {
+        let sx = out[m].x - out[m - 1].x, sy = out[m].y - out[m - 1].y
+        if (sx * dx + sy * dy) / dl < 0 { back += hypot(sx, sy); cut = m } else { break }
+        m -= 1
+    }
+    return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? Array(out[0..<cut]) : out
+}
+
 func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
     let o = lumenParams(s.style, s.opts)
     if s.opts["_raw"] != nil, s.pts.count >= 6 {
@@ -229,6 +256,7 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
         pts.append(SIMD3(s.pts[i] * k, s.pts[i + 1] * k, s.style == .ball ? 0.5 : s.pts[i + 2]))
         i += 3
     }
+    pts = lumenCleanPenEnd(pts) // 펜을 멈출 때 끝에 몰린 점·되돌아온 잔떨림 정리 (웹 cleanPenEnd 와 같음, 11/23)
     if s.style != .ball, !pts.isEmpty, s.opts["_raw"] == nil {
         // 시작 힘 보정 (웹 startPressure 와 같음): 누르는 순간부터 제 굵기로
         let K = min(6, pts.count)
