@@ -1659,7 +1659,9 @@ function drawStroke(ctx, s, live = false) {
       // 펜 굵기보다 좁게 급히 꺾이는 곳이 있으면 한 번에 그은 선 안쪽에 흰 틈이 생겨요 (11/23 '흐려' 형광펜). 그런 획도 따로 그려요
       if (!hc.loops) hc.loops = hlTightTurn(q, s.w);
     }
-    if (!hc.loops) {
+    // 아이패드 그리기 엔진은 굵은 선을 한 번에 그으면 꺾인 곳·끝에 흰 초승달 틈을 남겨요 (11/23, 맥 브라우저에선 안 생김).
+    // 그래서 형광펜은 늘 따로 그리는 판에 짧은 마디로 그어서 얹어요
+    if (false) {
       ctx.save();
       ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT; ctx.globalCompositeOperation = 'multiply';
       ctx.strokeStyle = s.color; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -1684,8 +1686,15 @@ function drawStroke(ctx, s, live = false) {
     o.setTransform(m.a, m.b, m.c, m.d, m.e - bx, m.f - by);
     o.strokeStyle = s.color; o.lineWidth = s.w; o.lineCap = 'round'; o.lineJoin = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
     // 따로 그리는 판(불투명)에는 짧은 마디로 나눠 그어요. 한 번에 그으면 급히 꺾인 곳 안쪽이 비어 흰 틈이 생겼어요
-    if (q.length === 2) { o.beginPath(); o.moveTo(q[0], q[1]); o.lineTo(q[0] + 0.01, q[1]); o.stroke(); }
-    else for (let i = 2; i < q.length; i += 2) { o.beginPath(); o.moveTo(q[i - 2], q[i - 1]); o.lineTo(q[i], q[i + 1]); o.stroke(); }
+    // 마디 길이는 굵기의 15% 정도로 (곡선이 각져 보이지 않으면서 마디 수는 적게)
+    if (!hc.seg) {
+      const gap = Math.max(0.8, s.w * 0.15), sg = [q[0], q[1]];
+      for (let i = 2; i < q.length; i += 2) { if (Math.hypot(q[i] - sg[sg.length - 2], q[i + 1] - sg[sg.length - 1]) >= gap || i === q.length - 2) sg.push(q[i], q[i + 1]); }
+      hc.seg = sg;
+    }
+    const sg = hc.seg;
+    if (sg.length <= 2) { o.beginPath(); o.moveTo(sg[0], sg[1]); o.lineTo(sg[0] + 0.01, sg[1]); o.stroke(); }
+    else for (let i = 2; i < sg.length; i += 2) { o.beginPath(); o.moveTo(sg[i - 2], sg[i - 1]); o.lineTo(sg[i], sg[i + 1]); o.stroke(); }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = s.a ?? HL_ALPHA_DEFAULT;

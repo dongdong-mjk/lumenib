@@ -416,15 +416,30 @@ func lumenHlWebPath(_ flat: [Double], stab: Double, k: Double, shaped: Bool, hlW
         while t < m && S[t] <= S[j] + r { let d = S[t] - S[j], w = exp(-(d * d) / (2 * sg * sg)); sx += X[t] * w; sy += Y[t] * w; sw += w; t += 1 }
         qx.append(sx / sw); qy.append(sy / sw)
     }
-    path.move(to: CGPoint(x: qx[0], y: qy[0]))
-    if qx.count == 1 { path.addLine(to: CGPoint(x: qx[0] + 0.01, y: qy[0])); return path }
-    if qx.count > 2 {
-        for j in 1..<(qx.count - 1) {
-            path.addQuadCurve(to: CGPoint(x: (qx[j] + qx[j + 1]) / 2, y: (qy[j] + qy[j + 1]) / 2), control: CGPoint(x: qx[j], y: qy[j]))
-        }
+    return lumenHlCapsules(qx, qy, width: hlWidth)
+}
+
+/// 형광펜 선을 짧은 마디(둥근 끝 막대)들의 합으로 만든 '채우기' 모양 (웹 drawStroke 형광펜과 같음).
+/// 굵은 선을 한 번에 그으면 꺾인 곳·끝에 흰 초승달 틈이 생겨서요 (11/23)
+func lumenHlCapsules(_ qx: [Double], _ qy: [Double], width: Double) -> CGPath {
+    let out = CGMutablePath()
+    guard !qx.isEmpty else { return out }
+    let gap = max(0.8, width * 0.15)
+    var sx = [qx[0]], sy = [qy[0]]
+    for j in 1..<max(1, qx.count) where qx.count > 1 {
+        if hypot(qx[j] - sx[sx.count - 1], qy[j] - sy[sy.count - 1]) >= gap || j == qx.count - 1 { sx.append(qx[j]); sy.append(qy[j]) }
     }
-    path.addLine(to: CGPoint(x: qx[qx.count - 1], y: qy[qy.count - 1]))
-    return path
+    let w = CGFloat(width)
+    if sx.count == 1 {
+        out.addEllipse(in: CGRect(x: sx[0] - width / 2, y: sy[0] - width / 2, width: width, height: width))
+        return out
+    }
+    for j in 1..<sx.count {
+        let seg = CGMutablePath()
+        seg.move(to: CGPoint(x: sx[j - 1], y: sy[j - 1])); seg.addLine(to: CGPoint(x: sx[j], y: sy[j]))
+        out.addPath(seg.copy(strokingWithWidth: w, lineCap: .round, lineJoin: .round, miterLimit: 10))
+    }
+    return out
 }
 
 // MARK: - 필기 화면: 애플펜슬 입력을 받아 직접 그려요
@@ -1070,9 +1085,12 @@ final class WebInkOverlay: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         let color = UIColor(hexString: config.color)
         if config.tool == .highlighter {
-            live.path = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped, hlWidth: config.width * Double(config.scale))
-            live.fillColor = nil
-            live.strokeColor = color.withAlphaComponent(config.hlAlpha).cgColor
+            let hp = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped, hlWidth: config.width * Double(config.scale))
+            if shaped {
+                live.path = hp; live.fillColor = nil; live.strokeColor = color.withAlphaComponent(config.hlAlpha).cgColor
+            } else {
+                live.path = hp; live.fillColor = color.withAlphaComponent(config.hlAlpha).cgColor; live.strokeColor = nil; live.fillRule = .nonZero
+            }
             live.lineWidth = CGFloat(s.width)
             live.lineCap = .round; live.lineJoin = .round
             live.compositingFilter = "multiplyBlendMode"
