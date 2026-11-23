@@ -136,7 +136,7 @@ export class Paper {
     };
     this._onScroll = () => {
       if (this.pages?.some((q) => q?.dirty)) this.flushPages(); // 아직 안 그린 장이 보이면 바로 그려요
-      cancelAnimationFrame(this._sbRaf); this._sbRaf = requestAnimationFrame(() => this.updateBars());
+      cancelAnimationFrame(this._sbRaf); this._sbRaf = requestAnimationFrame(() => { this.updateBars(); this.positionLassoMenu(); });
     };
     scrollEl.addEventListener('scroll', this._onScroll, { passive: true });
     scrollEl.addEventListener('touchstart', this._touchBlock, { passive: false });
@@ -320,6 +320,7 @@ export class Paper {
       el.style.right = c.w ? 'auto' : ''; el.style.width = c.w ? c.w + 'px' : '';
       u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
       placeRs();
+      if (this.selection?.cites?.has(c)) this.refreshSelBox(); // 올가미로 고른 인용이면 선택 테두리도 같이 (11/23)
     });
     const rsEnd = (e) => {
       if (!rz || e.pointerId !== rz.id) return;
@@ -667,6 +668,7 @@ export class Paper {
           cur.pts.push(x, y);
         } else if (cur.kind === 'move') {
           cur.dx = x - cur.x0; cur.dy = y - cur.y0; // 인용도 가로·세로 자유롭게
+          cur.dx = this.clampSelMove(cur.dx, 0)[0]; // 옆으로는 종이 밖으로 못 나가요 (위아래는 다른 장으로 갈 수 있어서 놓을 때 맞춰요)
           cur.cx = ev.clientX; cur.cy = ev.clientY;
           if (!cur.raf) {
             // 화면 위·아래 끝 가까이 끌면 종이가 따라 스크롤돼요 (올가미로 옮길 때도, 11/22)
@@ -680,7 +682,7 @@ export class Paper {
                 this.scrollEl.scrollTop += v;
                 if (this.scrollEl.scrollTop !== before) {
                   const [mx, my] = this.toLocal(page, { clientX: k.cx, clientY: k.cy });
-                  k.dx = mx - k.x0; k.dy = my - k.y0;
+                  k.dx = this.clampSelMove(mx - k.x0, 0)[0]; k.dy = my - k.y0;
                   this.moveGhost(page, k);
                 }
               }
@@ -729,7 +731,9 @@ export class Paper {
             to = this.pages.find((q) => { const b = q?.el.getBoundingClientRect(); return b && k.cy >= b.top && k.cy <= b.bottom; }) || page;
           }
           const off = to === page ? 0 : (page.el.getBoundingClientRect().top - to.el.getBoundingClientRect().top) / this.scale;
-          const dy = k.dy + off;
+          // 놓는 장 안에 머물도록 맞춰요: 인용만 제자리로 돌아오고 글씨·선택 테두리는 그대로 나가 있던 것 (11/23)
+          const [cdx, dy] = this.clampSelMove(k.dx, k.dy + off);
+          k.dx = cdx; k.dy = dy - off;
           // 되돌리기 기록: 인용 자리와 관련된 장의 획 목록만 (노트 전체를 저장하면 손을 뗀 뒤 버벅여요)
           const strokesBefore = { [sel.page]: this.note.pages[sel.page].strokes.slice() };
           if (to !== page) strokesBefore[to.i] = this.note.pages[to.i].strokes.slice();
@@ -1078,9 +1082,7 @@ export class Paper {
         if (sel.cites.size) { sel.set = new Set(sel.hit); sel.cites = new Set(); sel.box = bbox([...sel.set]); }
         else {
           sel.set = sel.full.set; sel.cites = sel.full.cites;
-          let box = sel.set.size ? bbox([...sel.set]) : null;
-          for (const c of sel.cites) { const b = this.citeBox(c); if (b) box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b; }
-          sel.box = box;
+          sel.box = this.selBoxOf(sel.set, sel.cites);
         }
         this.drawPage(pg);
         this.showLassoMenu();
@@ -1092,13 +1094,39 @@ export class Paper {
   }
   positionLassoMenu() {
     if (!this.lassoMenu || !this.selection) return;
-    const b = this.selection.box;
-    // 종이 오른쪽 끝에 닿으면 선택 영역의 오른쪽 끝에 맞춰요
-    const pageW = this.lassoMenu.parentElement.clientWidth, mw = this.lassoMenu.offsetWidth;
-    let left = b[0] * this.scale;
-    if (left + mw > pageW - 4) left = b[2] * this.scale - mw;
-    this.lassoMenu.style.left = Math.max(4, Math.min(left, pageW - mw - 4)) + 'px';
-    this.lassoMenu.style.top = Math.max(4, b[1] * this.scale - 46) + 'px';
+    const b = this.selection.box, s = this.scale, m = this.lassoMenu, pageEl = m.parentElement;
+    // 굿노트처럼 지금 보고 있는 화면 안에 띄워요 (선택 영역 위 모서리가 화면 밖이어도 메뉴는 보이게, 11/23)
+    const pr = pageEl.getBoundingClientRect(), sr = this.scrollEl.getBoundingClientRect();
+    const vis = { l: Math.max(0, sr.left - pr.left), r: Math.min(pr.width, sr.right - pr.left), t: Math.max(0, sr.top - pr.top), b: Math.min(pr.height, sr.bottom - pr.top) };
+    const mw = m.offsetWidth, mh = m.offsetHeight || 38, pad = 8;
+    let left = b[0] * s;
+    if (left + mw > vis.r - pad) left = b[2] * s - mw;
+    left = Math.max(vis.l + pad, Math.min(left, vis.r - mw - pad));
+    let top = b[1] * s - mh - 8; // 기본: 선택 영역 위
+    if (top < vis.t + pad) top = b[3] * s + 8 <= vis.b - mh - pad ? b[3] * s + 8 : vis.t + pad; // 위가 안 보이면 아래, 그것도 안 되면 화면 맨 위
+    top = Math.max(vis.t + pad, Math.min(top, vis.b - mh - pad));
+    m.style.left = left + 'px';
+    m.style.top = top + 'px';
+  }
+  // 고른 것(획·인용)을 감싸는 상자
+  selBoxOf(set, cites) {
+    let box = set?.size ? bbox([...set]) : null;
+    for (const c of cites || []) { const b = this.citeBox(c); if (b) box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : b; }
+    return box;
+  }
+  refreshSelBox() {
+    const sel = this.selection;
+    if (!sel) return;
+    sel.box = this.selBoxOf(sel.set, sel.cites) || sel.box;
+    this.drawSelection(this.pages[sel.page]);
+    this.positionLassoMenu();
+  }
+  // 올가미로 옮길 때 종이 밖으로 못 나가게: 고른 상자가 종이 안에 머무는 만큼만 (인용은 종이 여백 20·10 안쪽)
+  clampSelMove(dx, dy, box = this.selection?.box) {
+    if (!box) return [dx, dy];
+    const mx = this.selection?.cites?.size ? 20 : 0, my = this.selection?.cites?.size ? 10 : 0;
+    const cl = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
+    return [cl(dx, mx - box[0], PAGE_W - mx - box[2]), cl(dy, my - box[1], PAGE_H - my - box[3])];
   }
   hideLassoMenu() { this.lassoMenu?.remove(); this.lassoMenu = null; }
 

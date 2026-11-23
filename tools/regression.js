@@ -413,6 +413,39 @@ export async function run() {
     return (moved && moved.pts[1] - y0 > 20) || '글씨가 안 움직였어요';
   });
 
+  await check('올가미로 고른 인용: 메뉴는 보이는 화면 안 · 폭 줄이면 테두리도 따라옴 · 종이 밖으로 끌면 글씨·인용·테두리가 같이 종이 안에 멈춤', async () => {
+    se.scrollTop = 0; await wait(100);
+    const P = window.__lumenibPaper, cb = $('.cite-block'), pr = $$('.page')[0].getBoundingClientRect(), top = cb.getBoundingClientRect().top - pr.top;
+    const k = pr.width / 726;
+    tool('pen'); await settle();
+    stroke(line(120, top + 30, 220, top + 30)); await settle();
+    const t0 = P.note.pages[0].strokes.at(-1).t;
+    tool('lasso'); await settle();
+    stroke(box(105, top + 18, 235, top + 42)); await settle();
+    const done = async (msg) => { $$('.lasso-menu button').find((b) => b.textContent.includes('해제'))?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); await settle(); P.undo(); await settle(); P.undo(); await settle(); P.undo(); await settle(); return msg; };
+    if (!P.selection?.cites?.size) return done('인용이 안 골라짐');
+    // 1) 선택 영역 위가 화면 밖이어도 메뉴는 화면 안
+    const sv = P.scrollEl; sv.scrollTop += (cb.getBoundingClientRect().top - sv.getBoundingClientRect().top) + 40; await settle();
+    const mr = $('.lasso-menu').getBoundingClientRect(), vr = sv.getBoundingClientRect();
+    const menuOk = mr.top >= vr.top - 1 && mr.bottom <= vr.bottom + 1;
+    sv.scrollTop = 0; se.scrollTop = 0; await settle();
+    if (!menuOk) return done('메뉴가 보이는 화면 밖에 있어요');
+    // 2) 폭 줄이면 선택 테두리도 따라와요
+    const rs = $$('.page')[0].querySelector('.cite-rs'), rr = rs.getBoundingClientRect(), right0 = P.selection.box[2];
+    const ev = (t, x) => rs.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: rr.top + 10, pointerId: 931, pointerType: 'mouse', bubbles: true, cancelable: true, button: 0, buttons: t === 'pointerup' ? 0 : 1 }));
+    ev('pointerdown', rr.left + 10); ev('pointermove', rr.left + 10 - 120 * k); ev('pointerup', rr.left + 10 - 120 * k); await settle();
+    if (Math.abs(P.selection.box[2] - (right0 - 120)) > 4) return done('폭을 줄여도 선택 테두리가 그대로예요 ' + Math.round(right0) + '→' + Math.round(P.selection.box[2]));
+    // 3) 오른쪽으로 종이 밖까지 끌어도 종이 안에 멈추고, 인용과 그 안 글씨가 어긋나지 않아요
+    const c = base(), r = c.getBoundingClientRect();
+    const cx0 = cb.getBoundingClientRect().left, sx0 = P.note.pages[0].strokes.find((q) => q.t === t0).pts[0];
+    pe(c, 'pointerdown', r.left + 170 * k, r.top + top + 30); pe(c, 'pointermove', r.left + 170 * k + 900, r.top + top + 30); pe(c, 'pointerup', r.left + 170 * k + 900, r.top + top + 30); await settle();
+    const dCite = (cb.getBoundingClientRect().left - cx0) / k, sNow = P.note.pages[0].strokes.find((q) => q.t === t0);
+    const dInk = sNow ? sNow.pts[0] - sx0 : NaN, bx = P.selection?.box;
+    if (Math.abs(dCite - dInk) > 2) return done('인용과 글씨가 어긋났어요 ' + Math.round(dCite) + ' / ' + Math.round(dInk));
+    if (!bx || bx[2] > 726 - 20 + 1) return done('선택 테두리가 종이 밖이에요');
+    return done(true);
+  });
+
   await check('올가미로 인용 두 개 옮기기 · 되돌리기 (가볍게) · 크기 조절 손잡이도 같이', async () => {
     se.scrollTop = 0; await wait(100);
     $('.verse[data-n="20"]')?.click(); await wait(300);
