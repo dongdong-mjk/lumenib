@@ -984,9 +984,7 @@ export class Paper {
       const pb = page._hlBox;
       if (pb) ctx.clearRect(pb[0], pb[1], pb[2] - pb[0], pb[3] - pb[1]);
       page._hlBox = [x0 - m, y0 - m, x1 + m, y1 + m];
-      ctx.beginPath(); ctx.moveTo(q[0], q[1]);
-      for (let i = 2; i < q.length; i += 2) ctx.lineTo(q[i], q[i + 1]);
-      if (q.length === 2) ctx.lineTo(q[0] + 0.01, q[1]);
+      ctx.beginPath(); hlCurve(ctx, q);
       ctx.stroke();
       page._hlN = n;
       return;
@@ -1584,9 +1582,9 @@ function drawStroke(ctx, s, live = false) {
     o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, bw, bh);
     o.setTransform(k, 0, 0, k, m.e - bx, m.f - by);
     o.strokeStyle = s.color; o.lineWidth = s.w; o.lineCap = 'round'; o.lineJoin = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
-    o.beginPath(); o.moveTo(q[0], q[1]);
-    for (let i = 2; i < q.length; i += 2) o.lineTo(q[i], q[i + 1]);
-    if (q.length === 2) o.lineTo(q[0] + 0.01, q[1]);
+    o.beginPath();
+    if (typeof s.st === 'number' && !s.sh) hlCurve(o, q);
+    else { o.moveTo(q[0], q[1]); for (let i = 2; i < q.length; i += 2) o.lineTo(q[i], q[i + 1]); if (q.length === 2) o.lineTo(q[0] + 0.01, q[1]); }
     o.stroke();
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2095,6 +2093,13 @@ function hlStepEase(s, dx, dy) {
 // 새 획(st 있음): 펜처럼 '지나온 거리' 기준 가우시안으로 다듬어요. 양 끝은 고정이라 펜 끝은 펜에 붙어 있고,
 // 세기를 올리면 손 떨림(물결)이 확실히 펴져요 (점마다 조금씩 다듬던 방식은 펜슬 점이 촘촘해서 티가 안 났어요, 11/23)
 export const hlSmoothPath = (p, s) => hlSmooth(p, s); // 점검용
+// 점과 점 사이를 꺾지 않고 곡선으로 (가운데 점을 지나는 2차 곡선). 확대해도 각이 안 보이게, 쓰는 중과 완성본 같게
+function hlCurve(ctx, q) {
+  ctx.moveTo(q[0], q[1]);
+  if (q.length === 2) { ctx.lineTo(q[0] + 0.01, q[1]); return; }
+  for (let i = 2; i < q.length - 2; i += 2) ctx.quadraticCurveTo(q[i], q[i + 1], (q[i] + q[i + 2]) / 2, (q[i + 1] + q[i + 3]) / 2);
+  ctx.lineTo(q[q.length - 2], q[q.length - 1]);
+}
 function hlSmooth(p, s = {}) {
   const n = p.length / 3;
   if (!n) return [];
