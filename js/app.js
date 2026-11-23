@@ -758,7 +758,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     if (hb) { m.style.left = Math.max(8, hb.offsetLeft - 8) + 'px'; m.style.transform = 'none'; m.style.width = '260px'; }
     const sr = m.querySelector('[data-k="stab"]');
     sr.addEventListener('input', () => { S.settings.hlStab = +sr.value; m.querySelector('[data-v="stab"]').textContent = sr.value + '%'; });
-    sr.addEventListener('change', () => { S.saveSettings(); track('hl_stab_changed'); });
+    sr.addEventListener('change', () => { S.saveSettings(); track('hl_stab_changed'); sendInkConfig(); });
     m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
     nativeRange(sr);
   }
@@ -982,7 +982,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       color: pen ? PEN_COLORS[tool.penColor] : HL_COLORS[tool.hlColor],
       width: pen ? PEN_SIZES[tool.penSize] : HL_SIZES[tool.hlSize],
       style: S.settings.penStyle, opts: S.settings.penOpts[S.settings.penStyle] || {},
-      hlAlpha: S.settings.hlAlpha, scale: p?.scale || 1,
+      hlAlpha: S.settings.hlAlpha, hlStab: S.settings.hlStab, scale: p?.scale || 1,
       pages: [...(p?.scrollEl?.querySelectorAll('.page') || [])].map(rect), // 종이 한 장씩의 자리: 네이티브 임시 선을 종이 안으로 잘라요
       area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(toolbarEl?.querySelector('.tb-menu')), rect(p?.lassoMenu), ...btns].filter(Boolean),
     });

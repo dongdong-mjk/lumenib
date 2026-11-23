@@ -307,6 +307,51 @@ func lumenHighlighterPath(_ s: LumenStroke) -> CGPath {
 
 private extension SIMD2 where Scalar == Double { var magnitude: Double { (x * x + y * y).squareRoot() } }
 
+/// 형광펜 (웹 노트 위, 11/23): 웹 js/ink.js 의 hlSmooth + hlCurve 와 같은 계산이라 쓰는 중과 웹이 그린 완성본이 같아요.
+/// 지나온 거리 기준 가우시안(양 끝 고정) → 점 사이 2차 곡선. k = 종이 단위 → 화면 배율
+func lumenHlWebPath(_ flat: [Double], stab: Double, k: Double, shaped: Bool) -> CGPath {
+    let path = CGMutablePath()
+    var X: [Double] = [], Y: [Double] = []
+    var i = 0
+    while i + 1 < flat.count {
+        let x = flat[i], y = flat[i + 1]
+        if shaped || X.isEmpty || hypot(x - X[X.count - 1], y - Y[Y.count - 1]) >= 0.8 * k || i + 3 >= flat.count { X.append(x); Y.append(y) }
+        i += 3
+    }
+    guard !X.isEmpty else { return path }
+    if shaped {
+        path.move(to: CGPoint(x: X[0], y: Y[0]))
+        for j in 1..<max(1, X.count) { path.addLine(to: CGPoint(x: X[j], y: Y[j])) }
+        return path
+    }
+    let m = X.count
+    var S = [0.0]
+    for j in 1..<max(1, m) where m > 1 { S.append(S[j - 1] + hypot(X[j] - X[j - 1], Y[j] - Y[j - 1])) }
+    let sig = (4 + max(0, min(100, stab)) / 100 * 18) * k
+    let total = S[m - 1]
+    var qx: [Double] = [], qy: [Double] = []
+    var lo = 0
+    for j in 0..<m {
+        let sg = min(sig, S[j] / 2, (total - S[j]) / 2)
+        if sg < 0.05 * k { qx.append(X[j]); qy.append(Y[j]); continue }
+        let r = sg * 2.5
+        while S[lo] < S[j] - r { lo += 1 }
+        var sx = 0.0, sy = 0.0, sw = 0.0
+        var t = lo
+        while t < m && S[t] <= S[j] + r { let d = S[t] - S[j], w = exp(-(d * d) / (2 * sg * sg)); sx += X[t] * w; sy += Y[t] * w; sw += w; t += 1 }
+        qx.append(sx / sw); qy.append(sy / sw)
+    }
+    path.move(to: CGPoint(x: qx[0], y: qy[0]))
+    if qx.count == 1 { path.addLine(to: CGPoint(x: qx[0] + 0.01, y: qy[0])); return path }
+    if qx.count > 2 {
+        for j in 1..<(qx.count - 1) {
+            path.addQuadCurve(to: CGPoint(x: (qx[j] + qx[j + 1]) / 2, y: (qy[j] + qy[j + 1]) / 2), control: CGPoint(x: qx[j], y: qy[j]))
+        }
+    }
+    path.addLine(to: CGPoint(x: qx[qx.count - 1], y: qy[qy.count - 1]))
+    return path
+}
+
 // MARK: - 필기 화면: 애플펜슬 입력을 받아 직접 그려요
 
 /// 스크롤 뷰 안 종이 위에 올라가는 투명한 필기 판.
@@ -670,6 +715,7 @@ struct WebInkConfig {
     var style: LumenPenStyle = .ball
     var opts: [String: Double] = [:]
     var hlAlpha: CGFloat = 0.42
+    var hlStab: Double = 60    // 형광펜 손떨림 보정 (웹 settings.hlStab)
     var scale: CGFloat = 1     // 웹 종이 배율 (종이 단위 → 화면)
     var area: CGRect = .zero   // 필기할 수 있는 곳 (웹 화면 좌표)
     var exclude: [CGRect] = [] // 툴바처럼 필기하면 안 되는 곳
@@ -680,7 +726,8 @@ struct WebInkConfig {
         enabled = b["enabled"] as? Bool ?? false
         let t = b["tool"] as? String ?? "pen"
         tool = t == "hl" ? .highlighter : .pen
-        relay = t == "eraser" || t == "lasso" || t == "hl" // 형광펜도 웹이 직접 그려요: 본문 글씨 밑에 깔리는 모습이 처음부터 같게
+        relay = t == "eraser" || t == "lasso" // 형광펜은 다시 앱이 바로 그려요 (펜처럼 매끄럽게, 11/23). 곱하기로 글씨 밑에 깔리는 모습은 같게
+        hlStab = b["hlStab"] as? Double ?? 60
         color = b["color"] as? String ?? color
         width = b["width"] as? Double ?? width
         style = LumenPenStyle.allCases.first { ["ball", "fountain", "brush"][$0.rawValue] == (b["style"] as? String) } ?? .ball
@@ -889,6 +936,12 @@ final class WebInkOverlay: UIView {
                                  width: config.width * Double(config.scale), pts: flat)
             l.path = lumenPenPath(st, live: false)
         }
+        if config.tool == .highlighter, !pts.isEmpty {
+            // 펜을 뗀 모양(예측 점 없이)으로 바꿔 둬요. 웹이 그릴 완성본과 같아요
+            var flat: [Double] = []
+            for p in pts { flat += [p.x, p.y, 0.5] }
+            l.path = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped)
+        }
         l.lineWidth = live.lineWidth; l.lineCap = live.lineCap; l.lineJoin = live.lineJoin
         l.compositingFilter = live.compositingFilter
         l.mask = clipMask()
@@ -942,7 +995,7 @@ final class WebInkOverlay: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         let color = UIColor(hexString: config.color)
         if config.tool == .highlighter {
-            live.path = lumenHighlighterPath(s)
+            live.path = lumenHlWebPath(flat, stab: config.hlStab, k: Double(config.scale), shaped: shaped)
             live.fillColor = nil
             live.strokeColor = color.withAlphaComponent(config.hlAlpha).cgColor
             live.lineWidth = CGFloat(s.width)
