@@ -475,7 +475,7 @@ export async function run() {
     if (back.join() !== t0.join()) return '되돌리기 후 자리 다름 ' + [t0, back];
     return cost < 60 || '손 뗄 때 처리가 무거움 ' + Math.round(cost) + 'ms';
   });
-  await check('겹친 인용: 아래 인용의 아이콘이 위 인용을 뚫고 안 보임 · 마지막에 만진 인용이 위로', async () => {
+  await check('겹친 인용: 아래 인용의 아이콘이 위 인용을 뚫고 안 보임 · 마지막에 만진 인용이 위로 · 글씨는 쓴 인용과 한 묶음', async () => {
     const P = window.__lumenibPaper, pg = P.pages[0];
     const cs = P.note.citations.filter((c) => c.page === 0);
     if (cs.length < 2) return '인용이 2개가 아님';
@@ -488,10 +488,20 @@ export async function run() {
     if (!ui(a)?.classList.contains('covered')) { await restore(); return '아래 인용의 아이콘이 위 인용 위로 보여요'; }
     if (ui(b)?.classList.contains('covered')) { await restore(); return '위 인용의 아이콘이 숨겨졌어요'; }
     // a를 만지면(올가미·손잡이) a가 위로 올라오고 아이콘도 다시 보여요
+    // 겹친 곳에 쓴 글씨는 그때 위에 있던 b의 묶음: a를 위로 올리거나 옮겨도 a를 따라가지 않아요
+    const k = pg.el.getBoundingClientRect().width / 726, bb = P.citeBox(b);
+    tool('pen'); await settle();
+    stroke(line(bb[0] + 60 * k / k, bb[1] + 20, bb[0] + 160, bb[1] + 20).map(([x, y]) => [x * k, y * k])); await settle();
+    const st = P.note.pages[0].strokes.at(-1);
+    const inA0 = P.strokesInCite(0, a).has(st), inB0 = P.strokesInCite(0, b).has(st);
     P.raiseCite(pg, a); await settle();
     const top = order().at(-1);
     const ok = top === Math.round(a.y) && !ui(a).classList.contains('covered') && ui(b).classList.contains('covered');
+    const inA1 = P.strokesInCite(0, a).has(st), inB1 = P.strokesInCite(0, b).has(st);
+    undo(); await settle();
     await restore();
+    if (!inB0 || inA0) return '겹친 곳에 쓴 글씨가 위 인용 묶음이 아니에요';
+    if (!inB1 || inA1) return '아래 인용을 위로 올리니 글씨 묶음이 바뀌었어요';
     return ok || '만진 인용이 위로 안 올라와요 ' + order();
   });
 

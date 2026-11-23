@@ -293,6 +293,7 @@ export class Paper {
 
   // 인용을 맨 위로: 겹친 인용 중 마지막에 만진 것이 위에 보여요 (11/23)
   raiseCite(page, c) {
+    this.tagCiteStrokes(page.i); // 순서를 바꾸기 전에 글씨 묶음부터 정해요
     const top = Math.max(0, ...this.note.citations.map((q) => q.z || 0));
     if ((c.z || 0) !== top || this.note.citations.some((q) => q !== c && q.page === c.page && (q.z || 0) === top)) c.z = top + 1;
     const el = citeEls.get(c);
@@ -465,6 +466,7 @@ export class Paper {
         // 마지막 페이지로 옮겼으면 뒤에 빈 페이지를 하나 더 둬요
         if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
       }
+      this.updateCiteCover(to); if (to !== from) this.updateCiteCover(from); // 놓은 자리에서 겹침에 따라 아이콘 숨김 다시 계산
       if (moved) { this._push(entry); this.onChange({}); this.onHistory(); }
     };
     u.querySelector('.cite-x').addEventListener('click', () => {
@@ -770,6 +772,9 @@ export class Paper {
           else this.pagePush(sel.page);
           this.cloneSelection();
           for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + dy); } }
+          // 인용 없이 글씨만 옮겼으면 원래 인용 묶음에서 빠지고, 놓은 자리에 따라 다시 묶여요
+          const movedIds = new Set([...(sel.cites || [])].map(citeId));
+          for (const s of sel.set) if (!movedIds.has(s.cg)) delete s.cg;
           if (to !== page) {
             this.note.pages[page.i].strokes = this.note.pages[page.i].strokes.filter((q) => !sel.set.has(q));
             this.note.pages[to.i].strokes.push(...sel.set);
@@ -991,19 +996,31 @@ export class Paper {
     this._sbT = setTimeout(() => host.classList.remove('sb-on'), 900);
   }
 
-  // 인용 상자 안에 쓴 획 (점의 60% 이상이 상자 안)
+  // 인용과 그 위에 쓴 글씨는 한 묶음이에요 (11/23): 글씨마다 어느 인용 것인지 표시(cg)를 붙여 두고 그걸로 같이 움직여요.
+  // 겹친 인용 위에 쓴 글씨는 그때 맨 위에 있던 인용 것. 나중에 다른 인용을 그 위로 옮겨 와도 묶음이 바뀌지 않아요.
   strokesInCite(pageI, c) {
-    const b = this.citeBox(c), out = new Set();
-    if (!b) return out;
-    // 인용을 넣은 뒤에 그 위에 쓴 글씨만 인용 것으로 봐요. 인용을 원래 노트 위에 넣어도 원래 노트는 안 움직여요
-    const ct = c.t || 0; // 예전 인용(시각 없음): 이번 수정 뒤에 쓴 글씨만
-    for (const s of this.note.pages[pageI].strokes) {
-      if (!s.t || s.t <= ct) continue;
-      let n = 0, inn = 0;
-      for (let i = 0; i < s.pts.length; i += 3) { n++; if (s.pts[i] >= b[0] - 4 && s.pts[i] <= b[2] + 4 && s.pts[i + 1] >= b[1] - 4 && s.pts[i + 1] <= b[3] + 4) inn++; }
-      if (n && inn / n >= 0.6) out.add(s);
-    }
+    this.tagCiteStrokes(pageI);
+    const id = citeId(c), out = new Set();
+    for (const s of this.note.pages[pageI]?.strokes || []) if (s.cg === id) out.add(s);
     return out;
+  }
+  // 아직 묶음 표시가 없는 글씨에 표시를 붙여요: 인용을 넣은 뒤에 쓴 글씨 중 점의 60% 이상이 상자 안이면, 겹친 것 중 맨 위 인용 것
+  tagCiteStrokes(pageI) {
+    const strokes = this.note.pages[pageI]?.strokes;
+    if (!strokes?.some((s) => s.cg === undefined)) return;
+    const order = [...(this.pages[pageI]?.inner?.querySelectorAll('.cite-block') || [])].map((el) => this.note.citations.find((c) => citeEls.get(c) === el)).filter(Boolean).reverse(); // 위에 있는 것부터
+    const boxes = order.map((c) => [c, this.citeBox(c)]).filter(([, b]) => b);
+    for (const s of strokes) {
+      if (s.cg !== undefined) continue;
+      let owner = null;
+      if (s.t) for (const [c, b] of boxes) {
+        if (s.t <= (c.t || 0)) continue; // 인용을 넣기 전에 쓴 원래 노트는 인용 것이 아니에요
+        let n = 0, inn = 0;
+        for (let i = 0; i < s.pts.length; i += 3) { n++; if (s.pts[i] >= b[0] - 4 && s.pts[i] <= b[2] + 4 && s.pts[i + 1] >= b[1] - 4 && s.pts[i + 1] <= b[3] + 4) inn++; }
+        if (n && inn / n >= 0.6) { owner = c; break; }
+      }
+      s.cg = owner ? citeId(owner) : 0;
+    }
   }
 
   // 인용 블록이 종이에서 차지하는 상자 (종이 단위)
@@ -1472,6 +1489,8 @@ const citeRs = new WeakMap();
 const citeW = (c) => c.w || PAGE_W - 40; // 인용 상자 너비 (종이 단위, 기본은 가로 전체)
 const citeX = (c) => (c.x ?? 20); // 인용 상자 왼쪽 (종이 단위)
 const citeMaxX = (c) => PAGE_W - 20 - citeW(c);
+// 인용마다 바뀌지 않는 이름 (글씨 묶음 표시에 써요)
+const citeId = (c) => c.id || (c.id = 'c' + (c.t || 0).toString(36) + Math.random().toString(36).slice(2, 7));
 function penKey(s) {
   const p = s.pts, n = p.length;
   return n + '|' + p[0] + ',' + p[1] + '|' + p[n - 3] + ',' + p[n - 2] + '|' + p[n >> 1] + '|' + s.w + '|' + (s.ps || '') + '|' + (s.po ? JSON.stringify(s.po) : '') + '|' + (s.sv || 0) + '|' + (s.np ? 1 : 0);
