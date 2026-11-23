@@ -1667,13 +1667,19 @@ function drawStroke(ctx, s, live = false) {
       ctx.stroke(); ctx.restore();
       return;
     }
-    const m = ctx.getTransform(), k = m.a, pad = s.w / 2 + 2;
-    const bx = Math.floor((x0 - pad) * k + m.e), by = Math.floor((y0 - pad) * k + m.f);
-    const bw = Math.ceil((x1 - x0 + pad * 2) * k) + 2, bh = Math.ceil((y1 - y0 + pad * 2) * k) + 2;
+    // 화면 변환(늘리기·돌리기 중 포함)을 그대로 따라가요. 가로·세로 배율이 다르거나 돌아가 있으면 예전엔 잘려 그려졌어요 (11/23)
+    const m = ctx.getTransform(), pad = s.w * Math.max(Math.hypot(m.a, m.b), Math.hypot(m.c, m.d)) / 2 + 2;
+    let dx0 = Infinity, dy0 = Infinity, dx1 = -Infinity, dy1 = -Infinity;
+    for (const [px, py] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+      const tx = m.a * px + m.c * py + m.e, ty = m.b * px + m.d * py + m.f;
+      if (tx < dx0) dx0 = tx; if (tx > dx1) dx1 = tx; if (ty < dy0) dy0 = ty; if (ty > dy1) dy1 = ty;
+    }
+    const bx = Math.floor(dx0 - pad), by = Math.floor(dy0 - pad);
+    const bw = Math.ceil(dx1 - dx0 + pad * 2) + 2, bh = Math.ceil(dy1 - dy0 + pad * 2) + 2;
     if (bw <= 0 || bh <= 0) return;
     const off = hlScratch(bw, bh), o = off.getContext('2d');
     o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, bw, bh);
-    o.setTransform(k, 0, 0, k, m.e - bx, m.f - by);
+    o.setTransform(m.a, m.b, m.c, m.d, m.e - bx, m.f - by);
     o.strokeStyle = s.color; o.lineWidth = s.w; o.lineCap = 'round'; o.lineJoin = 'round'; // 굿노트처럼 끝이 부드럽게 (11/21)
     o.beginPath();
     if (typeof s.st === 'number' && !s.sh) hlCurve(o, q);
