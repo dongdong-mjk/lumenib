@@ -437,7 +437,7 @@ export async function run() {
     const mr = $('.lasso-menu').getBoundingClientRect(), vr = sv.getBoundingClientRect();
     const menuOk = mr.top >= vr.top - 1 && mr.bottom <= vr.bottom + 1;
     sv.scrollTop = 0; se.scrollTop = 0; await settle();
-    if (!menuOk) return done('메뉴가 보이는 화면 밖에 있어요');
+    if (!menuOk) return done('메뉴가 보이는 화면 밖에 있어요 ' + [mr.top, mr.bottom, vr.top, vr.bottom].map(Math.round));
     // 2) 폭 줄이면 선택 테두리도 따라와요
     const rs = $$('.page')[0].querySelector('.cite-rs'), rr = rs.getBoundingClientRect(), right0 = P.selection.box[2];
     const ev = (t, x) => rs.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: rr.top + 10, pointerId: 931, pointerType: 'mouse', bubbles: true, cancelable: true, button: 0, buttons: t === 'pointerup' ? 0 : 1 }));
