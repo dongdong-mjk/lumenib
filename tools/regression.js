@@ -491,7 +491,7 @@ export async function run() {
     // 겹친 곳에 쓴 글씨는 그때 위에 있던 b의 묶음: a를 위로 올리거나 옮겨도 a를 따라가지 않아요
     const k = pg.el.getBoundingClientRect().width / 726, bb = P.citeBox(b);
     tool('pen'); await settle();
-    stroke(line(bb[0] + 60 * k / k, bb[1] + 20, bb[0] + 160, bb[1] + 20).map(([x, y]) => [x * k, y * k])); await settle();
+    stroke(line(bb[0] + 400, bb[1] + 20, bb[0] + 500, bb[1] + 20).map(([x, y]) => [x * k, y * k])); await settle();
     const st = P.note.pages[0].strokes.at(-1);
     const inA0 = P.strokesInCite(0, a).has(st), inB0 = P.strokesInCite(0, b).has(st);
     P.raiseCite(pg, a); await settle();
@@ -500,7 +500,7 @@ export async function run() {
     const inA1 = P.strokesInCite(0, a).has(st), inB1 = P.strokesInCite(0, b).has(st);
     // a가 위로 오면 b 묶음 글씨는 a 자리에서 안 보여요
     const cv = ink(), rr = cv.width / 726, alpha = (x, y) => cv.getContext('2d').getImageData(Math.round(x * rr), Math.round(y * rr), 1, 1).data[3];
-    const hiddenUnderA = alpha(bb[0] + 110, bb[1] + 20) === 0;
+    const hiddenUnderA = alpha(bb[0] + 450, bb[1] + 20) === 0 /* 앞 점검이 남긴 글씨와 안 겹치는 오른쪽 */;
     undo(); await settle();
     await restore();
     if (!inB0 || inA0) return '겹친 곳에 쓴 글씨가 위 인용 묶음이 아니에요';
