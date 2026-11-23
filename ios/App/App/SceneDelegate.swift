@@ -119,6 +119,9 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
                 if sv.isDecelerating || sv.isDragging { sv.setContentOffset(sv.contentOffset, animated: false) }
                 // 펜슬이 종이에 닿아 있는 동안은 이 스크롤을 잠가요 (도구를 바꾼 직후 빠르게 쓰면 웹이 막기 전에 스크롤이 시작되곤 했어요)
                 lockedScrolls.append((sv, sv.contentOffset))
+                // 종이 스크롤은 손가락으로만 움직여요. 확대한 상태에서 펜슬로 쓰면 종이가 같이 끌려가던 것 (11/23)
+                // (제스처를 끄면 웹킷이 펜슬 탭을 붙잡아서 안 되고, 펜슬만 빼 두는 건 괜찮아요)
+                sv.panGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
             }
             v = cur.superview
         }

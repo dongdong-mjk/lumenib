@@ -159,15 +159,16 @@ export async function run() {
     undo(); await settle();
     return w > 20 || '도형 크기가 이상해요 ' + w;
   });
-  await check('도형: 그린 모양대로 · 대충 그린 네모 인식 · 덜 닫힌 원도 원(매끄럽게) · 꺾은선 끝을 시작점에 대면 붙음', async () => {
+  await check('도형: 그린 모양대로 · 대충 그린 네모 인식 · 덜 닫힌 원도 원(매끄럽게) · 꺾은선 끝을 시작점에 대면 붙고, 붙은 뒤엔 닫힌 채로 늘어남', async () => {
     tool('pen'); await settle();
     const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
     const drawHold = async (pts, after) => {
       pe(c, 'pointerdown', r.left + pts[0][0], r.top + pts[0][1]);
       for (const [x, y] of pts.slice(1)) pe(c, 'pointermove', r.left + x, r.top + y);
       await wait(750);
-      if (after) pe(c, 'pointermove', r.left + after[0], r.top + after[1]);
-      const e = after || pts.at(-1);
+      const afters = after ? (Array.isArray(after[0]) ? after : [after]) : [];
+      for (const a of afters) pe(c, 'pointermove', r.left + a[0], r.top + a[1]);
+      const e = afters.at(-1) || pts.at(-1);
       pe(c, 'pointerup', r.left + e[0], r.top + e[1]); await settle();
       return P.note.pages[0].strokes.at(-1);
     };
@@ -203,7 +204,14 @@ export async function run() {
     undo(); await settle();
     if (!poly?.sh) return '꺾은선이 도형으로 안 바뀜';
     const q = poly.pts, d = Math.hypot(q[q.length - 3] - q[0], q[q.length - 2] - q[1]);
-    return d < 0.5 || '끝점이 시작점에 안 붙어요 ' + d.toFixed(1) + ' (배율 ' + k.toFixed(2) + ')';
+    if (d >= 0.5) return '끝점이 시작점에 안 붙어요 ' + d.toFixed(1) + ' (배율 ' + k.toFixed(2) + ')';
+    // 4) 붙은 다음 펜을 더 움직이면 떨어지지 않고, 닫힌 채로 늘어나요
+    const poly2 = await drawHold(open, [[S[0] + 4, S[1] + 4], [S[0] - 60, S[1] - 50]]);
+    undo(); await settle();
+    const q2 = poly2.pts, d2 = Math.hypot(q2[q2.length - 3] - q2[0], q2[q2.length - 2] - q2[1]);
+    if (d2 >= 0.5) return '붙은 뒤 펜을 움직이니 다시 떨어져요';
+    const xs2 = q2.filter((_, i) => i % 3 === 0), xs1 = q.filter((_, i) => i % 3 === 0);
+    return (Math.max(...xs2) - Math.min(...xs2)) > (Math.max(...xs1) - Math.min(...xs1)) + 30 || '붙은 뒤 펜을 따라 안 늘어나요';
   });
   await check('펜슬처럼 떨리는 손으로 그은 선도 멈추면 직선 (펜·형광펜)', async () => {
     const c = base(), r = c.getBoundingClientRect(), P = window.__lumenibPaper;
@@ -507,6 +515,33 @@ export async function run() {
     if (!inB1 || inA1) return '아래 인용을 위로 올리니 글씨 묶음이 바뀌었어요';
     if (!hiddenUnderA) return '위 인용 자리에 아래 인용의 글씨가 보여요';
     return ok || '만진 인용이 위로 안 올라와요 ' + order();
+  });
+
+  await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {
+    const P = window.__lumenibPaper, pg = P.pages[0], arr = P.note.pages[0].strokes, n0 = arr.length;
+    // 글씨 400획을 아래쪽에 채워요
+    for (let i = 0; i < 400; i++) { const x = 40 + (i % 20) * 32, y = 700 + Math.floor(i / 20) * 14, pts = []; for (let j = 0; j < 20; j++) pts.push(x + j, y + Math.sin(j) * 3, 0.5); arr.push({ tool: 'pen', color: '#111', w: 2, pts, t: 1 }); }
+    P.drawPage(pg);
+    tool('eraser'); await settle();
+    const c = base(), r = c.getBoundingClientRect(), k = r.width / 726;
+    const t0 = performance.now();
+    pe(c, 'pointerdown', r.left + 300 * k, r.top + 640 * k);
+    for (let i = 0; i < 30; i++) pe(c, 'pointermove', r.left + (300 + i * 4) * k, r.top + 640 * k);
+    pe(c, 'pointerup', r.left + 420 * k, r.top + 640 * k);
+    const eraseMs = (performance.now() - t0) / 30;
+    arr.splice(n0); P.drawPage(pg); await settle();
+    if (eraseMs > 8) return '글씨 많은 장에서 지우개가 무거워요 ' + eraseMs.toFixed(1) + 'ms';
+    // 인용을 끄는 동안 글씨 판에 그 인용 자리만큼 구멍이 나고, 놓으면 없어져요
+    const grip = pg.ui.querySelector('.cite-grip');
+    if (!grip) return '인용 손잡이 없음';
+    const gg = grip.getBoundingClientRect();
+    pe(grip, 'pointerdown', gg.left + 5, gg.top + 5, 981); pe(window, 'pointermove', gg.left + 5, gg.top + 45, 981);
+    const during = pg.ink.style.clipPath;
+    pe(window, 'pointerup', gg.left + 5, gg.top + 45, 981); await settle();
+    const after = pg.ink.style.clipPath;
+    undo(); await settle();
+    if (!during || !during.includes('evenodd')) return '끄는 동안 아래 글씨가 비쳐요';
+    return !after || '놓은 뒤에도 구멍이 남아요';
   });
 
   await check('올가미로 인용·글씨를 다음 장으로 옮기기 · 되돌리기', async () => {

@@ -807,11 +807,16 @@ final class WebInkOverlay: UIView {
             // 열린 꺾은선: 마지막 꼭짓점이 펜을 따라오고, 시작점에 가까이 가면 붙어서 닫혀요 (웹 shapeAt 과 같음)
             var vs = Array(vs0.dropLast())
             let s0 = vs[0]
-            vs.append(hypot(p.x - s0.x, p.y - s0.y) < shapeMerge ? s0 : p)
+            let merged = hypot(p.x - s0.x, p.y - s0.y) < shapeMerge
+            vs.append(merged ? s0 : p)
             var out: [SIMD3<Double>] = []
             for i in 0..<(vs.count - 1) {
                 let a = vs[i], b = vs[i + 1], n = max(2, Int(ceil(hypot(b.x - a.x, b.y - a.y) / 6)))
                 for j in (i == 0 ? 0 : 1)...n { let t = Double(j) / Double(n); out.append(SIMD3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, z)) }
+            }
+            if merged {
+                // 시작점에 붙으면 닫힌 도형이 돼요. 그다음부터는 떨어지지 않고 펜 위치대로 늘어나요 (웹 shapeAt 과 같음, 11/23)
+                shapeOpen = nil; shapeBase = out; shapeRef = p; shapeRot = 0
             }
             return out
         }

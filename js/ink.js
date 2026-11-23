@@ -293,6 +293,8 @@ export class Paper {
 
   // 인용을 맨 위로: 겹친 인용 중 마지막에 만진 것이 위에 보여요 (11/23)
   raiseCite(page, c) {
+    const el0 = citeEls.get(c);
+    if (el0?.isConnected && !el0.nextElementSibling?.classList.contains('cite-block') && [...el0.parentElement.children].filter((q) => q.classList.contains('cite-block')).at(-1) === el0) return; // 이미 맨 위
     this.tagCiteStrokes(page.i); // 순서를 바꾸기 전에 글씨 묶음부터 정해요
     const top = Math.max(0, ...this.note.citations.map((q) => q.z || 0));
     if ((c.z || 0) !== top || this.note.citations.some((q) => q !== c && q.page === c.page && (q.z || 0) === top)) c.z = top + 1;
@@ -300,6 +302,16 @@ export class Paper {
     if (el?.isConnected) el.parentElement.appendChild(el);
     this.updateCiteCover(page);
     if (this.citeCoverBoxes(page).size) this.drawPage(page); // 위아래가 바뀌면 묶음 글씨 가림도 다시
+  }
+  // 끄는 인용 자리만큼 그 장의 글씨 판(펜·형광펜)에 구멍을 내요. 옮기는 인용 글씨는 따로 그린 판이라 그대로 보여요
+  citeHole(d, tp, box) {
+    if (d.holePage && d.holePage !== tp) { for (const cv of [d.holePage.ink, d.holePage.base]) cv.style.clipPath = ''; d.holePage = null; }
+    if (!tp) return;
+    const k = this.scale, W = tp.ink.offsetWidth, H = tp.ink.offsetHeight;
+    const [x0, y0, x1, y1] = box.map((v) => v * k);
+    const path = `path(evenodd, 'M0 0H${W}V${H}H0Z M${x0} ${y0}H${x1}V${y1}H${x0}Z')`;
+    for (const cv of [tp.ink, tp.base]) cv.style.clipPath = path;
+    d.holePage = tp;
   }
   // 인용마다 그 위를 덮고 있는 인용 상자들 (겹친 것만). 그 인용 묶음 글씨를 그릴 때 이 자리는 비워요
   citeCoverBoxes(page) {
@@ -354,22 +366,29 @@ export class Paper {
     rs.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       try { rs.setPointerCapture(e.pointerId); } catch {}
-      rz = { x0: e.clientX, w0: citeW(c), id: e.pointerId, snap: this.snapshot() };
+      rz = { x0: e.clientX, cx: e.clientX, w0: citeW(c), id: e.pointerId, snap: this.snapshot(), cov: this.citeCoverBoxes(page).size };
       this.raiseCite(page, c);
     });
-    rs.addEventListener('pointermove', (e) => {
-      if (!rz || e.pointerId !== rz.id) return;
-      const w = Math.round(Math.max(220, Math.min(PAGE_W - 20 - citeX(c), rz.w0 + (e.clientX - rz.x0) / this.scale)));
+    const rsApply = () => {
+      rz.raf = 0;
+      const w = Math.round(Math.max(220, Math.min(PAGE_W - 20 - citeX(c), rz.w0 + (rz.cx - rz.x0) / this.scale)));
       c.w = w >= PAGE_W - 41 && citeX(c) <= 20 ? undefined : w; // 끝까지 늘리면 원래대로(가로 전체)
       el.style.right = c.w ? 'auto' : ''; el.style.width = c.w ? c.w + 'px' : '';
       u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
       placeRs();
       if (this.selection?.cites?.has(c)) this.refreshSelBox(); // 올가미로 고른 인용이면 선택 테두리도 같이 (11/23)
       this.updateCiteCover(page);
+    };
+    rs.addEventListener('pointermove', (e) => {
+      if (!rz || e.pointerId !== rz.id) return;
+      rz.cx = e.clientX;
+      // 너비 조절은 화면에 한 번 그릴 때마다 한 번만 (움직임마다 하면 버벅였어요, 11/23)
+      if (!rz.raf) rz.raf = requestAnimationFrame(rsApply);
     });
     const rsEnd = (e) => {
       if (!rz || e.pointerId !== rz.id) return;
-      if (citeW(c) !== rz.w0) { this._push({ t: 'full', json: rz.snap }); this.onChange({}); this.onHistory(); this.drawPage(page); }
+      if (rz.raf) { cancelAnimationFrame(rz.raf); rsApply(); }
+      if (citeW(c) !== rz.w0) { this._push({ t: 'full', json: rz.snap }); this.onChange({}); this.onHistory(); if (this.citeCoverBoxes(page).size || rz.cov) this.drawPage(page); }
       rz = null;
     };
     rs.addEventListener('pointerup', rsEnd);
@@ -391,7 +410,7 @@ export class Paper {
       });
       const pr = page.el.getBoundingClientRect();
       // 되돌리기용으로 노트 전체를 저장하면 누르는 순간이 느려서, 이 인용 자리와 그 장 획 목록만 기억해요
-      d = { id: e.pointerId, lastY: e.clientY, lastX: e.clientX, x0: e.clientX, cx: citeX(c), cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
+      d = { cov0: this.citeCoverBoxes(page).size, id: e.pointerId, lastY: e.clientY, lastX: e.clientX, x0: e.clientX, cx: citeX(c), cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', up, true);
       window.addEventListener('pointercancel', up, true);
@@ -420,7 +439,7 @@ export class Paper {
     });
     const apply = () => {
       // 손가락이 있는 페이지로 인용을 옮겨요 (다음·이전 페이지로 넘기기, 11/21)
-      const h = el.offsetHeight;
+      const h = d.h || (d.h = el.offsetHeight); // 끄는 동안 높이는 그대로라 한 번만 재요
       let tp = this.pages.find((p) => { const r = p.el.getBoundingClientRect(); return d.lastY >= r.top && d.lastY <= r.bottom; });
       if (!tp) {
         const first = this.pages[0], last = this.pages[this.pages.length - 1];
@@ -443,7 +462,9 @@ export class Paper {
       el.style.left = citeX(c) + 'px';
       u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
       el.style.top = u.style.top = c.y + 'px';
-      const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.top = (c.y + el.offsetHeight - 28) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 28) + 'px'; }
+      const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.top = (c.y + h - 28) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 28) + 'px'; }
+      // 옮기는 인용 자리에는 아래 글씨가 비치지 않게 (올가미로 옮길 때처럼, 11/23)
+      this.citeHole(d, tp, [citeX(c), c.y, citeX(c) + citeW(c), c.y + h]);
       if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
     };
     const onMove = (e) => {
@@ -459,6 +480,7 @@ export class Paper {
       window.removeEventListener('pointercancel', up, true);
       el.classList.remove('moving'); u.classList.remove('moving');
       this.scrollEl.classList.remove('cite-moving');
+      this.citeHole(d, null);
       const from = this.pages[d.page0], to = d.cur;
       if (d.carry.length) {
         const delta = c.y - d.cy;
@@ -476,6 +498,7 @@ export class Paper {
         this.drawPage(from); if (to !== from) this.drawPage(to);
       }
       if (to !== from && !d.before[to.i]) d.before[to.i] = this.note.pages[to.i].strokes.slice();
+      const carried = d.carry.length > 0, cov0 = d.cov0;
       const moved = d.moved, entry = { t: 'cite', ci: this.note.citations.indexOf(c), page: d.page0, y: d.cy, x: d.cx, strokes: d.before };
       d = null;
       if (to !== from) {
@@ -484,7 +507,9 @@ export class Paper {
         if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
       }
       this.updateCiteCover(to); if (to !== from) this.updateCiteCover(from); // 놓은 자리에서 겹침에 따라 아이콘 숨김 다시 계산
-      this.drawPage(to); if (to !== from) this.drawPage(from); // 겹침이 바뀌었으니 묶음 글씨 가림도 다시
+      // 겹침이 있거나 있었던 장만 묶음 글씨 가림을 다시 그려요 (글씨 많은 장에서 놓을 때 버벅이던 것)
+      if (!carried && (cov0 || this.citeCoverBoxes(to).size)) this.drawPage(to);
+      if (!carried && to !== from && (cov0 || this.citeCoverBoxes(from).size)) this.drawPage(from);
       if (moved) { this._push(entry); this.onChange({}); this.onHistory(); }
     };
     u.querySelector('.cite-x').addEventListener('click', () => {
@@ -628,6 +653,17 @@ export class Paper {
     this.clearLive(page);
     this.clearHlLive(page);
     if (sel) this.drawSelection(page);
+  }
+
+  // 같은 프레임 안의 여러 번 다시 그리기를 한 번으로 모아요
+  drawPageSoon(page) {
+    page._drawSoon = true;
+    if (page._drawRaf) return;
+    page._drawRaf = requestAnimationFrame(() => { page._drawRaf = 0; if (page._drawSoon) { page._drawSoon = false; this.drawPage(page); } });
+  }
+  flushDrawSoon(page) {
+    if (page._drawRaf) { cancelAnimationFrame(page._drawRaf); page._drawRaf = 0; }
+    if (page._drawSoon) { page._drawSoon = false; this.drawPage(page); }
   }
 
   // 새 획 하나만 덧그려요. 장 전체를 다시 그리면 글씨가 많을수록 무거워졌어요 (새 획은 맨 위에 그려지니 결과는 같아요)
@@ -777,6 +813,7 @@ export class Paper {
         this.drawAdded(page, k.s);
         this.changed(page);
       } else if (k.kind === 'erase') {
+        this.flushDrawSoon(page);
         this.clearLive(page);
         if (k.removed.length) { this._push({ t: 'page', i: page.i, strokes: k.before }); this.changed(page); }
       } else if (k.kind === 'lasso') {
@@ -810,6 +847,7 @@ export class Paper {
           if (sel.cites?.size) {
             for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.page = to.i; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + dy))); const nx = Math.round(Math.max(20, Math.min(citeMaxX(c), citeX(c) + k.dx))); if (nx !== 20 || c.x != null) c.x = nx; }
             this.renderCitations(page); if (to !== page) this.renderCitations(to);
+            this.drawPage(page); if (to !== page) this.drawPage(to); // 놓은 인용 아래 다른 인용 글씨는 가려요 (놓으면 다시 보이던 것, 11/23)
             this.onChange({});
           }
           if (to !== page) {
@@ -913,9 +951,12 @@ export class Paper {
     const partial = tool.eraserMode === 'partial';
     for (let i = strokes.length - 1; i >= 0; i--) {
       const orig = strokes[i];
+      const rr = partial ? r : r + orig.w / 2;
+      // 지우개에서 먼 획은 상자만 보고 건너뛰어요 (글씨가 많을 때 지우개가 버벅이던 것, 11/23)
+      const ob = strokeBox(orig);
+      if (x < ob[0] - rr || x > ob[2] + rr || y < ob[1] - rr || y > ob[3] + rr) continue;
       // 점 사이가 먼 획도 지우개가 정확히 닿게, 검사할 때만 촘촘하게 채운 점을 써요 (그리기는 원래 점으로)
       const s = { ...orig, pts: denseOf(orig) };
-      const rr = partial ? r : r + s.w / 2;
       const inside = (j) => { const dx = s.pts[j] - x, dy = s.pts[j + 1] - y; return dx * dx + dy * dy <= rr * rr; };
       let any = false;
       for (let j = 0; j < s.pts.length; j += 3) if (inside(j)) { any = true; break; }
@@ -933,7 +974,7 @@ export class Paper {
       if (run.length >= 6) pieces.push(run);
       strokes.splice(i, 1, ...pieces.map((pts) => ({ ...s, pts })));
     }
-    if (hit) this.drawPage(page);
+    if (hit) this.drawPageSoon(page); // 한 프레임에 한 번만 다시 그려요
     const ctx = this.clearLive(page);
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1 / this.scale; ctx.stroke();
@@ -1818,9 +1859,17 @@ function shapeAt(sh, x, y) {
   if (sh.kind === 'open' && sh.verts) {
     // 마지막 꼭짓점(펜 끝)이 펜을 따라와요. 시작점에 가까이 대면 붙어서 닫혀요
     const vs = sh.verts.slice(0, -1).map((q) => q.slice()), s0 = vs[0];
-    vs.push(Math.hypot(x - s0[0], y - s0[1]) < MERGE_DIST ? s0 : [x, y]);
+    const merged = Math.hypot(x - s0[0], y - s0[1]) < MERGE_DIST;
+    vs.push(merged ? s0.slice() : [x, y]);
     const out = [];
     for (const q of chainPts(vs)) out.push(round(q[0]), round(q[1]), sh.p);
+    if (merged) {
+      // 시작점에 붙으면 닫힌 도형이 돼요. 그다음부터는 떨어지지 않고, 닫힌 도형처럼 펜 위치대로 늘어나요 (11/23)
+      sh.kind = 'closed-poly'; sh.verts = vs; sh.base = out.slice(); sh.ref = [x, y]; sh.rot = 0;
+      let cx = 0, cy = 0; const n = out.length / 3;
+      for (let i = 0; i < out.length; i += 3) { cx += out[i]; cy += out[i + 1]; }
+      sh.c = [cx / n, cy / n];
+    }
     return out;
   }
   // 닫힌 도형·원 (굿노트처럼): 펜 반대쪽을 고정하고, 펜 쪽을 잡아당기듯 가로·세로를 따로 늘려요 (비율이 펜 위치대로 바뀜)
@@ -2004,6 +2053,17 @@ function pip(poly, x, y) {
 }
 const citeEls = new WeakMap(); // 인용 → 화면의 블록
 const citeUis = new WeakMap(); // 인용 → 오른쪽 손잡이(옮기기 · 빼기)
+// 획 하나의 상자 (점이 바뀌면 다시 계산)
+const _sbox = new WeakMap();
+function strokeBox(s) {
+  const c = _sbox.get(s);
+  if (c && c.pts === s.pts && c.n === s.pts.length) return c.b;
+  let a = Infinity, b = Infinity, cc = -Infinity, d = -Infinity;
+  for (let i = 0; i < s.pts.length; i += 3) { const x = s.pts[i], y = s.pts[i + 1]; if (x < a) a = x; if (y < b) b = y; if (x > cc) cc = x; if (y > d) d = y; }
+  const box = [a, b, cc, d];
+  _sbox.set(s, { pts: s.pts, n: s.pts.length, b: box });
+  return box;
+}
 function bbox(strokes) {
   let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
   for (const s of strokes) for (let i = 0; i < s.pts.length; i += 3) {
