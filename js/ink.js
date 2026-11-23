@@ -299,6 +299,22 @@ export class Paper {
     const el = citeEls.get(c);
     if (el?.isConnected) el.parentElement.appendChild(el);
     this.updateCiteCover(page);
+    if (this.citeCoverBoxes(page).size) this.drawPage(page); // 위아래가 바뀌면 묶음 글씨 가림도 다시
+  }
+  // 인용마다 그 위를 덮고 있는 인용 상자들 (겹친 것만). 그 인용 묶음 글씨를 그릴 때 이 자리는 비워요
+  citeCoverBoxes(page) {
+    const out = new Map();
+    if (!page?.inner) return out;
+    this.tagCiteStrokes(page.i);
+    const list = [...page.inner.querySelectorAll('.cite-block')].map((el) => this.note.citations.find((c) => citeEls.get(c) === el)).filter(Boolean);
+    const hit = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+    list.forEach((c, i) => {
+      const b = this.citeBox(c);
+      if (!b) return;
+      const above = list.slice(i + 1).map((q) => this.citeBox(q)).filter((q) => q && hit(q, b));
+      if (above.length) out.set(citeId(c), above);
+    });
+    return out;
   }
   // 아이콘(옮기기·빼기·너비 조절)은 맨 위 층에 있어서, 위에 겹친 인용이 덮는 자리면 숨겨요
   updateCiteCover(page) {
@@ -353,7 +369,7 @@ export class Paper {
     });
     const rsEnd = (e) => {
       if (!rz || e.pointerId !== rz.id) return;
-      if (citeW(c) !== rz.w0) { this._push({ t: 'full', json: rz.snap }); this.onChange({}); this.onHistory(); }
+      if (citeW(c) !== rz.w0) { this._push({ t: 'full', json: rz.snap }); this.onChange({}); this.onHistory(); this.drawPage(page); }
       rz = null;
     };
     rs.addEventListener('pointerup', rsEnd);
@@ -363,6 +379,7 @@ export class Paper {
     grip.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       try { grip.setPointerCapture(e.pointerId); } catch {}
+      if (this.selection) this.clearSelection(); // 올가미 선택 중에 옮기기 아이콘을 쓰면 선택은 풀어요 (선택 테두리만 남아 있던 것, 11/23)
       this.raiseCite(page, c);
       // 인용 안에 쓴 밑줄·메모도 같이 옮겨요 (11/21). 원래 획은 되돌리기 기록에 두고, 새 획으로 바꿔 끼워 옮겨요
       const pg = this.note.pages[page.i], inside = this.strokesInCite(page.i, c), carry = [], preStrokes = pg.strokes.slice();
@@ -467,6 +484,7 @@ export class Paper {
         if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
       }
       this.updateCiteCover(to); if (to !== from) this.updateCiteCover(from); // 놓은 자리에서 겹침에 따라 아이콘 숨김 다시 계산
+      this.drawPage(to); if (to !== from) this.drawPage(from); // 겹침이 바뀌었으니 묶음 글씨 가림도 다시
       if (moved) { this._push(entry); this.onChange({}); this.onHistory(); }
     };
     u.querySelector('.cite-x').addEventListener('click', () => {
@@ -595,8 +613,18 @@ export class Paper {
     const strokes = this.note.pages[page.i].strokes;
     const sel = this.selection && this.selection.page === page.i ? this.selection : null;
     const hid = this._hidden;
-    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s)) drawStroke(ctx, s);
-    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s)) drawStroke(ictx, s);
+    // 인용 위에 쓴 글씨는 그 인용과 한 묶음: 그 인용을 덮고 있는 다른 인용 자리에서는 안 보여요 (11/23)
+    const cover = this.citeCoverBoxes(page);
+    const draw = (cx, s) => {
+      const bs = s.cg && cover.get(s.cg);
+      if (!bs) return drawStroke(cx, s);
+      cx.save();
+      for (const b of bs) { cx.beginPath(); cx.rect(-50, -50, PAGE_W + 100, PAGE_H + 100); cx.rect(b[0], b[1], b[2] - b[0], b[3] - b[1]); cx.clip('evenodd'); }
+      drawStroke(cx, s);
+      cx.restore();
+    };
+    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s)) draw(ctx, s);
+    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s)) draw(ictx, s);
     this.clearLive(page);
     this.clearHlLive(page);
     if (sel) this.drawSelection(page);
@@ -1008,6 +1036,8 @@ export class Paper {
   tagCiteStrokes(pageI) {
     const strokes = this.note.pages[pageI]?.strokes;
     if (!strokes?.some((s) => s.cg === undefined)) return;
+    // 인용 상자가 아직 화면에 없으면(장을 만드는 중) 나중에 정해요. 지금 정하면 '묶음 없음'으로 잘못 굳어요
+    if (this.note.citations.some((c) => c.page === pageI && !this.citeBox(c))) return;
     const order = [...(this.pages[pageI]?.inner?.querySelectorAll('.cite-block') || [])].map((el) => this.note.citations.find((c) => citeEls.get(c) === el)).filter(Boolean).reverse(); // 위에 있는 것부터
     const boxes = order.map((c) => [c, this.citeBox(c)]).filter(([, b]) => b);
     for (const s of strokes) {
