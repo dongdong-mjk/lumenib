@@ -1743,7 +1743,7 @@ function drawStroke(ctx, s, live = false) {
     if (sp.length === 1) path.lineTo(P0[0] / k + 0.01, P0[1] / k);
     for (let i = 1; i < sp.length - 1; i++) { const a = sp[i].point, b = sp[i + 1].point; path.quadraticCurveTo(a[0] / k, a[1] / k, (a[0] + b[0]) / 2 / k, (a[1] + b[1]) / 2 / k); }
     if (sp.length > 1) { const z = sp[sp.length - 1].point; path.lineTo(z[0] / k, z[1] / k); }
-    const lw = (2 * REF_SIZE * Math.sin(Math.PI / 4)) / k; // 외곽선 방식과 같은 굵기
+    const lw = REF_SIZE / k; // 외곽선 방식에서 볼펜(필압 없음) 굵기 = size (반지름 size/2). 11/23 처음엔 1.41배로 넣어 뗄 때 굵어졌어요
     if (key) _penPath.set(s, { key, path, lw });
     ctx.save(); ctx.strokeStyle = s.color; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke(path); ctx.restore();
     return;
@@ -2230,7 +2230,7 @@ function strokeOpts(o, live, sv = false) {
   // 새 획(sv): 쓰는 중과 뗀 뒤가 같게 끝은 늘 같은 방식 (끝 가늘어짐은 펜을 들며 약해지는 힘으로). 예전 획은 그때 방식 그대로 (11/23)
   return {
     size: REF_SIZE, thinning: o.thinning, smoothing: o.smooth ?? 0.6, streamline: o.stream, // 쓰는 중과 완성본이 같은 보정
-    simulatePressure: false, last: sv ? true : !live,
+    simulatePressure: false, last: sv ? false : !live, // 새 획: 끝점도 쓰는 중처럼 다듬은 자리로 (true면 쓰는 중 끝이 매번 튀어 덜덜 떨렸어요)
     easing: (t) => Math.sin((t * Math.PI) / 2),
     start: { taper: o.taper, cap: true }, end: { taper: sv ? 0 : live ? 0 : o.taper, cap: true },
   };

@@ -300,7 +300,7 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
     opt.easing = { sin($0 * Double.pi / 2) }
     // 쓰는 중과 뗀 뒤가 같게 (웹 strokeOpts sv 와 같음, 11/23): 끝 가늘어짐은 펜을 들며 약해지는 힘으로
     opt.taperStart = o.taper; opt.taperEnd = 0
-    opt.last = true
+    opt.last = false // 끝점도 쓰는 중처럼 다듬은 자리로 (웹과 같음). true면 쓰는 중 끝이 매번 튀어 덜덜 떨렸어요
     if s.style == .ball {
         // 볼펜(굵기 일정): 가운데 선을 둥근 끝으로 한 번에 (굵은 선으로 작은 원을 그려도 테두리가 떨리지 않게, 웹과 같음)
         let sp = Freehand.strokePoints(pts, opt).map { $0.point / k }
@@ -310,7 +310,7 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
         if sp.count == 1 { line.addLine(to: CGPoint(x: f.x + 0.01, y: f.y)) }
         if sp.count > 2 { for j in 1..<(sp.count - 1) { let a = sp[j], b = sp[j + 1]; line.addQuadCurve(to: CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2), control: CGPoint(x: a.x, y: a.y)) } }
         if sp.count > 1 { let z = sp[sp.count - 1]; line.addLine(to: CGPoint(x: z.x, y: z.y)) }
-        let lw = 2 * REF_SIZE * sin(Double.pi / 4) / k
+        let lw = REF_SIZE / k // 필압 없는 볼펜 굵기 = size (웹과 같음)
         return line.copy(strokingWithWidth: CGFloat(lw), lineCap: .round, lineJoin: .round, miterLimit: 10)
     }
     // 만년필·붓펜: 굵기가 바뀌는 마디를 겹쳐 하나로 (웹 capsulePath 와 같음, 11/23). 쓰는 중과 뗀 뒤가 같은 계산
