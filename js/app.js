@@ -816,7 +816,10 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         ${mine.length ? '<p class="pal-tip">내 색을 길게 누르면 지울 수 있어요</p>' : ''}
         ${isPen ? '' : `<h6>투명도</h6><div class="pal-alpha"><span class="pa-sample"><span>형광펜</span><i></i></span>
           <input type="range" min="20" max="80" step="5" value="${Math.round(S.settings.hlAlpha * 100)}" aria-label="형광펜 투명도"></div>
-          <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>`}`;
+          <div class="pa-ends"><span>투명하게</span><span>진하게</span></div>
+          <h6>손떨림 보정 <span class="pa-val" data-v="stab">${S.settings.hlStab}%</span></h6><div class="pal-alpha pal-stab">
+          <input type="range" min="0" max="100" step="5" value="${S.settings.hlStab}" aria-label="형광펜 손떨림 보정"></div>
+          <div class="pa-ends"><span>그대로</span><span>많이 다듬기</span></div>`}`;
       const ar = m.querySelector('.pal-alpha input');
       if (ar) {
         const paint = () => { const i = m.querySelector('.pa-sample i'); i.style.background = cur(); i.style.opacity = ar.value / 100; };
@@ -824,6 +827,12 @@ async function NoteScreen({ noteId, start, openOld, from }) {
         ar.addEventListener('change', () => { S.saveSettings(); track('hl_alpha_changed'); sendInkConfig(); });
         paint();
         nativeRange(ar);
+      }
+      const sr = m.querySelector('.pal-stab input'); // 형광펜 손떨림 보정 (펜 설정처럼, 11/23)
+      if (sr) {
+        sr.addEventListener('input', () => { S.settings.hlStab = +sr.value; m.querySelector('[data-v="stab"]').textContent = sr.value + '%'; });
+        sr.addEventListener('change', () => { S.saveSettings(); track('hl_stab_changed'); });
+        nativeRange(sr);
       }
       m.querySelector('[data-act="close"]').addEventListener('click', () => m.remove());
       m.querySelectorAll('[data-c]').forEach((b) => {
@@ -1022,22 +1031,27 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     return true;
   };
   // iPad 앱: 웹 창 안의 슬라이더 자리에 진짜 iOS 슬라이더를 겹쳐 놓아요. 값이 바뀌면 웹 슬라이더에 input/change를 보내요
+  // 웹 슬라이더 자리에 진짜 iPad 슬라이더를 띄워요. 여러 개를 동시에 (id별로) 둘 수 있어요
+  const nativeRanges = new Map();
+  let nativeRangeSeq = 0;
+  window.lumenibSlider = (sid, v, done) => {
+    const input = nativeRanges.get(sid);
+    if (!input?.isConnected) return;
+    input.value = v;
+    input.dispatchEvent(new Event(done ? 'change' : 'input', { bubbles: true }));
+  };
   function nativeRange(input) {
     if (!nativeInk) return;
-    const id = 'r' + Date.now();
+    const id = 'r' + Date.now() + '_' + (++nativeRangeSeq);
+    nativeRanges.set(id, input);
     input.style.visibility = 'hidden';
     const send = () => {
       const b = input.getBoundingClientRect();
       nativeInk.postMessage({ action: 'slider', id, min: +input.min, max: +input.max, step: +input.step || 1, value: +input.value, anchor: [b.left, b.top, b.width, b.height] });
     };
     requestAnimationFrame(send);
-    window.lumenibSlider = (sid, v, done) => {
-      if (sid !== id || !input.isConnected) return;
-      input.value = v;
-      input.dispatchEvent(new Event(done ? 'change' : 'input', { bubbles: true }));
-    };
     const watch = setInterval(() => {
-      if (!input.isConnected) { clearInterval(watch); nativeInk.postMessage({ action: 'sliderRemove' }); }
+      if (!input.isConnected) { clearInterval(watch); nativeRanges.delete(id); nativeInk.postMessage({ action: 'sliderRemove', id }); }
     }, 150);
   }
   // 네이티브 펜 설정 · 굵기 창에서 바꾼 값을 받아요

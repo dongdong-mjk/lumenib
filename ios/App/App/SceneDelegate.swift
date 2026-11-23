@@ -264,27 +264,33 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         box.alpha = 0; UIView.animate(withDuration: 0.15) { box.alpha = 1 }
     }
     // 웹 창 안의 슬라이더 자리에 진짜 iOS 슬라이더를 겹쳐 놓아요 (형광펜 투명도 등)
-    private var webSlider: UISlider?
-    private var webSliderInfo: (id: String, step: Double) = ("", 1)
+    // 웹 창 안의 슬라이더 자리에 띄우는 진짜 iPad 슬라이더. 한 창에 여러 개(형광펜 투명도·손떨림 보정)라 id별로 둬요 (11/23)
+    private var webSliders: [String: (slider: UISlider, step: Double)] = [:]
     private func showWebSlider(_ b: [String: Any]) {
         guard let web = webView else { return }
-        let r = anchorRect(b)
-        let sl = webSlider ?? UISlider()
+        let r = anchorRect(b), id = b["id"] as? String ?? ""
+        let sl = webSliders[id]?.slider ?? UISlider()
         sl.minimumValue = Float(b["min"] as? Double ?? 0); sl.maximumValue = Float(b["max"] as? Double ?? 100)
         sl.value = Float(b["value"] as? Double ?? 0)
         sl.tintColor = .lumenTextPrimary
         sl.overrideUserInterfaceStyle = .light // '더 보기' 계열 창은 늘 흰 바탕
         sl.frame = CGRect(x: r.minX, y: r.midY - 15, width: r.width, height: 30)
-        webSliderInfo = (b["id"] as? String ?? "", b["step"] as? Double ?? 1)
-        if webSlider == nil {
+        sl.accessibilityIdentifier = id
+        if webSliders[id] == nil {
             sl.addTarget(self, action: #selector(webSliderChanged(_:)), for: .valueChanged)
             sl.addTarget(self, action: #selector(webSliderDone(_:)), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-            web.addSubview(sl); webSlider = sl
+            web.addSubview(sl)
         }
+        webSliders[id] = (sl, b["step"] as? Double ?? 1)
     }
-    private func webSliderValue(_ s: UISlider) -> Double { let st = webSliderInfo.step; return (Double(s.value) / st).rounded() * st }
-    @objc private func webSliderChanged(_ s: UISlider) { js("window.lumenibSlider && window.lumenibSlider('\(webSliderInfo.id)', \(webSliderValue(s)), false)") }
-    @objc private func webSliderDone(_ s: UISlider) { js("window.lumenibSlider && window.lumenibSlider('\(webSliderInfo.id)', \(webSliderValue(s)), true)") }
+    private func removeWebSlider(_ id: String?) {
+        if let id = id, !id.isEmpty { webSliders[id]?.slider.removeFromSuperview(); webSliders[id] = nil; return }
+        for (_, v) in webSliders { v.slider.removeFromSuperview() }
+        webSliders = [:]
+    }
+    private func webSliderValue(_ s: UISlider) -> Double { let st = webSliders[s.accessibilityIdentifier ?? ""]?.step ?? 1; return (Double(s.value) / st).rounded() * st }
+    @objc private func webSliderChanged(_ s: UISlider) { js("window.lumenibSlider && window.lumenibSlider('\(s.accessibilityIdentifier ?? "")', \(webSliderValue(s)), false)") }
+    @objc private func webSliderDone(_ s: UISlider) { js("window.lumenibSlider && window.lumenibSlider('\(s.accessibilityIdentifier ?? "")', \(webSliderValue(s)), true)") }
 
     private func js(_ code: String) { webView?.evaluateJavaScript(code, completionHandler: nil) }
 
@@ -331,7 +337,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
         if action == "slider" { showWebSlider(body); return }
-        if action == "sliderRemove" { webSlider?.removeFromSuperview(); webSlider = nil; return }
+        if action == "sliderRemove" { removeWebSlider(body["id"] as? String); return }
         if action == "inkDrawn" { inkOverlay.dropOldestPending(); return }
         if action == "inkConfig" {
             let c = WebInkConfig(body)

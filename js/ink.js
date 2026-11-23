@@ -32,6 +32,9 @@ export const ERASER_SIZES = settings.eraserSizes;
 // 형광펜 진하기 (0.2 연하게 ~ 0.8 진하게). 새로 긋는 획부터 적용돼요.
 export const HL_ALPHA_DEFAULT = 0.42;
 if (typeof settings.hlAlpha !== 'number') settings.hlAlpha = HL_ALPHA_DEFAULT;
+// 형광펜 손떨림 보정 (0 그대로 ~ 100 많이 다듬기). 새로 긋는 획부터 (11/23)
+export const HL_STAB_DEFAULT = 60;
+if (typeof settings.hlStab !== 'number') settings.hlStab = HL_STAB_DEFAULT;
 
 // 펜 종류 (굿노트 참고). 기본은 필압 없는 볼펜.
 // 예전 설정에서 필압을 켜 두었던 사람도 새 기본(볼펜)으로 시작해요.
@@ -631,16 +634,22 @@ export class Paper {
     }
   }
 
-  drawPage(page) {
-    if (page.dirty) { page.dirty = false; this.drawBackground(page); }
+  // rect(종이 단위 [x0,y0,x1,y1])를 주면 그 부분만 지우고 그 부분에 걸친 획만 다시 그려요 (지우개처럼 자주 다시 그릴 때 가볍게, 11/23)
+  drawPage(page, rect = null) {
+    if (page.dirty) { page.dirty = false; this.drawBackground(page); rect = null; }
     const ctx = this.ctxFor(page.base, page), ictx = this.ctxFor(page.ink, page);
-    ctx.clearRect(0, 0, PAGE_W, PAGE_H);
-    ictx.clearRect(0, 0, PAGE_W, PAGE_H);
+    if (rect) {
+      for (const cx of [ctx, ictx]) { cx.save(); cx.beginPath(); cx.rect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.clip(); cx.clearRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); }
+    } else {
+      ctx.clearRect(0, 0, PAGE_W, PAGE_H);
+      ictx.clearRect(0, 0, PAGE_W, PAGE_H);
+    }
     const strokes = this.note.pages[page.i].strokes;
     const sel = this.selection && this.selection.page === page.i ? this.selection : null;
     const hid = this._hidden;
     // 인용 위에 쓴 글씨는 그 인용과 한 묶음: 그 인용을 덮고 있는 다른 인용 자리에서는 안 보여요 (11/23)
     const cover = this.citeCoverBoxes(page);
+    const near = (s) => { if (!rect) return true; const b = strokeBox(s), m = (s.w || 2) + 2; return b[2] + m >= rect[0] && b[0] - m <= rect[2] && b[3] + m >= rect[1] && b[1] - m <= rect[3]; };
     const draw = (cx, s) => {
       const bs = s.cg && cover.get(s.cg);
       if (!bs) return drawStroke(cx, s);
@@ -649,22 +658,27 @@ export class Paper {
       drawStroke(cx, s);
       cx.restore();
     };
-    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s)) draw(ctx, s);
-    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s)) draw(ictx, s);
+    for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s) && near(s)) draw(ctx, s);
+    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s) && near(s)) draw(ictx, s);
+    if (rect) { ctx.restore(); ictx.restore(); return; } // 부분만 다시 그릴 땐 위 층(쓰는 중·선택)은 그대로 둬요
     this.clearLive(page);
     this.clearHlLive(page);
     if (sel) this.drawSelection(page);
   }
 
   // 같은 프레임 안의 여러 번 다시 그리기를 한 번으로 모아요
-  drawPageSoon(page) {
-    page._drawSoon = true;
+  drawPageSoon(page, rect = null) {
+    // 바뀐 곳(rect)을 모아 두었다가 한 프레임에 한 번, 그 부분만 다시 그려요. rect가 없으면 장 전체
+    if (!page._drawSoon) page._drawSoon = rect ? rect.slice() : 'all';
+    else if (page._drawSoon !== 'all') page._drawSoon = rect ? [Math.min(page._drawSoon[0], rect[0]), Math.min(page._drawSoon[1], rect[1]), Math.max(page._drawSoon[2], rect[2]), Math.max(page._drawSoon[3], rect[3])] : 'all';
     if (page._drawRaf) return;
-    page._drawRaf = requestAnimationFrame(() => { page._drawRaf = 0; if (page._drawSoon) { page._drawSoon = false; this.drawPage(page); } });
+    page._drawRaf = requestAnimationFrame(() => { page._drawRaf = 0; this.flushDrawSoon(page); });
   }
   flushDrawSoon(page) {
     if (page._drawRaf) { cancelAnimationFrame(page._drawRaf); page._drawRaf = 0; }
-    if (page._drawSoon) { page._drawSoon = false; this.drawPage(page); }
+    const r = page._drawSoon;
+    page._drawSoon = null;
+    if (r) this.drawPage(page, r === 'all' ? null : r);
   }
 
   // 새 획 하나만 덧그려요. 장 전체를 다시 그리면 글씨가 많을수록 무거워졌어요 (새 획은 맨 위에 그려지니 결과는 같아요)
@@ -676,12 +690,20 @@ export class Paper {
     this.clearHlLive(page);
   }
 
+  // 쓰는 중 판(live)은 큰 캔버스라 통째로 지우면 무거워요. 지난번에 그린 상자만 알면 그만큼만 지워요 (지우개·올가미가 버벅이던 것, 11/23)
   clearLive(page) {
     const ctx = this.ctxFor(page.live, page);
-    ctx.clearRect(0, 0, PAGE_W, PAGE_H);
+    const lb = page._liveBox;
+    if (lb === 'clean') { /* 그린 게 없어요 */ }
+    else if (lb) ctx.clearRect(lb[0], lb[1], lb[2] - lb[0], lb[3] - lb[1]);
+    else ctx.clearRect(0, 0, PAGE_W, PAGE_H);
+    page._liveBox = null; // 다음에 그리는 쪽이 상자를 알려 주지 않으면 전체로 봐요
     ctx.setLineDash([]);
     return ctx;
   }
+  // 방금 live 판에 그린 범위(종이 단위)를 알려 둬요
+  liveDrewIn(page, box) { page._liveBox = box; }
+  liveClean(page) { page._liveBox = 'clean'; }
 
   toLocal(page, e) {
     const r = page.base.getBoundingClientRect();
@@ -726,7 +748,7 @@ export class Paper {
       if (t === 'pen' || t === 'hl') {
         const s = t === 'pen'
           ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, sv: 2, pts: [x, y, pr] }
-          : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x, y, 0.5] };
+          : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, st: settings.hlStab, pts: [x, y, 0.5] };
         cur = { kind: 'draw', s };
         this.drawLive(page, s);
         // 그리고 멈춰서 잠깐 기다리면 반듯한 도형으로 (굿노트·메모 앱의 '그리고 멈추기')
@@ -928,7 +950,7 @@ export class Paper {
     // 완성본(hlSmooth)과 같은 방식으로 새 점만 이어서 다듬어요
     if (page._hlN === 0) { page._hlX = p[0]; page._hlY = p[1]; }
     ctx.moveTo(page._hlX, page._hlY);
-    const ease = s.sh ? 1 : HL_EASE;
+    const ease = hlEase(s);
     for (let k = Math.max(1, page._hlN); k < n; k++) {
       page._hlX += (p[k * 3] - page._hlX) * ease; page._hlY += (p[k * 3 + 1] - page._hlY) * ease;
       ctx.lineTo(page._hlX, page._hlY);
@@ -950,6 +972,7 @@ export class Paper {
     const strokes = pg.strokes;
     let hit = false;
     const partial = tool.eraserMode === 'partial';
+    let dirty = null;
     for (let i = strokes.length - 1; i >= 0; i--) {
       const orig = strokes[i];
       const rr = partial ? r : r + orig.w / 2;
@@ -964,6 +987,8 @@ export class Paper {
       if (!any) continue;
       hit = true;
       cur.removed.push(orig);
+      const m = (orig.w || 2) + 4; // 지운 획이 있던 자리만 다시 그려요
+      dirty = dirty ? [Math.min(dirty[0], ob[0] - m), Math.min(dirty[1], ob[1] - m), Math.max(dirty[2], ob[2] + m), Math.max(dirty[3], ob[3] + m)] : [ob[0] - m, ob[1] - m, ob[2] + m, ob[3] + m];
       if (!partial) { strokes.splice(i, 1); continue; }
       // 부분 지우기: 지우개에 닿은 점만 빼고 나머지를 조각으로 남겨요
       const pieces = [];
@@ -975,17 +1000,22 @@ export class Paper {
       if (run.length >= 6) pieces.push(run);
       strokes.splice(i, 1, ...pieces.map((pts) => ({ ...s, pts })));
     }
-    if (hit) this.drawPageSoon(page); // 한 프레임에 한 번만 다시 그려요
+    if (hit) this.drawPageSoon(page, dirty); // 한 프레임에 한 번, 지운 자리만 다시 그려요
     const ctx = this.clearLive(page);
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1 / this.scale; ctx.stroke();
+    const e = r + 3 / this.scale;
+    this.liveDrewIn(page, [x - e, y - e, x + e, y + e]);
   }
 
   drawLasso(page, pts) {
     const ctx = this.clearLive(page);
     const poly = [];
-    for (let i = 0; i < pts.length; i += 2) poly.push([pts[i], pts[i + 1]]);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < pts.length; i += 2) { const x = pts[i], y = pts[i + 1]; poly.push([x, y]); if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
     this.strokeLasso(ctx, poly, false);
+    const m = 6 / this.scale; // 그린 올가미 범위만 다음에 지워요
+    this.liveDrewIn(page, [x0 - m, y0 - m, x1 + m, y1 + m]);
   }
   // 올가미 선: 그리는 동안과 고른 뒤가 똑같은 파란 점선 (굿노트처럼, 화면 기준 굵기 일정)
   strokeLasso(ctx, poly, close = true) {
@@ -1144,11 +1174,15 @@ export class Paper {
         for (const o of [el, citeUis.get(c), citeRs.get(c)]) if (o) o.style.visibility = 'hidden'; // 크기 조절 손잡이도 같이 숨겨요 (원래 자리에 남아 있던 것)
       }
       g.appendChild(inner);
+      // 고른 범위만 한 판으로 (장 전체 크기 판을 새로 만들면 옮기기 시작할 때 버벅였어요, 11/23)
+      const gb = sel.box, gm = 30, k2 = this.scale * page.dpr;
+      const gx = Math.max(0, gb[0] - gm), gy = Math.max(0, gb[1] - gm), gw = Math.min(PAGE_W, gb[2] + gm) - gx, gh = Math.min(PAGE_H, gb[3] + gm) - gy;
       const cv = document.createElement('canvas');
-      cv.width = page.live.width; cv.height = page.live.height;
-      cv.style.width = page.live.style.width; cv.style.height = page.live.style.height;
+      cv.width = Math.max(1, Math.ceil(gw * k2)); cv.height = Math.max(1, Math.ceil(gh * k2));
+      Object.assign(cv.style, { left: gx * this.scale + 'px', top: gy * this.scale + 'px', width: gw * this.scale + 'px', height: gh * this.scale + 'px' });
       g.appendChild(cv);
-      const ctx = this.ctxFor(cv, page);
+      const ctx = cv.getContext('2d');
+      ctx.setTransform(k2, 0, 0, k2, -gx * k2, -gy * k2);
       for (const q of sel.set) if (q.tool === 'hl') drawStroke(ctx, q);
       for (const q of sel.set) if (q.tool !== 'hl') drawStroke(ctx, q);
       { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
@@ -1431,7 +1465,7 @@ export class Paper {
     const shaped = !!opts?.shape;
     const s = tool.type === 'pen'
       ? { tool: 'pen', color: PEN_COLORS[tool.penColor], w: PEN_SIZES[tool.penSize], ps: settings.penStyle, po: { ...settings.penOpts[settings.penStyle] }, sv: 2, pts: [x0, y0, p0] }
-      : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, pts: [x0, y0, 0.5] };
+      : { tool: 'hl', color: HL_COLORS[tool.hlColor], w: HL_SIZES[tool.hlSize], a: settings.hlAlpha, st: settings.hlStab, pts: [x0, y0, 0.5] };
     for (let i = 1; i < pts.length; i++) {
       const [x, y, pr] = loc(pts[i]);
       const p = s.pts;
@@ -1494,7 +1528,7 @@ function drawStroke(ctx, s, live = false) {
   if (s.tool === 'hl') {
     // 형광펜: 획을 따로 불투명하게 그린 뒤 한 번에 반투명·곱하기로 얹어요.
     // 돼지꼬리처럼 스스로 겹치는 곳이 더 진해지지 않게 (쓰는 중 모습과도 같아요)
-    const q = s.sh ? hlRaw(p) : hlSmooth(p);
+    const q = s.sh ? hlRaw(p) : hlSmooth(p, hlEase(s));
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (let i = 0; i < q.length; i += 2) { x0 = Math.min(x0, q[i]); x1 = Math.max(x1, q[i]); y0 = Math.min(y0, q[i + 1]); y1 = Math.max(y1, q[i + 1]); }
     const m = ctx.getTransform(), k = m.a, pad = s.w / 2 + 2;
@@ -2008,12 +2042,19 @@ function hlScratch(w, h) {
 // 형광펜 선: 들어온 점을 살짝 늦게 따라가게 다듬어요 (굿노트처럼 부드럽게). 쓰는 중과 뗀 뒤가 같은 선이에요
 const HL_EASE = 0.35;
 function hlRaw(p) { const q = []; for (let i = 0; i < p.length; i += 3) q.push(p[i], p[i + 1]); return q; }
-function hlSmooth(p) {
+// 획마다 보정 세기(st)를 기억해요. 예전 획(st 없음)은 원래 세기(0.35) 그대로
+function hlEase(s) {
+  if (s.sh) return 1;
+  if (typeof s.st !== 'number') return HL_EASE;
+  const t = Math.max(0, Math.min(100, s.st)) / 100;
+  return t <= 0.5 ? 1 - t * 1.3 : 0.35 - (t - 0.5) * 0.44; // 0 → 그대로(1), 50 → 0.35, 100 → 0.13
+}
+function hlSmooth(p, ease = HL_EASE) {
   const n = p.length / 3;
   if (!n) return [];
   let x = p[0], y = p[1];
   const q = [x, y];
-  for (let i = 1; i < n; i++) { x += (p[i * 3] - x) * HL_EASE; y += (p[i * 3 + 1] - y) * HL_EASE; q.push(x, y); }
+  for (let i = 1; i < n; i++) { x += (p[i * 3] - x) * ease; y += (p[i * 3 + 1] - y) * ease; q.push(x, y); }
   q.push(p[(n - 1) * 3], p[(n - 1) * 3 + 1]); // 끝은 펜을 뗀 자리까지
   return q;
 }

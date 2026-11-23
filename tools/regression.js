@@ -517,6 +517,27 @@ export async function run() {
     return ok || '만진 인용이 위로 안 올라와요 ' + order();
   });
 
+  await check('지우개: 지운 자리만 다시 그려도 지운 획은 사라지고 옆 획은 그대로 · 형광펜 손떨림 보정 값이 획에 저장', async () => {
+    const P = window.__lumenibPaper, pg = P.pages[0], c = base(), r = c.getBoundingClientRect(), k = r.width / 726;
+    tool('pen'); await settle();
+    stroke(line(80 * k, 900 * k, 180 * k, 900 * k)); await settle();
+    stroke(line(80 * k, 950 * k, 180 * k, 950 * k)); await settle();
+    const cv = ink(), rr = cv.width / 726, alpha = (x, y) => { let m = 0; for (let d = -2; d <= 2; d++) m = Math.max(m, cv.getContext('2d').getImageData(Math.round(x * rr), Math.round((y + d) * rr), 1, 1).data[3]); return m; };
+    tool('eraser'); await settle();
+    pe(c, 'pointerdown', r.left + 130 * k, r.top + 900 * k); pe(c, 'pointermove', r.left + 132 * k, r.top + 900 * k); pe(c, 'pointerup', r.left + 132 * k, r.top + 900 * k); await settle();
+    const gone = alpha(100, 900) === 0, kept = alpha(100, 950) > 0;
+    undo(); await settle(); undo(); await settle(); undo(); await settle();
+    if (!gone) return '지운 획이 남아 있어요';
+    if (!kept) return '옆 획까지 지워졌어요';
+    // 형광펜 손떨림 보정: 설정 값이 새 획에 들어가요
+    const S0 = (await import('../js/store.js')).settings, keep = S0.hlStab;
+    S0.hlStab = 80; tool('hl'); await settle();
+    stroke(line(80 * k, 1000 * k, 180 * k, 1000 * k)); await settle();
+    const hs = P.note.pages[0].strokes.at(-1);
+    undo(); await settle(); S0.hlStab = keep;
+    return (hs?.tool === 'hl' && hs.st === 80) || '형광펜 획에 보정 값이 없어요 ' + hs?.st;
+  });
+
   await check('글씨 많은 장: 지우개가 가볍고 · 인용 옮기는 동안 아래 인용 글씨 가림', async () => {
     const P = window.__lumenibPaper, pg = P.pages[0], arr = P.note.pages[0].strokes, n0 = arr.length;
     // 글씨 400획을 아래쪽에 채워요
