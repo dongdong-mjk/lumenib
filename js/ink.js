@@ -529,6 +529,7 @@ export class Paper {
       if (!carried && (cov0 || this.citeCoverBoxes(to).size)) this.drawPage(to);
       if (!carried && to !== from && (cov0 || this.citeCoverBoxes(from).size)) this.drawPage(from);
       if (moved) { this._push(entry); this.onChange({}); this.onHistory(); }
+      this.onLayout?.(); // 버튼 자리가 바뀌었으니 앱에 다시 알려요
     };
     u.querySelector('.cite-x').addEventListener('click', () => {
       this.pushHistory();
@@ -934,7 +935,7 @@ export class Paper {
       else if (cur.kind === 'lasso') { if (!(this.nativeCanvas && window.__nativeLasso)) this.drawLasso(page, cur.pts); } // 앱이 올가미 선을 바로 그려요
       else if (cur.kind === 'move') this.moveGhost(page, cur);
       else if (cur.kind === 'scale') this.scaleGhost(page, cur);
-      else if (cur.kind === 'rotate') this.drawSelection(page, 0, 0, null, cur);
+      else if (cur.kind === 'rotate') this.rotateGhost(page, cur);
     });
 
     const end = (e) => {
@@ -1285,7 +1286,15 @@ export class Paper {
     return [citeX(c), c.y, citeX(c) + citeW(c), c.y + el.offsetHeight];
   }
 
-  drawSelection(page, dx = 0, dy = 0, sc = null, rt = null) {
+  // 올가미 돌리는 중: 고른 글씨를 한 번만 그린 판을 돌리기만 하고, 상자·손잡이만 다시 그려요 (글씨가 많으면 매번 다시 그려 느렸어요, 11/24)
+  rotateGhost(page, k) {
+    if (!k.ghost) this.moveGhost(page, k, false);
+    const s = this.scale, [gx, gy] = k.ghostOrg, cv = k.ghostCv;
+    cv.style.transformOrigin = `${(k.c[0] - gx) * s}px ${(k.c[1] - gy) * s}px`;
+    cv.style.transform = `rotate(${k.ang}rad)`;
+    this.drawSelection(page, 0, 0, null, k, true);
+  }
+  drawSelection(page, dx = 0, dy = 0, sc = null, rt = null, noStrokes = false) {
     const sel = this.selection;
     const ctx = this.clearLive(page);
     // 고른 인용 블록은 옮기는 동안 위아래로 같이 따라와요 (인용은 가로로는 안 움직여요)
@@ -1297,8 +1306,10 @@ export class Paper {
     ctx.save(); ctx.translate(dx, dy);
     if (rt) { ctx.translate(rt.c[0], rt.c[1]); ctx.rotate(rt.ang); ctx.translate(-rt.c[0], -rt.c[1]); } // 돌리는 중: 글씨와 상자를 같이 돌려 보여요
     ctx.save(); ctx.translate(ox, oy); ctx.scale(kx, ky); ctx.translate(-ox, -oy);
-    for (const s of sel.set) if (s.tool === 'hl') drawStroke(ctx, s);
-    for (const s of sel.set) if (s.tool !== 'hl') drawStroke(ctx, s);
+    if (!noStrokes) {
+      for (const s of sel.set) if (s.tool === 'hl') drawStroke(ctx, s);
+      for (const s of sel.set) if (s.tool !== 'hl') drawStroke(ctx, s);
+    }
     ctx.restore();
     // 상자는 배율만큼 커지되, 선 굵기와 손잡이 크기는 화면 기준으로 일정하게
     const nb = [ox + (b[0] - ox) * kx, oy + (b[1] - oy) * ky, ox + (b[2] - ox) * kx, oy + (b[3] - oy) * ky];
@@ -1425,6 +1436,7 @@ export class Paper {
     this.pages[this.selection.page].el.appendChild(m);
     this.lassoMenu = m;
     this.positionLassoMenu();
+    this.onLayout?.();
   }
   positionLassoMenu() {
     if (!this.lassoMenu || !this.selection) return;
@@ -1463,7 +1475,7 @@ export class Paper {
     const cl = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
     return [cl(dx, mx - box[0], PAGE_W - mx - box[2]), cl(dy, my - box[1], PAGE_H - my - box[3])];
   }
-  hideLassoMenu() { this.lassoMenu?.remove(); this.lassoMenu = null; }
+  hideLassoMenu() { if (!this.lassoMenu) return; this.lassoMenu.remove(); this.lassoMenu = null; this.onLayout?.(); }
 
   // ---------- 바뀐 내용 저장 · 되돌리기 ----------
   snapshot() {

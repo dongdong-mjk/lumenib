@@ -852,6 +852,7 @@ struct WebInkConfig {
     var eraserR = 18.0         // 지우개 반지름 (종이 단위)
     var eraserWhole = true     // 획 통째로 지우기 (부분 지우기는 웹이 잘라요)
     var lasso = false
+    var ui: [(CGRect, CGFloat)] = [] // 종이 위 버튼·메뉴 (웹 화면 좌표, 둥근 정도)
     var sel: CGRect? = nil     // 고른 상자 자리 (웹 화면 좌표). 이 근처에서 시작하면 옮기기·크기·회전이라 웹이 그려요
     var color = "#111111"
     var width = 2.6            // 종이 단위
@@ -890,6 +891,10 @@ struct WebInkConfig {
         exclude = (b["exclude"] as? [Any] ?? []).compactMap(r)
         pages = (b["pages"] as? [Any] ?? []).compactMap(r)
         sel = r(b["sel"])
+        ui = (b["ui"] as? [[Any]] ?? []).compactMap { a in
+            let n = a.compactMap { ($0 as? NSNumber)?.doubleValue }
+            return n.count == 5 ? (CGRect(x: n[0], y: n[1], width: n[2], height: n[3]), CGFloat(n[4])) : nil
+        }
     }
     /// 이 점에서 시작하는 올가미가 새 올가미인지 (고른 상자·손잡이 근처면 아니에요)
     func startsNewLasso(_ p: CGPoint) -> Bool {
@@ -1420,6 +1425,24 @@ final class NoteInkView: UIView {
         m.path = path; m.fillRule = .evenOdd; m.fillColor = UIColor.black.cgColor
         m.frame = pl.bounds
         pl.mask = m
+    }
+
+    /// 종이 위 버튼·메뉴 자리는 글씨를 비워요 (웹에서는 버튼이 글씨 위에 있었어요). rects: 이 판 좌표
+    private var uiKey: [CGFloat] = []
+    func setUIHoles(_ rects: [(CGRect, CGFloat)]) {
+        let key = rects.flatMap { [$0.0.minX.rounded(), $0.0.minY.rounded(), $0.0.width.rounded(), $0.0.height.rounded(), $0.1] }
+        if key == uiKey { return }
+        uiKey = key
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        if rects.isEmpty { layer.mask = nil; return }
+        let m = (layer.mask as? CAShapeLayer) ?? CAShapeLayer()
+        let path = CGMutablePath()
+        path.addRect(bounds)
+        for (r, rad) in rects { path.addRoundedRect(in: r, cornerWidth: min(rad, r.width / 2 - 0.01), cornerHeight: min(rad, r.height / 2 - 0.01)) }
+        m.path = path; m.fillRule = .evenOdd; m.fillColor = UIColor.black.cgColor
+        m.frame = bounds
+        layer.mask = m
     }
 
     func clearAll() {

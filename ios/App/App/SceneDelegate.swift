@@ -431,6 +431,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             let c = WebInkConfig(body)
             inkConfig = c
             inkOverlay.config = c
+            if noteInk.superview != nil, let web = webView { noteInk.setUIHoles(c.ui.map { (noteInk.convert($0.0, from: web), $0.1) }) }
             return
         }
         if action == "theme", let t = body["value"] as? String {
