@@ -68,8 +68,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     private var noteArea: CGRect = .zero
     private let pinchHost: UIView = { let v = UIView(); v.clipsToBounds = true; v.isUserInteractionEnabled = false; v.backgroundColor = .clear; return v }()
     private var pinchLifted = false
-    /// 두 손가락 확대 동안: 웹은 종이에 확대 효과를 걸면서 안쪽 층을 새로 짜요. 그 사이 종이 스크롤 안에 붙은 글씨 판이 가려져 사라졌어요 (11/24).
-    /// 확대하는 동안만 글씨 판을 웹 위 같은 자리(종이 칸 크기로 잘라서)에 띄워 두고, 끝나면 다시 종이 스크롤에 붙여요
+    // 확대하는 동안: 종이 칸을 사진 한 장으로 찍어(글씨 포함) 그 사진만 앱이 움직여요.
+    // 웹 종이와 앱 글씨를 따로 움직이면 웹 화면이 한두 번 늦게 바뀌어 글씨가 딱 맞게 따라오지 않았어요 (11/24)
+    private let pinchContent: UIView = { let v = UIView(); v.layer.anchorPoint = .zero; v.isUserInteractionEnabled = false; return v }()
+    private var pinchSnap: UIView?
+    private var pinchOff: CGPoint = .zero
+    private var paperBg: UIColor = .white
     private func liftNoteInkForPinch() {
         guard !pinchLifted, let web = webView, let sv = noteInk.superview as? UIScrollView else { return }
         landScroll = sv
@@ -78,19 +82,60 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         pinchHost.frame = f
         if pinchHost.superview !== web { web.addSubview(pinchHost) }
         web.bringSubviewToFront(pinchHost)
-        let size = noteInk.frame.size
-        noteInk.removeFromSuperview()
-        pinchHost.addSubview(noteInk)
-        noteInk.frame = CGRect(origin: CGPoint(x: -sv.contentOffset.x, y: -sv.contentOffset.y), size: size) // 판 좌표 = 종이 스크롤 안쪽 좌표 그대로
+        if let snap = web.resizableSnapshotView(from: f, afterScreenUpdates: false, withCapInsets: .zero) {
+            pinchHost.backgroundColor = paperBg
+            if pinchContent.superview !== pinchHost { pinchHost.addSubview(pinchContent) }
+            pinchContent.layer.transform = CATransform3DIdentity
+            pinchContent.frame = pinchHost.bounds
+            pinchSnap?.removeFromSuperview()
+            snap.frame = pinchContent.bounds
+            pinchContent.addSubview(snap); pinchSnap = snap
+            pinchOff = sv.contentOffset
+            noteInk.isHidden = true
+        } else {
+            // 사진을 못 찍으면 글씨 판만 띄워서 따라가게 (예전 방식)
+            pinchHost.backgroundColor = .clear
+            let size = noteInk.frame.size
+            noteInk.removeFromSuperview()
+            pinchHost.addSubview(noteInk)
+            noteInk.frame = CGRect(origin: CGPoint(x: -sv.contentOffset.x, y: -sv.contentOffset.y), size: size)
+        }
         pinchHost.isHidden = false
         CATransaction.commit()
         pinchLifted = true
     }
+    /// t: [기준x, 기준y, 이동x, 이동y, 배율] (종이 스크롤 안쪽 좌표)
+    private func pinchMove(_ t: [Double]) {
+        guard t.count == 5 else { return }
+        guard pinchSnap != nil else { noteInk.pinch(t); return }
+        let ox = CGFloat(t[0]) - pinchOff.x, oy = CGFloat(t[1]) - pinchOff.y, z = CGFloat(t[4])
+        let m = CGAffineTransform(translationX: ox + CGFloat(t[2]), y: oy + CGFloat(t[3])).scaledBy(x: z, y: z).translatedBy(x: -ox, y: -oy)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        pinchContent.layer.transform = CATransform3DMakeAffineTransform(m)
+        CATransaction.commit()
+    }
+    private func dropPinchSnap() {
+        guard let snap = pinchSnap else { return }
+        snap.removeFromSuperview(); pinchSnap = nil
+        pinchContent.layer.transform = CATransform3DIdentity
+        noteInk.isHidden = false
+    }
     private func landNoteInk() {
         guard pinchLifted else { return }
         pinchLifted = false
-        attachNoteInk(area: noteArea.isEmpty ? inkConfig.area : noteArea)
+        if pinchSnap != nil { dropPinchSnap() } else { attachNoteInk(area: noteArea.isEmpty ? inkConfig.area : noteArea) }
         pinchHost.isHidden = true
+    }
+    /// 확대할 때 사진이 줄어 드러나는 칸을 종이 칸 배경색으로 채워요
+    private func readPaperBg() {
+        webView?.evaluateJavaScript("(()=>{const e=document.querySelector('.right-panel.note')||document.body;return getComputedStyle(e).backgroundColor})()") { [weak self] r, _ in
+            guard let s = r as? String else { return }
+            let n = s.components(separatedBy: CharacterSet(charactersIn: "0123456789.").inverted).compactMap { Double($0) }
+            guard n.count >= 3 else { return }
+            let a = n.count >= 4 ? n[3] : 1
+            if a < 0.5 { return }
+            self?.paperBg = UIColor(red: n[0] / 255, green: n[1] / 255, blue: n[2] / 255, alpha: 1)
+        }
     }
     private func attachNoteInk(area: CGRect) {
         guard let web = webView, !area.isEmpty else { return }
@@ -168,10 +213,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         switch action {
         case "noteLayout":
             CATransaction.begin(); CATransaction.setDisableActions(true)
+            if pinchLifted && pinchSnap != nil { dropPinchSnap() }
             pinchLifted = false
             if let area = rect(b["area"]) { attachNoteInk(area: area) }
             pinchHost.isHidden = true
             CATransaction.commit()
+            readPaperBg()
             let pages: [(Int, CGRect)] = (b["pages"] as? [[Any]] ?? []).compactMap { a in
                 guard a.count >= 5, let i = (a[0] as? NSNumber)?.intValue, let r = rect(Array(a[1...])) else { return nil }
                 return (i, r)
@@ -206,10 +253,11 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             if let t = t {
                 if landing { finishLanding() }
                 liftNoteInkForPinch()
-                noteInk.pinch(t)
+                pinchMove(t)
             } else { beginLanding() } // 앱 글씨는 손 뗀 순간 모습 그대로 두었다가 웹과 같이 바꿔요
         case "noteClear":
             landing = false; landQueue = []; landObs = []; landTimer?.cancel()
+            dropPinchSnap()
             noteInk.clearAll(); noteInk.removeFromSuperview(); noteInkOn = false; pinchLifted = false; pinchHost.isHidden = true
         default: break
         }
