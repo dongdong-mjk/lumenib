@@ -82,6 +82,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         noteInk.frame = CGRect(origin: .zero, size: size)
         sv.bringSubviewToFront(noteInk)
         noteInkOn = true
+        // 판을 붙이기 전에 받은 버튼 자리도 바로 비워요 (노트를 막 열었을 때 버튼 위로 글씨가 겹쳐 보이던 것)
+        noteInk.setUIHoles(inkConfig.ui.map { (noteInk.convert($0.0, from: web), $0.1) })
     }
     private func noteCanvasMessage(_ b: [String: Any]) {
         let action = b["action"] as? String ?? ""
