@@ -51,12 +51,64 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         webView?.configuration.userContentController.add(self, name: "lumenibNative")
+        // 글씨 판 통로: 이게 있으면 웹은 다 쓴 글씨를 직접 그리지 않고 앱에 맡겨요 (11/24)
+        webView?.configuration.userContentController.add(self, name: "lumenibCanvas")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
         // (isScrollEnabled = false 는 쓰면 안 돼요: 웹 안 스크롤 영역(노트 종이·성경 목록)과 확대까지 같이 멈춰요)
         webView?.scrollView.bounces = false
         webView?.scrollView.alwaysBounceVertical = false
+    }
+
+    // MARK: 노트 글씨 판 (다 쓴 글씨도 앱이 그려요, 11/24)
+    private let noteInk = NoteInkView()
+    private var noteInkOn = false
+    /// 웹 종이 스크롤(화면 좌표 area)과 같은 자리의 스크롤 뷰를 찾아 글씨 판을 붙여요. 종이와 같이 스크롤돼요
+    private func attachNoteInk(area: CGRect) {
+        guard let web = webView, !area.isEmpty else { return }
+        var best: UIScrollView?
+        func walk(_ v: UIView) {
+            if let sv = v as? UIScrollView, sv !== web.scrollView, best == nil {
+                let f = sv.convert(sv.bounds, to: web)
+                if abs(f.minX - area.minX) < 24 && abs(f.minY - area.minY) < 24 && abs(f.width - area.width) < 48 && abs(f.height - area.height) < 48 { best = sv }
+            }
+            if best == nil { v.subviews.forEach(walk) }
+        }
+        walk(web.scrollView)
+        guard let sv = best else { return }
+        if noteInk.superview !== sv { noteInk.removeFromSuperview(); sv.addSubview(noteInk) }
+        let size = CGSize(width: max(sv.contentSize.width, sv.bounds.width) + 2000, height: max(sv.contentSize.height, sv.bounds.height) + 4000)
+        noteInk.frame = CGRect(origin: .zero, size: size)
+        sv.bringSubviewToFront(noteInk)
+        noteInkOn = true
+    }
+    private func noteCanvasMessage(_ b: [String: Any]) {
+        let action = b["action"] as? String ?? ""
+        func rect(_ a: Any?) -> CGRect? {
+            guard let a = a as? [Any], a.count >= 4 else { return nil }
+            let v = a.map { ($0 as? NSNumber)?.doubleValue ?? 0 }
+            return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+        }
+        switch action {
+        case "noteLayout":
+            if let area = rect(b["area"]) { attachNoteInk(area: area) }
+            let pages: [(Int, CGRect)] = (b["pages"] as? [[Any]] ?? []).compactMap { a in
+                guard a.count >= 5, let i = (a[0] as? NSNumber)?.intValue, let r = rect(Array(a[1...])) else { return nil }
+                return (i, r)
+            }
+            noteInk.layout(pages: pages, scale: CGFloat((b["scale"] as? NSNumber)?.doubleValue ?? 1))
+        case "notePage":
+            guard let i = (b["i"] as? NSNumber)?.intValue, let r = rect(b["rect"]) else { return }
+            if noteInk.superview == nil, inkConfig.enabled { attachNoteInk(area: inkConfig.area) }
+            let ids = (b["ids"] as? [Any] ?? []).compactMap { ($0 as? NSNumber)?.intValue }
+            noteInk.apply(page: i, ids: ids, add: b["add"] as? [String: Any] ?? [:], rect: r, scale: CGFloat((b["scale"] as? NSNumber)?.doubleValue ?? 1))
+        case "notePinch":
+            noteInk.pinch((b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue })
+        case "noteClear":
+            noteInk.clearAll(); noteInk.removeFromSuperview(); noteInkOn = false
+        default: break
+        }
     }
 
     // MARK: 필기만 네이티브 (웹 노트 위에서 애플펜슬 펜·형광펜)
@@ -334,11 +386,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
+        if message.name == "lumenibCanvas" { noteCanvasMessage(body); return }
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
         if action == "slider" { showWebSlider(body); return }
         if action == "sliderRemove" { removeWebSlider(body["id"] as? String); return }
-        if action == "inkDrawn" { inkOverlay.dropOldestPending(); return }
+        if action == "inkDrawn" { inkOverlay.dropOldestPending(immediately: noteInkOn); return } // 글씨 판이 있으면 같은 그림이라 바로 바꿔요 (겹쳐 진해지지 않게)
         if action == "inkConfig" {
             let c = WebInkConfig(body)
             inkConfig = c

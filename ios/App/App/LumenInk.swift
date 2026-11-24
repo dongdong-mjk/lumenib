@@ -1088,9 +1088,10 @@ final class WebInkOverlay: UIView {
         return l
     }
     /// 웹이 다 그렸다고 알려 주면 가장 오래된 남겨 둔 획을 지워요
-    func dropOldestPending() {
+    func dropOldestPending(immediately: Bool = false) {
         guard !pending.isEmpty else { return }
         let l = pending.removeFirst()
+        if immediately { remove(l); return }
         // 형광펜은 반투명이라 웹 획과 겹치는 순간 진해졌다 옅어져서 깜빡여 보였어요. 아주 짧게 흐려지며 사라지게 해요
         if l.compositingFilter != nil { // 웹 획이 서서히 나타나는 동안(0.16초) 같이 서서히 사라져요
             CATransaction.begin()
@@ -1215,5 +1216,138 @@ final class LayoutNotifyingView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         if bounds.size != last { last = bounds.size; onLayout?() }
+    }
+}
+
+// MARK: - 노트 글씨 판 (11/24): 다 쓴 글씨도 앱이 그려요. 쓸 때와 뗀 뒤가 같은 계산·같은 그림이라 바꿔치기가 없어요.
+// 웹 노트의 종이 스크롤(WKChildScrollView) 안에 붙어서 종이와 같이 스크롤돼요. 웹은 획 목록(번호·새 획 내용)과 종이 자리만 알려 줘요.
+
+final class NoteInkView: UIView {
+    private struct StrokeData { let tool: String; let color: String; let w: Double; let a: Double; let st: Double?; let sh: Bool; let ps: String; let po: [String: Double]; let sv: Bool; let pts: [Double] }
+    private var data: [Int: StrokeData] = [:]           // 번호 → 획
+    private var layers: [Int: CAShapeLayer] = [:]       // 번호 → 그린 층 (지금 배율로)
+    private var pageLayer: [Int: CALayer] = [:]         // 장 → 그 장의 층 (자리 = 종이 자리, 넘치면 잘라요)
+    private var hlLayer: [Int: CALayer] = [:], penLayer: [Int: CALayer] = [:]
+    private var pageIds: [Int: [Int]] = [:]
+    private(set) var scale: CGFloat = 1
+    private var layerScale: [Int: CGFloat] = [:]        // 번호 → 그 층을 만든 배율
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        layer.zPosition = 1000
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func clearAll() {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        pageLayer.values.forEach { $0.removeFromSuperlayer() }
+        CATransaction.commit()
+        data = [:]; layers = [:]; pageLayer = [:]; hlLayer = [:]; penLayer = [:]; pageIds = [:]; layerScale = [:]
+        layer.sublayerTransform = CATransform3DIdentity
+    }
+
+    private func container(_ i: Int) -> CALayer {
+        if let l = pageLayer[i] { return l }
+        let l = CALayer(); l.masksToBounds = true
+        let h = CALayer(), p = CALayer()
+        l.addSublayer(h); l.addSublayer(p)
+        layer.addSublayer(l)
+        pageLayer[i] = l; hlLayer[i] = h; penLayer[i] = p
+        return l
+    }
+
+    func setPage(_ i: Int, rect: CGRect) {
+        let l = container(i)
+        if l.frame != rect { l.frame = rect; hlLayer[i]?.frame = l.bounds; penLayer[i]?.frame = l.bounds }
+    }
+
+    /// 웹이 알려 준 이 장의 획 (순서 = 그리는 순서, 형광펜 먼저)
+    func apply(page i: Int, ids: [Int], add: [String: Any], rect: CGRect, scale s: CGFloat) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        scale = s
+        setPage(i, rect: rect)
+        for (k, v) in add { if let id = Int(k), let d = v as? [String: Any], let sd = Self.parse(d) { data[id] = sd; layers[id]?.removeFromSuperlayer(); layers[id] = nil } }
+        let keep = Set(ids)
+        for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil }
+        pageIds[i] = ids
+        guard let hl = hlLayer[i], let pen = penLayer[i] else { CATransaction.commit(); return }
+        var hlIdx: UInt32 = 0, penIdx: UInt32 = 0
+        for id in ids {
+            guard let d = data[id] else { continue }
+            let l: CAShapeLayer
+            if let ex = layers[id], layerScale[id] == scale { l = ex } else {
+                layers[id]?.removeFromSuperlayer()
+                l = build(d); layers[id] = l; layerScale[id] = scale
+            }
+            let parent = d.tool == "hl" ? hl : pen
+            let idx = d.tool == "hl" ? hlIdx : penIdx
+            if l.superlayer !== parent || parent.sublayers?.firstIndex(of: l) != Int(idx) { parent.insertSublayer(l, at: idx) }
+            if d.tool == "hl" { hlIdx += 1 } else { penIdx += 1 }
+        }
+        CATransaction.commit()
+    }
+
+    /// 확대·축소·창 크기: 종이 자리와 배율이 바뀌면 다시 그려요
+    func layout(pages: [(Int, CGRect)], scale s: CGFloat) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        let changed = s != scale
+        scale = s
+        for (i, r) in pages { setPage(i, rect: r) }
+        let live = Set(pages.map { $0.0 })
+        for (i, l) in pageLayer where !live.contains(i) {
+            l.removeFromSuperlayer(); pageLayer[i] = nil; hlLayer[i] = nil; penLayer[i] = nil
+            for id in pageIds[i] ?? [] { layers[id] = nil; data[id] = nil; layerScale[id] = nil }
+            pageIds[i] = nil
+        }
+        CATransaction.commit()
+        if changed { for (i, ids) in pageIds { apply(page: i, ids: ids, add: [:], rect: pageLayer[i]?.frame ?? .zero, scale: s) } }
+    }
+
+    /// 두 손가락 확대 중: 웹 종이와 같은 변환 [기준x, 기준y, 이동x, 이동y, 배율]
+    func pinch(_ t: [Double]?) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if let t = t, t.count == 5 {
+            var m = CGAffineTransform(translationX: t[0] + t[2], y: t[1] + t[3])
+            m = m.scaledBy(x: t[4], y: t[4]).translatedBy(x: -t[0], y: -t[1])
+            layer.sublayerTransform = CATransform3DMakeAffineTransform(m)
+        } else { layer.sublayerTransform = CATransform3DIdentity }
+        CATransaction.commit()
+    }
+
+    private static func parse(_ d: [String: Any]) -> StrokeData? {
+        guard let pts = (d["pts"] as? [Any])?.compactMap({ ($0 as? NSNumber)?.doubleValue }), pts.count >= 3 else { return nil }
+        let po = (d["po"] as? [String: Any])?.compactMapValues { ($0 as? NSNumber)?.doubleValue } ?? [:]
+        return StrokeData(tool: d["tool"] as? String ?? "pen", color: d["color"] as? String ?? "#111111", w: (d["w"] as? NSNumber)?.doubleValue ?? 2.6,
+                          a: (d["a"] as? NSNumber)?.doubleValue ?? 0.42, st: (d["st"] as? NSNumber)?.doubleValue, sh: ((d["sh"] as? NSNumber)?.intValue ?? 0) != 0,
+                          ps: d["ps"] as? String ?? "ball", po: po, sv: d["sv"] != nil && !(d["sv"] is NSNull), pts: pts)
+    }
+
+    /// 쓰는 중(WebInkOverlay)과 같은 계산으로 그려요. 좌표는 종이 단위 × 배율
+    private func build(_ d: StrokeData) -> CAShapeLayer {
+        let l = CAShapeLayer()
+        l.contentsScale = UIScreen.main.scale
+        let k = Double(scale)
+        var flat = d.pts
+        var i = 0
+        while i + 1 < flat.count { flat[i] *= k; flat[i + 1] *= k; i += 3 }
+        let color = UIColor(hexString: d.color)
+        if d.tool == "hl" {
+            l.path = lumenHlWebPath(flat, stab: d.st ?? 60, k: k, shaped: d.sh, hlWidth: d.w * k)
+            if d.sh {
+                l.fillColor = nil; l.strokeColor = color.withAlphaComponent(d.a).cgColor; l.lineWidth = CGFloat(d.w * k); l.lineCap = .round; l.lineJoin = .round
+            } else { l.fillColor = color.withAlphaComponent(d.a).cgColor; l.strokeColor = nil }
+            l.compositingFilter = "multiplyBlendMode"
+        } else {
+            let keys = ["ball", "fountain", "brush"]
+            let style = LumenPenStyle(rawValue: keys.firstIndex(of: d.ps) ?? 0) ?? .ball
+            var opts = d.po
+            if d.sh { opts["_raw"] = 1 }
+            let st = LumenStroke(tool: .pen, style: style, opts: opts, color: d.color, width: d.w * k, pts: flat)
+            l.path = lumenPenPath(st, live: false)
+            l.fillColor = color.cgColor; l.strokeColor = nil
+        }
+        return l
     }
 }

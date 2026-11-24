@@ -58,6 +58,8 @@ export class Paper {
     this.scrollEl = scrollEl;
     this.note = note;
     this.readonly = !!opts.readonly;
+    // 아이패드 앱: 글씨는 앱이 처음부터 끝까지 그려요 (쓸 때와 뗄 때 똑같게, 11/24). 웹은 저장·지우개·올가미 계산만
+    this.nativeCanvas = !this.readonly && !!window.webkit?.messageHandlers?.lumenibCanvas; // 이 통로는 글씨 판을 가진 새 앱에만 있어요
     this.onChange = opts.onChange || (() => {});
     this.onHistory = opts.onHistory || (() => {});
     this.onLayout = opts.onLayout;
@@ -150,6 +152,7 @@ export class Paper {
   }
 
   destroy() {
+    if (this.nativeCanvas) window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteClear' });
     this._ro.disconnect();
     cancelAnimationFrame(this._flushRaf);
     this.scrollEl.removeEventListener('touchstart', this._touchBlock);
@@ -175,11 +178,17 @@ export class Paper {
     p.z = z;
     this.pagesEl.style.transform = `translate(${cx - p.cx}px, ${cy - p.cy}px) scale(${z})`;
     p.lx = cx; p.ly = cy;
+    if (this.nativeCanvas) {
+      // 앱 글씨 판도 같은 변환으로 (기준점 = 종이 묶음 안 기준점, 종이 스크롤 안쪽 좌표)
+      if (!p.org) { const pr = this.pagesEl.getBoundingClientRect(), sr = this.scrollEl.getBoundingClientRect(); p.org = [pr.left - sr.left + this.scrollEl.scrollLeft + (p.cx - pr.left), pr.top - sr.top + this.scrollEl.scrollTop + (p.cy - pr.top)]; }
+      this.nativePinch([p.org[0], p.org[1], cx - p.cx, cy - p.cy, z]);
+    }
   }
   endPinch() {
     const p = this._pan; this._pan = null;
     const el = this.scrollEl;
     this.pagesEl.style.transform = ''; this.pagesEl.style.transformOrigin = ''; this.pagesEl.style.willChange = '';
+    this.nativePinch(null);
     const z0 = this.zoom, z1 = Math.min(3, Math.max(1, z0 * p.z));
     // 손가락 가운데 있던 종이 위치가 그대로 그 자리에 오게
     const offL = this.pagesEl.offsetLeft, offT = this.pagesEl.offsetTop;
@@ -588,6 +597,7 @@ export class Paper {
       p.dirty = true; // 그림은 보이는 장부터 그려요 (아래 flushPages)
     }
     this.positionLassoMenu();
+    if (this.nativeCanvas) queueMicrotask(() => this.nativeLayout());
     // 확대·축소 뒤 모든 장을 한꺼번에 다시 그리면 버벅였어요. 스크롤 위치가 정해진 뒤(같은 순간 안) 보이는 장만 바로 그리고 나머지는 한 장씩
     queueMicrotask(() => this.flushPages());
   }
@@ -668,6 +678,11 @@ export class Paper {
   drawPage(page, rect = null) {
     if (page.released) { this.allocPage(page); page.dirty = true; }
     if (page.dirty) { page.dirty = false; this.drawBackground(page); rect = null; }
+    if (this.nativeCanvas) {
+      this.nativeSync(page);
+      if (!rect) { this.clearLive(page, false); this.clearHlLive(page); if (this.selection && this.selection.page === page.i) this.drawSelection(page); }
+      return;
+    }
     const ctx = this.ctxFor(page.base, page), ictx = this.ctxFor(page.ink, page);
     if (rect) {
       for (const cx of [ctx, ictx]) { cx.save(); cx.beginPath(); cx.rect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.clip(); cx.clearRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.__clip = rect; }
@@ -697,6 +712,38 @@ export class Paper {
     if (sel) this.drawSelection(page);
   }
 
+  // ---------- 앱이 그리는 글씨 판 (아이패드) ----------
+  // 이 장에 보일 획 목록을 앱에 알려요. 앱이 이미 가진 획은 번호만, 새 획은 내용까지
+  nativeSync(page) {
+    const h = window.webkit?.messageHandlers?.lumenibCanvas;
+    if (!h) return;
+    const sel = this.selection && this.selection.page === page.i ? this.selection : null, hid = this._hidden;
+    const list = this.note.pages[page.i].strokes.filter((q) => !(sel && sel.set.has(q)) && !hid?.has(q));
+    const sent = page._nsent || (page._nsent = new Set());
+    const ids = [], add = {};
+    for (const q of [...list.filter((x) => x.tool === 'hl'), ...list.filter((x) => x.tool !== 'hl')]) {
+      const id = nativeId(q);
+      ids.push(id);
+      if (!sent.has(id)) add[id] = { tool: q.tool, color: q.color, w: q.w, a: q.a, st: q.st, sh: q.sh ? 1 : 0, ps: q.ps, po: q.po, sv: q.sv, pts: q.pts };
+    }
+    page._nsent = new Set(ids);
+    h.postMessage({ action: 'notePage', i: page.i, ids, add, rect: this.nativeRect(page), scale: this.scale });
+  }
+  // 종이 자리 (종이 스크롤 안쪽 좌표)
+  nativeRect(page) {
+    const pr = page.el.getBoundingClientRect(), sr = this.scrollEl.getBoundingClientRect();
+    return [pr.left - sr.left + this.scrollEl.scrollLeft - this.scrollEl.clientLeft, pr.top - sr.top + this.scrollEl.scrollTop - this.scrollEl.clientTop, pr.width, pr.height];
+  }
+  nativeLayout() {
+    if (!this.nativeCanvas || !this.pages) return;
+    const r = this.scrollEl.getBoundingClientRect();
+    window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteLayout', scale: this.scale, area: [r.left, r.top, r.width, r.height], count: this.pages.length,
+      pages: this.pages.map((p, i) => (p ? [i, ...this.nativeRect(p)] : null)).filter(Boolean) });
+  }
+  nativePinch(t) {
+    if (!this.nativeCanvas) return;
+    window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'notePinch', t });
+  }
   // 같은 프레임 안의 여러 번 다시 그리기를 한 번으로 모아요
   drawPageSoon(page, rect = null) {
     // 바뀐 곳(rect)을 모아 두었다가 한 프레임에 한 번, 그 부분만 다시 그려요. rect가 없으면 장 전체
@@ -714,6 +761,7 @@ export class Paper {
 
   // 새 획 하나만 덧그려요. 장 전체를 다시 그리면 글씨가 많을수록 무거워졌어요 (새 획은 맨 위에 그려지니 결과는 같아요)
   drawAdded(page, s) {
+    if (this.nativeCanvas) { this.nativeSync(page); return; }
     const sel = this.selection && this.selection.page === page.i;
     if (page.dirty || sel || this._hidden || this._hlFading?.size) return this.drawPage(page);
     drawStroke(this.ctxFor(s.tool === 'hl' ? page.base : page.ink, page), s);
@@ -1596,6 +1644,7 @@ export class Paper {
   // 형광펜은 반투명이라 네이티브 임시 획과 겹치거나 비는 순간이 티가 났어요.
   // 새 획을 따로 깐 캔버스에서 서서히 나타나게 하고(네이티브는 같은 시간 동안 서서히 사라짐), 다 나타나면 원래 캔버스로 합쳐요.
   fadeInHl(page, s, onStart) {
+    if (this.nativeCanvas) { this.nativeSync(page); onStart?.(); return; } // 앱이 그린 그대로 남아요 (서서히 바꿔치기 없음)
     this._hlFading ||= new WeakSet();
     this._hlFading.add(s);
     this.drawPage(page);
@@ -1774,6 +1823,9 @@ function drawStroke(ctx, s, live = false) {
 // 도형 선 굵기: 같은 펜으로 보통 세기로 그은 선과 비슷하게
 const shapeWidth = (w, o) => w * 1.25 * o.scale * (1 - (o.thinning || 0) * 0.5);
 const _penPath = new WeakMap();
+// 앱 글씨 판에서 획을 알아보는 번호 (획 객체마다 하나, 저장되지 않아요)
+const _nid = new WeakMap(); let _nidSeq = 0;
+const nativeId = (s) => { let id = _nid.get(s); if (!id) { id = ++_nidSeq; _nid.set(s, id); } return id; };
 const citeRs = new WeakMap();
 const citeW = (c) => c.w || PAGE_W - 40; // 인용 상자 너비 (종이 단위, 기본은 가로 전체)
 const citeX = (c) => (c.x ?? 20); // 인용 상자 왼쪽 (종이 단위)
