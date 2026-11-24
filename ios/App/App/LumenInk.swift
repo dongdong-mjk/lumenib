@@ -851,6 +851,8 @@ struct WebInkConfig {
     var eraser = false         // 지우개: 닿은 획을 앱이 바로 숨겨요 (웹은 뒤따라 실제로 지워요)
     var eraserR = 18.0         // 지우개 반지름 (종이 단위)
     var eraserWhole = true     // 획 통째로 지우기 (부분 지우기는 웹이 잘라요)
+    var lasso = false
+    var sel: CGRect? = nil     // 고른 상자 자리 (웹 화면 좌표). 이 근처에서 시작하면 옮기기·크기·회전이라 웹이 그려요
     var color = "#111111"
     var width = 2.6            // 종이 단위
     var style: LumenPenStyle = .ball
@@ -868,6 +870,7 @@ struct WebInkConfig {
         let t = b["tool"] as? String ?? "pen"
         tool = t == "hl" ? .highlighter : .pen
         eraser = t == "eraser"
+        lasso = t == "lasso"
         eraserR = b["eraserR"] as? Double ?? eraserR
         eraserWhole = (b["eraserMode"] as? String ?? "stroke") != "partial"
         relay = t == "eraser" || t == "lasso" // 형광펜은 다시 앱이 바로 그려요 (펜처럼 매끄럽게, 11/23). 곱하기로 글씨 밑에 깔리는 모습은 같게
@@ -886,6 +889,13 @@ struct WebInkConfig {
         area = r(b["area"]) ?? .zero
         exclude = (b["exclude"] as? [Any] ?? []).compactMap(r)
         pages = (b["pages"] as? [Any] ?? []).compactMap(r)
+        sel = r(b["sel"])
+    }
+    /// 이 점에서 시작하는 올가미가 새 올가미인지 (고른 상자·손잡이 근처면 아니에요)
+    func startsNewLasso(_ p: CGPoint) -> Bool {
+        guard lasso else { return false }
+        guard let s = sel else { return true }
+        return !CGRect(x: s.minX - 30, y: s.minY - 70, width: s.width + 60, height: s.height + 100).contains(p)
     }
     func allows(_ p: CGPoint) -> Bool { enabled && area.contains(p) && !exclude.contains { $0.contains(p) } }
 }
@@ -1258,6 +1268,9 @@ final class NoteInkView: UIView {
     private var erased: Set<Int> = []                   // 지우개가 닿아 바로 숨긴 획
     private let ring = CAShapeLayer()                   // 지우개 동그라미
     private var unhideWork: DispatchWorkItem?
+    private let lassoLine = CAShapeLayer()              // 올가미 선 (앱이 바로 그려요)
+    private var lassoPts: [CGPoint] = []
+    private var lassoHide: DispatchWorkItem?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1304,6 +1317,55 @@ final class NoteInkView: UIView {
             }
         }
     }
+    // MARK: 올가미 선 (11/24): 펜슬을 따라 바로 그려요. 고르기·옮기기는 웹이 해요
+    private func toLocal(_ p: CGPoint) -> CGPoint {
+        CATransform3DIsIdentity(layer.sublayerTransform) ? p : p.applying(CATransform3DGetAffineTransform(layer.sublayerTransform).inverted())
+    }
+    func lassoBegin(_ p: CGPoint) {
+        lassoHide?.cancel(); lassoHide = nil
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if lassoLine.superlayer == nil {
+            lassoLine.fillColor = UIColor.clear.cgColor
+            lassoLine.strokeColor = UIColor(red: 0x3d / 255.0, green: 0x7b / 255.0, blue: 1, alpha: 1).cgColor
+            lassoLine.lineWidth = 1.4
+            lassoLine.lineDashPattern = [6, 5]
+            lassoLine.lineJoin = .round
+            lassoLine.zPosition = 11
+            layer.addSublayer(lassoLine)
+        }
+        lassoPts = [toLocal(p)]
+        lassoLine.path = nil; lassoLine.isHidden = false
+        CATransaction.commit()
+    }
+    func lassoAdd(_ pts: [CGPoint]) {
+        guard !lassoPts.isEmpty else { return }
+        for p in pts.map(toLocal) { if let l = lassoPts.last, hypot(p.x - l.x, p.y - l.y) >= 3 { lassoPts.append(p) } }
+        // 웹과 같은 모양: 3px 안쪽 점은 건너뛰고 부드러운 곡선으로
+        let path = CGMutablePath()
+        path.move(to: lassoPts[0])
+        if lassoPts.count > 2 {
+            for i in 1..<(lassoPts.count - 1) {
+                let a = lassoPts[i], b = lassoPts[i + 1]
+                path.addQuadCurve(to: CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2), control: a)
+            }
+        }
+        if lassoPts.count > 1 { path.addLine(to: lassoPts[lassoPts.count - 1]) }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        lassoLine.path = path
+        CATransaction.commit()
+    }
+    /// 펜을 떼면 웹이 고른 모양(같은 점선)을 그릴 때까지 잠깐 두었다가 지워요
+    func lassoEnd(after: Double = 0.35) {
+        lassoPts = []
+        let w = DispatchWorkItem { [weak self] in
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            self?.lassoLine.isHidden = true; self?.lassoLine.path = nil
+            CATransaction.commit()
+        }
+        lassoHide = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + after, execute: w)
+    }
+
     func eraseEnd() {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         ring.isHidden = true

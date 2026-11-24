@@ -984,6 +984,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       style: S.settings.penStyle, opts: S.settings.penOpts[S.settings.penStyle] || {},
       hlAlpha: S.settings.hlAlpha, hlStab: S.settings.hlStab, scale: p?.scale || 1,
       eraserR: ERASER_SIZES[tool.eraserSize], eraserMode: tool.eraserMode,
+      sel: (() => { const sl = p?.selection, pg = sl && p.pages[sl.page]; if (!pg?.el) return null; const r = pg.el.getBoundingClientRect(), b = sl.box, k = p.scale; return [r.left + b[0] * k, r.top + b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k]; })(), // 고른 상자: 이 근처에서 시작하면 옮기기라 앱이 올가미 선을 안 그려요
       pages: [...(p?.scrollEl?.querySelectorAll('.page') || [])].map(rect), // 종이 한 장씩의 자리: 네이티브 임시 선을 종이 안으로 잘라요
       area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(toolbarEl?.querySelector('.tb-menu')), rect(p?.lassoMenu), ...btns].filter(Boolean),
     });

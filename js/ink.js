@@ -914,7 +914,7 @@ export class Paper {
         }
       }
       if (cur.kind === 'draw') this.drawLive(page, cur.s);
-      else if (cur.kind === 'lasso') this.drawLasso(page, cur.pts);
+      else if (cur.kind === 'lasso') { if (!(this.nativeCanvas && window.__nativeLasso)) this.drawLasso(page, cur.pts); } // 앱이 올가미 선을 바로 그려요
       else if (cur.kind === 'move') this.moveGhost(page, cur);
       else if (cur.kind === 'scale') this.scaleGhost(page, cur);
       else if (cur.kind === 'rotate') this.drawSelection(page, 0, 0, null, cur);

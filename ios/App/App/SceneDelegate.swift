@@ -192,21 +192,25 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         inkLastPoint = p
         erasing = relaying && inkConfig.eraser && noteInk.superview != nil
         if erasing { noteInk.eraseBegin(); eraseNative(p) }
+        lassoing = relaying && noteInk.superview != nil && inkConfig.startsNewLasso(CGPoint(x: p.x, y: p.y))
+        if lassoing, let web = webView { noteInk.lassoBegin(noteInk.convert(CGPoint(x: p.x, y: p.y), from: web)) }
         if relaying { relay("down", [p]) } else { inkOverlay.begin(p) }
     }
     func inkMove(_ pts: [SIMD3<Double>], _ pred: [SIMD3<Double>]) {
         holdScrolls()
         if let l = pts.last { inkLastPoint = l }
         if erasing { pts.forEach(eraseNative) }
+        if lassoing, let web = webView { noteInk.lassoAdd(pts.map { noteInk.convert(CGPoint(x: $0.x, y: $0.y), from: web) }) }
         if relaying { relay("move", pts) } else { inkOverlay.add(pts, predicted: pred) }
     }
     private var erasing = false
+    private var lassoing = false
     private func eraseNative(_ p: SIMD3<Double>) {
         guard let web = webView else { return }
         let q = noteInk.convert(CGPoint(x: p.x, y: p.y), from: web)
         noteInk.erase(at: q, r: inkConfig.eraserR, whole: inkConfig.eraserWhole)
     }
-    func inkCancel() { unlockScrolls(); if erasing { erasing = false; noteInk.eraseEnd() }; if relaying { relay("cancel", []) } else { inkOverlay.clear() } }
+    func inkCancel() { unlockScrolls(); if erasing { erasing = false; noteInk.eraseEnd() }; if lassoing { lassoing = false; noteInk.lassoEnd(after: 0) }; if relaying { relay("cancel", []) } else { inkOverlay.clear() } }
     // 지우개·올가미 펜슬 움직임을 웹에 넘기기.
     // 움직일 때마다 바로 보내면 웹이 처리하기 전에 계속 쌓여서, 펜을 뗀 뒤에도 한동안 밀린 걸 처리하느라 화면이 멈추고
     // 툴바 누름도 늦게 먹혔어요. 이제 앞의 묶음을 웹이 다 처리한 뒤에 그동안 모인 움직임을 한 번에 보내요
@@ -214,7 +218,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     private var relayPending: [SIMD3<Double>] = []
     private func relayJS(_ type: String, _ pts: [SIMD3<Double>]) -> String {
         let arr = pts.map { "[\(($0.x * 10).rounded() / 10),\(($0.y * 10).rounded() / 10),\(($0.z * 100).rounded() / 100)]" }.joined(separator: ",")
-        let ring = erasing ? "window.__nativeEraser=1;" : "" // 앱이 지우개 동그라미를 그리면 웹은 안 그려요
+        let ring = type == "up" ? "" : "window.__nativeEraser=\(erasing ? 1 : 0);window.__nativeLasso=\(lassoing ? 1 : 0);" // 앱이 지우개 동그라미·올가미 선을 그리면 웹은 안 그려요
         return ring + "window.lumenibPointer && window.lumenibPointer('\(type)', [\(arr)]);"
     }
     private func pumpRelay() {
@@ -265,6 +269,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     func inkEnd() {
         unlockScrolls()
         if erasing { erasing = false; noteInk.eraseEnd() }
+        if lassoing { lassoing = false; noteInk.lassoEnd() }
         if relaying { relay("up", [inkLastPoint ?? SIMD3(0, 0, 0.5)]); relaying = false; return }
         do {
             let q: Double = inkOverlay.shaped ? 100 : 10 // 도형(원)은 더 촘촘하게 (확대 시 지글거림)
