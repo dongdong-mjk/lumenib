@@ -2234,12 +2234,13 @@ function cleanPenEnd(pts) {
   if (dl < 1e-6) return out;
   // 펜을 들면서 힘이 빠진 곳만 잔떨림으로 봐요. 힘을 준 채 작게 도는 원은 그대로 둬요 (11/24: 작은 원에서 끝이 잘려 버벅이며 따라오던 것)
   let pRef = 0; for (let m = i0; m <= j; m++) pRef = Math.max(pRef, out[m][2] ?? 0.5);
+  const lifting = (out[n - 1][2] ?? 0.5) < pRef * 0.6; // 마지막 점에서 힘이 많이 빠졌으면 = 펜을 드는 중
   let cut = n, back = 0;
   for (let m = n - 1; m > j; m--) {
     const sx = out[m][0] - out[m - 1][0], sy = out[m][1] - out[m - 1][1];
     const sl = Math.hypot(sx, sy) || 1e-9;
     // 진행 방향에서 60° 넘게 꺾인 끝 + 힘이 빠지는 중 = 펜을 떼며 생긴 잔떨림
-    if ((sx * dx + sy * dy) / (dl * sl) < 0.5 && (out[m][2] ?? 0.5) < pRef * 0.6) { back += sl; cut = m; } else break;
+    if (lifting && (sx * dx + sy * dy) / (dl * sl) < 0.5 && (out[m][2] ?? 0.5) < pRef * 0.9) { back += sl; cut = m; } else break;
   }
   return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? out.slice(0, cut) : out;
 }

@@ -236,13 +236,14 @@ func lumenCleanPenEnd(_ pts: [SIMD3<Double>]) -> [SIMD3<Double>] {
     if dl < 1e-6 { return out }
     var pRef = 0.0
     for q in out[i0...j] { pRef = max(pRef, q.z) }
+    let lifting = out[n - 1].z < pRef * 0.6 // 마지막 점에서 힘이 많이 빠짐 = 펜을 드는 중 (웹과 같음)
     var cut = n, back = 0.0
     var m = n - 1
     while m > j {
         let sx = out[m].x - out[m - 1].x, sy = out[m].y - out[m - 1].y
         let sl = max(hypot(sx, sy), 1e-9)
         // 60° 넘게 꺾인 끝 + 힘이 빠지는 중일 때만 (작게 도는 원은 그대로, 웹과 같음)
-        if (sx * dx + sy * dy) / (dl * sl) < 0.5 && out[m].z < pRef * 0.6 { back += sl; cut = m } else { break }
+        if lifting && (sx * dx + sy * dy) / (dl * sl) < 0.5 && out[m].z < pRef * 0.9 { back += sl; cut = m } else { break }
         m -= 1
     }
     return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? Array(out[0..<cut]) : out
