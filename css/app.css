@@ -686,3 +686,5 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 /* 피그마 Top Bar(노트 쓰기): 왼쪽 16, 버튼 40×40, 버튼 사이 간격 0 */
 .topbar .left:has([data-act="back"]) { gap: 0; }
 .topbar .left [data-act="back"], .topbar .left [data-act="side"] { width: 40px; height: 40px; }
+
+.menu-diag { margin: 6px 8px 2px; font-size: 11px; color: #8a8a8a; } /* 확인용: 글씨를 누가 그리는지 (아이패드 앱) */

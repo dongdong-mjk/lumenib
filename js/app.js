@@ -954,6 +954,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     m.className = 'tb-menu';
     m.innerHTML = `<h6>종이 종류</h6><div class="row">${PAPERS.map(([k, l]) => `<button class="paper-opt ${k === main.paper ? 'on' : ''}" data-p="${k}"><span class="paper-thumb ${k}"></span>${l.replace(' 종이', '')}</button>`).join('')}</div>
       <button class="menu-item" data-act="pdf">${icon.download || ''}<span>PDF로 내보내기</span></button>
+      ${window.webkit?.messageHandlers?.lumenibNative ? `<p class="menu-diag">글씨: ${ns.paper?.nativeCanvas ? '앱이 그림' : '웹이 그림'}${window.__lumenibBuild ? ' · 앱 ' + window.__lumenibBuild : ''}</p>` : ''}
       ${window.webkit?.messageHandlers?.lumenibNative ? '<button class="menu-item" data-act="native-ink"><span>네이티브 필기 비교</span></button>' : ''}`;
     toolbarEl.appendChild(m);
     m.querySelector('[data-act="native-ink"]')?.addEventListener('click', () => { m.remove(); track('native_ink_open'); window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' }); });
