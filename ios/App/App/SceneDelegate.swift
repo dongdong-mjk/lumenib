@@ -93,15 +93,14 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         pinchContent.addSubview(noteInk)
         noteInk.frame = CGRect(origin: CGPoint(x: -pinchOff.x, y: -pinchOff.y), size: size)
         // 지금 보이는 종이(장) 부분만 사진으로 찍어 글씨 판 위에 얹어요. 패널 테두리·모서리는 안 찍어서 그대로 있어요 (11/25)
+        // 글씨 판을 종이 스크롤에서 뺀 다음에 찍어서 사진엔 웹 종이만 담기고, 글씨는 사진 위 글씨 판이 보여 줘요
+        // (29: 사진을 찍은 뒤 글씨 판을 숨겼더니 사진에 글씨가 안 담겨 확대 중 글씨가 사라졌어요)
         pinchSnap?.removeFromSuperview(); pinchSnap = nil
         let vis = sv.bounds.intersection(noteInk.pagesBox)
-        if !vis.isNull, vis.width > 1, vis.height > 1 {
-            let local = vis.offsetBy(dx: -pinchOff.x, dy: -pinchOff.y)      // 사진 자리 (pinchHost 좌표)
-            let inWeb = local.offsetBy(dx: f.minX, dy: f.minY)
-            if let snap = web.resizableSnapshotView(from: inWeb, afterScreenUpdates: false, withCapInsets: .zero) {
-                snap.frame = local
-                pinchContent.addSubview(snap); pinchSnap = snap
-            }
+        if !vis.isNull, vis.width > 1, vis.height > 1,
+           let snap = sv.resizableSnapshotView(from: vis, afterScreenUpdates: false, withCapInsets: .zero) {
+            snap.frame = vis.offsetBy(dx: -pinchOff.x, dy: -pinchOff.y) // 사진 자리 (pinchHost 좌표)
+            pinchContent.insertSubview(snap, belowSubview: noteInk); pinchSnap = snap
         }
         pinchHost.isHidden = false
         CATransaction.commit()
