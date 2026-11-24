@@ -1131,6 +1131,7 @@ export class Paper {
       strokes.splice(i, 1, ...pieces.map((pts) => ({ ...s, pts })));
     }
     if (hit) this.drawPageSoon(page, dirty); // 한 프레임에 한 번, 지운 자리만 다시 그려요
+    if (this.nativeCanvas && window.__nativeEraser) return; // 앱이 동그라미를 바로 그려요
     const ctx = this.clearLive(page);
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1 / this.scale; ctx.stroke();

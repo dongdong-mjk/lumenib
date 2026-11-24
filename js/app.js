@@ -983,6 +983,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       width: pen ? PEN_SIZES[tool.penSize] : HL_SIZES[tool.hlSize],
       style: S.settings.penStyle, opts: S.settings.penOpts[S.settings.penStyle] || {},
       hlAlpha: S.settings.hlAlpha, hlStab: S.settings.hlStab, scale: p?.scale || 1,
+      eraserR: ERASER_SIZES[tool.eraserSize], eraserMode: tool.eraserMode,
       pages: [...(p?.scrollEl?.querySelectorAll('.page') || [])].map(rect), // 종이 한 장씩의 자리: 네이티브 임시 선을 종이 안으로 잘라요
       area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(toolbarEl?.querySelector('.tb-menu')), rect(p?.lassoMenu), ...btns].filter(Boolean),
     });

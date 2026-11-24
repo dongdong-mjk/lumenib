@@ -848,6 +848,9 @@ struct WebInkConfig {
     var enabled = false
     var tool: LumenStroke.Tool = .pen
     var relay = false          // 지우개 · 올가미: 네이티브는 그리지 않고 펜슬 움직임만 웹에 넘겨요
+    var eraser = false         // 지우개: 닿은 획을 앱이 바로 숨겨요 (웹은 뒤따라 실제로 지워요)
+    var eraserR = 18.0         // 지우개 반지름 (종이 단위)
+    var eraserWhole = true     // 획 통째로 지우기 (부분 지우기는 웹이 잘라요)
     var color = "#111111"
     var width = 2.6            // 종이 단위
     var style: LumenPenStyle = .ball
@@ -864,6 +867,9 @@ struct WebInkConfig {
         enabled = b["enabled"] as? Bool ?? false
         let t = b["tool"] as? String ?? "pen"
         tool = t == "hl" ? .highlighter : .pen
+        eraser = t == "eraser"
+        eraserR = b["eraserR"] as? Double ?? eraserR
+        eraserWhole = (b["eraserMode"] as? String ?? "stroke") != "partial"
         relay = t == "eraser" || t == "lasso" // 형광펜은 다시 앱이 바로 그려요 (펜처럼 매끄럽게, 11/23). 곱하기로 글씨 밑에 깔리는 모습은 같게
         hlStab = b["hlStab"] as? Double ?? 60
         color = b["color"] as? String ?? color
@@ -1248,6 +1254,10 @@ final class NoteInkView: UIView {
     private var pageIds: [Int: [Int]] = [:]
     private(set) var scale: CGFloat = 1
     private var layerScale: [Int: CGFloat] = [:]        // 번호 → 그 층을 만든 배율
+    private var boxes: [Int: CGRect] = [:]              // 번호 → 획 상자 (종이 단위, 지우개 검사용)
+    private var erased: Set<Int> = []                   // 지우개가 닿아 바로 숨긴 획
+    private let ring = CAShapeLayer()                   // 지우개 동그라미
+    private var unhideWork: DispatchWorkItem?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1257,11 +1267,87 @@ final class NoteInkView: UIView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    // MARK: 지우개 (11/24): 펜슬이 닿는 순간 앱이 바로 숨겨요. 웹은 같은 움직임을 받아 실제로 지우고 판을 다시 알려 줘요
+    func eraseBegin() {
+        unhideWork?.cancel(); unhideWork = nil
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if ring.superlayer == nil {
+            ring.fillColor = UIColor.clear.cgColor
+            ring.strokeColor = UIColor(white: 0, alpha: 0.35).cgColor
+            ring.zPosition = 10
+            layer.addSublayer(ring)
+        }
+        ring.isHidden = true
+        CATransaction.commit()
+    }
+    /// p: 이 판 좌표, r: 지우개 반지름(종이 단위)
+    func erase(at p: CGPoint, r: Double, whole: Bool) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        // 동그라미 (확대 중이어도 같은 자리에 오게 판의 좌표로 바꿔서)
+        let rs = CGFloat(r) * scale
+        let inv = CATransform3DIsIdentity(layer.sublayerTransform) ? p : p.applying(CATransform3DGetAffineTransform(layer.sublayerTransform).inverted())
+        ring.lineWidth = 1
+        ring.path = CGPath(ellipseIn: CGRect(x: inv.x - rs, y: inv.y - rs, width: rs * 2, height: rs * 2), transform: nil)
+        ring.isHidden = false
+        guard whole else { return }
+        for (i, pl) in pageLayer {
+            let q = CGPoint(x: inv.x - pl.frame.minX, y: inv.y - pl.frame.minY)
+            if !pl.bounds.insetBy(dx: -rs - 40, dy: -rs - 40).contains(q) { continue }
+            let x = Double(q.x / scale), y = Double(q.y / scale)
+            for id in pageIds[i] ?? [] where !erased.contains(id) {
+                guard let d = data[id] else { continue }
+                let rr = r + d.w / 2
+                let b = box(id, d)
+                if x < Double(b.minX) - rr || x > Double(b.maxX) + rr || y < Double(b.minY) - rr || y > Double(b.maxY) + rr { continue }
+                if Self.hits(d.pts, x, y, rr) { erased.insert(id); layers[id]?.isHidden = true }
+            }
+        }
+    }
+    func eraseEnd() {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        ring.isHidden = true
+        CATransaction.commit()
+        // 웹이 끝내 지우지 않은 획(드물게 판단이 다를 때)은 잠시 뒤 다시 보여요
+        let w = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            for id in self.erased where self.data[id] != nil { self.layers[id]?.isHidden = false }
+            self.erased = []
+        }
+        unhideWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: w)
+    }
+    private func box(_ id: Int, _ d: StrokeData) -> CGRect {
+        if let b = boxes[id] { return b }
+        var x0 = Double.infinity, y0 = Double.infinity, x1 = -Double.infinity, y1 = -Double.infinity
+        var i = 0
+        while i + 1 < d.pts.count { x0 = min(x0, d.pts[i]); x1 = max(x1, d.pts[i]); y0 = min(y0, d.pts[i + 1]); y1 = max(y1, d.pts[i + 1]); i += 3 }
+        let b = CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+        boxes[id] = b
+        return b
+    }
+    /// 점 사이 선분까지의 거리로 봐요 (웹의 촘촘한 점 검사와 같은 결과)
+    private static func hits(_ p: [Double], _ x: Double, _ y: Double, _ r: Double) -> Bool {
+        let r2 = r * r
+        if p.count >= 2 { let dx = p[0] - x, dy = p[1] - y; if dx * dx + dy * dy <= r2 { return true } }
+        var i = 3
+        while i + 1 < p.count {
+            let ax = p[i - 3], ay = p[i - 2], bx = p[i], by = p[i + 1]
+            let vx = bx - ax, vy = by - ay, l2 = vx * vx + vy * vy
+            var t = l2 > 0 ? ((x - ax) * vx + (y - ay) * vy) / l2 : 0
+            t = max(0, min(1, t))
+            let dx = ax + vx * t - x, dy = ay + vy * t - y
+            if dx * dx + dy * dy <= r2 { return true }
+            i += 3
+        }
+        return false
+    }
+
     func clearAll() {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         pageLayer.values.forEach { $0.removeFromSuperlayer() }
         CATransaction.commit()
-        data = [:]; layers = [:]; pageLayer = [:]; hlLayer = [:]; penLayer = [:]; pageIds = [:]; layerScale = [:]
+        data = [:]; layers = [:]; pageLayer = [:]; hlLayer = [:]; penLayer = [:]; pageIds = [:]; layerScale = [:]; boxes = [:]; erased = []
         layer.sublayerTransform = CATransform3DIdentity
     }
 
@@ -1285,7 +1371,7 @@ final class NoteInkView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         scale = s
         setPage(i, rect: rect)
-        for (k, v) in add { if let id = Int(k), let d = v as? [String: Any], let sd = Self.parse(d) { data[id] = sd; layers[id]?.removeFromSuperlayer(); layers[id] = nil } }
+        for (k, v) in add { if let id = Int(k), let d = v as? [String: Any], let sd = Self.parse(d) { data[id] = sd; boxes[id] = nil; layers[id]?.removeFromSuperlayer(); layers[id] = nil } }
         // 방금 뗀 획: 쓰는 동안 그린 그림을 그대로 옮겨 남겨요 (다시 그려 바꿔치기하지 않아요, 11/24)
         if let l = adopt, let from = adoptFrom, add.count == 1, let k = add.keys.first, let id = Int(k), let path = l.path {
             let o = convert(CGPoint.zero, from: from)
@@ -1297,7 +1383,7 @@ final class NoteInkView: UIView {
             layers[id] = l; layerScale[id] = s
         }
         let keep = Set(ids)
-        for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil }
+        for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil; boxes[old] = nil; erased.remove(old) }
         pageIds[i] = ids
         guard let hl = hlLayer[i], let pen = penLayer[i] else { CATransaction.commit(); return }
         // 순서대로 줄 세운 뒤 다르면 한 번에 바꿔 끼워요 (지우개처럼 자주 바뀔 때 글씨가 많아도 가볍게, 11/24)
@@ -1309,6 +1395,7 @@ final class NoteInkView: UIView {
             if let ex = layers[id], layerScale[id] == scale { l = ex } else {
                 layers[id]?.removeFromSuperlayer()
                 l = build(d); layers[id] = l; layerScale[id] = scale
+                if erased.contains(id) { l.isHidden = true }
             }
             if d.tool == "hl" { hlList.append(l) } else { penList.append(l) }
         }
