@@ -916,7 +916,7 @@ export class Paper {
       if (cur.kind === 'draw') this.drawLive(page, cur.s);
       else if (cur.kind === 'lasso') this.drawLasso(page, cur.pts);
       else if (cur.kind === 'move') this.moveGhost(page, cur);
-      else if (cur.kind === 'scale') this.drawSelection(page, 0, 0, cur);
+      else if (cur.kind === 'scale') this.scaleGhost(page, cur);
       else if (cur.kind === 'rotate') this.drawSelection(page, 0, 0, null, cur);
     });
 
@@ -1302,7 +1302,7 @@ export class Paper {
 
   // 올가미로 옮기는 동안: 고른 글씨·인용을 한 번만 따로 그린 판을 만들어 통째로 옮겨요.
   // 매번 다시 그리면 무거워서 펜슬 입력이 밀리고, 장 밖으로 나가면 안 보였어요 (11/22)
-  moveGhost(page, k) {
+  moveGhost(page, k, withBox = true) {
     if (!k.ghost) {
       const sel = this.selection;
       const g = document.createElement('div');
@@ -1330,12 +1330,30 @@ export class Paper {
       ctx.setTransform(k2, 0, 0, k2, -gx * k2, -gy * k2);
       for (const q of sel.set) if (q.tool === 'hl') drawStroke(ctx, q);
       for (const q of sel.set) if (q.tool !== 'hl') drawStroke(ctx, q);
-      { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
+      if (withBox) { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
       this.pagesEl.appendChild(g);
       this.clearLive(page, false); // 원래 자리의 선택 그림은 지워요
-      k.ghost = g;
+      k.ghost = g; k.ghostCv = cv; k.ghostOrg = [gx, gy];
     }
-    k.ghost.style.transform = `translate(${k.dx * this.scale}px, ${k.dy * this.scale}px)`;
+    if (withBox) k.ghost.style.transform = `translate(${k.dx * this.scale}px, ${k.dy * this.scale}px)`;
+  }
+  // 올가미 크기 조절 중: 고른 글씨를 한 번만 그린 판을 늘리기만 해요 (움직일 때마다 전부 다시 그리면 여러 개일 때 버벅였어요, 11/24)
+  scaleGhost(page, k) {
+    if (!k.ghost) this.moveGhost(page, k, false);
+    const s = this.scale, [gx, gy] = k.ghostOrg, cv = k.ghostCv;
+    cv.style.transformOrigin = `${(k.h.ax - gx) * s}px ${(k.h.ay - gy) * s}px`;
+    cv.style.transform = `scale(${k.kx}, ${k.ky})`;
+    // 상자·손잡이만 쓰는 중 판에 다시 그려요 (가벼워요)
+    const b = this.selection.box, ox = k.h.ax, oy = k.h.ay;
+    const nb = [ox + (b[0] - ox) * k.kx, oy + (b[1] - oy) * k.ky, ox + (b[2] - ox) * k.kx, oy + (b[3] - oy) * k.ky];
+    const ctx = this.clearLive(page), u = 1 / s;
+    ctx.save();
+    ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(nb[0], nb[1], nb[2] - nb[0], nb[3] - nb[1]);
+    ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.lineWidth = 2 * u;
+    for (const q of selHandles(nb)) { ctx.beginPath(); ctx.arc(q.x, q.y, (q.dx && q.dy ? 7 : 6) * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+    const m = 12 * u;
+    this.liveDrewIn(page, [Math.min(nb[0], nb[2]) - m, Math.min(nb[1], nb[3]) - m, Math.max(nb[0], nb[2]) + m, Math.max(nb[1], nb[3]) + m]);
   }
 
   clearSelection() {
