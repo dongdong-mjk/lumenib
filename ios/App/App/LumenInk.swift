@@ -1117,10 +1117,10 @@ final class WebInkOverlay: UIView {
     var hasPending: Bool { !pending.isEmpty }
     /// 글씨 판이 새 획을 그리는 바로 그 순간(같은 화면 갱신)에 임시 획을 지워요. 둘이 겹쳐 보이는 틈이 없게
     private var handedOff = 0
-    func handOffOldest() { guard !pending.isEmpty else { return }; remove(pending.removeFirst()); handedOff += 1 }
+    func handOffOldest() { guard let l = pending.first, l.compositingFilter == nil else { return }; remove(pending.removeFirst()); handedOff += 1 } // 형광펜은 웹이 그려요 (inkDrawn 때 지움)
     /// 쓰는 동안 그린 그 그림을 그대로 넘겨줘요 (노트 판이 다시 그리지 않고 이 그림을 남겨요)
     func takeOldestPending() -> CAShapeLayer? {
-        guard !pending.isEmpty else { return nil }
+        guard let f = pending.first, f.compositingFilter == nil else { return nil } // 형광펜은 판으로 안 옮겨요
         let l = pending.removeFirst(); handedOff += 1
         return l
     }
@@ -1129,7 +1129,7 @@ final class WebInkOverlay: UIView {
 
         guard !pending.isEmpty else { return }
         let l = pending.removeFirst()
-        if immediately { remove(l); return }
+        if immediately && l.compositingFilter == nil { remove(l); return } // 형광펜은 웹이 글씨 밑에 서서히 그리니 같이 서서히
         // 형광펜은 반투명이라 웹 획과 겹치는 순간 진해졌다 옅어져서 깜빡여 보였어요. 아주 짧게 흐려지며 사라지게 해요
         if l.compositingFilter != nil { // 웹 획이 서서히 나타나는 동안(0.16초) 같이 서서히 사라져요
             CATransaction.begin()
@@ -1284,6 +1284,8 @@ final class NoteInkView: UIView {
         isUserInteractionEnabled = false
         backgroundColor = .clear
         layer.zPosition = 1000
+        // 확대 변환(sublayerTransform)은 층의 기준점 둘레로 걸려요. 기준점이 판 가운데(아주 먼 곳)면 확대하는 동안 글씨가 화면 밖으로 날아가 사라졌어요 (11/24). 왼쪽 위로
+        layer.anchorPoint = .zero
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -1449,13 +1451,15 @@ final class NoteInkView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         pageLayer.values.forEach { $0.removeFromSuperlayer() }
         CATransaction.commit()
-        data = [:]; layers = [:]; pageLayer = [:]; hlLayer = [:]; penLayer = [:]; pageIds = [:]; layerScale = [:]; boxes = [:]; erased = []
+        data = [:]; layers = [:]; pageLayer = [:]; hlLayer = [:]; penLayer = [:]; pageIds = [:]; layerScale = [:]; boxes = [:]; erased = []; stale = []
+        pinchReset?.cancel(); pinchReset = nil
         layer.sublayerTransform = CATransform3DIdentity
     }
 
     private func container(_ i: Int) -> CALayer {
         if let l = pageLayer[i] { return l }
         let l = CALayer(); l.masksToBounds = true
+        l.anchorPoint = .zero // 배율이 바뀐 직전 그림을 잠깐 늘려 보여 줄 때 왼쪽 위 기준으로
         let h = CALayer(), p = CALayer()
         l.addSublayer(h); l.addSublayer(p)
         layer.addSublayer(l)
@@ -1518,12 +1522,19 @@ final class NoteInkView: UIView {
         func same(_ a: [CALayer]?, _ b: [CALayer]) -> Bool { guard let a = a, a.count == b.count else { return b.isEmpty && (a?.isEmpty ?? true) }; for j in 0..<a.count where a[j] !== b[j] { return false }; return true }
         if !same(hl.sublayers, hlList) { hl.sublayers = hlList }
         if !same(pen.sublayers, penList) { pen.sublayers = penList }
+        pageLayer[i]?.sublayerTransform = CATransform3DIdentity // 새 배율로 다 그렸으니 늘리기 끝
+        stale.remove(i)
         CATransaction.commit()
     }
 
     /// 확대·축소·창 크기: 종이 자리와 배율이 바뀌면 다시 그려요
+    /// 모든 장을 한꺼번에 다시 그리면 손을 떼는 순간 멈칫했어요 (11/24). 먼저 있던 그림을 새 배율로 늘려 바로 보여 주고,
+    /// 화면에 가까운 장부터 한 장씩 선명하게 다시 그려요
+    private var stale: Set<Int> = []
+    private var pinchReset: DispatchWorkItem?
     func layout(pages: [(Int, CGRect)], scale s: CGFloat) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
+        let old = scale
         let changed = s != scale
         scale = s
         for (i, r) in pages { setPage(i, rect: r) }
@@ -1531,21 +1542,57 @@ final class NoteInkView: UIView {
         for (i, l) in pageLayer where !live.contains(i) {
             l.removeFromSuperlayer(); pageLayer[i] = nil; hlLayer[i] = nil; penLayer[i] = nil
             for id in pageIds[i] ?? [] { layers[id] = nil; data[id] = nil; layerScale[id] = nil }
-            pageIds[i] = nil
+            pageIds[i] = nil; stale.remove(i)
         }
+        if changed {
+            for (i, l) in pageLayer where pageIds[i] != nil {
+                // 이 장 층들이 만들어진 배율 → 새 배율로 늘려 둬요 (글씨가 사라지거나 엉뚱한 자리에 보이지 않게)
+                let built = (pageIds[i] ?? []).compactMap { layerScale[$0] }.first ?? old
+                let k = s / max(built, 0.01)
+                l.sublayerTransform = abs(k - 1) < 0.0001 ? CATransform3DIdentity : CATransform3DMakeScale(k, k, 1)
+                stale.insert(i)
+            }
+        }
+        // 손가락 확대 변환은 새 자리가 들어오는 이 순간에 같이 풀어요 (먼저 풀면 한 번 옛 크기로 튀었어요)
+        pinchReset?.cancel(); pinchReset = nil
+        layer.sublayerTransform = CATransform3DIdentity
         CATransaction.commit()
-        if changed { for (i, ids) in pageIds { apply(page: i, ids: ids, add: [:], rect: pageLayer[i]?.frame ?? .zero, scale: s) } }
+        if changed { scheduleRebuild() }
+    }
+    private func scheduleRebuild() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.stale.isEmpty else { return }
+            // 화면(스크롤 뷰가 보여 주는 곳) 가운데에서 가장 가까운 장부터
+            let vis = (self.superview as? UIScrollView).map { $0.bounds } ?? self.bounds
+            let i = self.stale.min { a, b in
+                let ra = self.pageLayer[a]?.frame ?? .zero, rb = self.pageLayer[b]?.frame ?? .zero
+                return abs(ra.midY - vis.midY) < abs(rb.midY - vis.midY)
+            }!
+            if let r = self.pageLayer[i]?.frame, let ids = self.pageIds[i] { self.apply(page: i, ids: ids, add: [:], rect: r, scale: self.scale) }
+            self.stale.remove(i)
+            self.scheduleRebuild()
+        }
     }
 
     /// 두 손가락 확대 중: 웹 종이와 같은 변환 [기준x, 기준y, 이동x, 이동y, 배율]
     func pinch(_ t: [Double]?) {
-        CATransaction.begin(); CATransaction.setDisableActions(true)
         if let t = t, t.count == 5 {
+            pinchReset?.cancel(); pinchReset = nil
+            CATransaction.begin(); CATransaction.setDisableActions(true)
             var m = CGAffineTransform(translationX: t[0] + t[2], y: t[1] + t[3])
             m = m.scaledBy(x: t[4], y: t[4]).translatedBy(x: -t[0], y: -t[1])
             layer.sublayerTransform = CATransform3DMakeAffineTransform(m)
-        } else { layer.sublayerTransform = CATransform3DIdentity }
-        CATransaction.commit()
+            CATransaction.commit()
+        } else {
+            // 손을 떼면 웹이 새 배율로 자리를 다시 알려 줘요(layout). 그때 같이 풀어요. 소식이 없으면 잠시 뒤 풀어요
+            let w = DispatchWorkItem { [weak self] in
+                CATransaction.begin(); CATransaction.setDisableActions(true)
+                self?.layer.sublayerTransform = CATransform3DIdentity
+                CATransaction.commit()
+            }
+            pinchReset?.cancel(); pinchReset = w
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: w)
+        }
     }
 
     private static func parse(_ d: [String: Any]) -> StrokeData? {
