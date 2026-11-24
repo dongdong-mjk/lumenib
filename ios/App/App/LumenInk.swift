@@ -234,12 +234,15 @@ func lumenCleanPenEnd(_ pts: [SIMD3<Double>]) -> [SIMD3<Double>] {
     while i0 > 0 && d < REF_SIZE * 1.2 { d += len(out[i0 - 1], out[i0]); i0 -= 1 }
     let dx = out[j].x - out[i0].x, dy = out[j].y - out[i0].y, dl = hypot(dx, dy)
     if dl < 1e-6 { return out }
+    var pRef = 0.0
+    for q in out[i0...j] { pRef = max(pRef, q.z) }
     var cut = n, back = 0.0
     var m = n - 1
     while m > j {
         let sx = out[m].x - out[m - 1].x, sy = out[m].y - out[m - 1].y
         let sl = max(hypot(sx, sy), 1e-9)
-        if (sx * dx + sy * dy) / (dl * sl) < 0.5 { back += sl; cut = m } else { break } // 60° 넘게 꺾인 끝 (웹과 같음)
+        // 60° 넘게 꺾인 끝 + 힘이 빠지는 중일 때만 (작게 도는 원은 그대로, 웹과 같음)
+        if (sx * dx + sy * dy) / (dl * sl) < 0.5 && out[m].z < pRef * 0.6 { back += sl; cut = m } else { break }
         m -= 1
     }
     return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? Array(out[0..<cut]) : out
@@ -260,10 +263,11 @@ func lumenPenPath(_ s: LumenStroke, live: Bool) -> CGPath {
     var pts: [SIMD3<Double>] = []
     var i = 0
     while i + 2 < s.pts.count {
-        pts.append(SIMD3(s.pts[i] * k, s.pts[i + 1] * k, s.style == .ball ? 0.5 : s.pts[i + 2]))
+        pts.append(SIMD3(s.pts[i] * k, s.pts[i + 1] * k, s.pts[i + 2]))
         i += 3
     }
     pts = lumenCleanPenEnd(pts) // 펜을 멈출 때 끝에 몰린 점·되돌아온 잔떨림 정리 (웹 cleanPenEnd 와 같음, 11/23)
+    if s.style == .ball { for j in pts.indices { pts[j].z = 0.5 } } // 볼펜은 같은 굵기 (끝 정리에는 실제 힘을 써요)
     if s.style != .ball, !pts.isEmpty, s.opts["_raw"] == nil {
         // 시작 힘 보정 (웹 startPressure 와 같음): 누르는 순간부터 제 굵기로
         let K = min(6, pts.count)

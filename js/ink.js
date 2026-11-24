@@ -1778,8 +1778,9 @@ function drawStroke(ctx, s, live = false) {
   const st = penStyleOf(s), o = styleOpts(st, s.po, !s.sv);
   const size = s.w * 1.25 * o.scale, k = REF_SIZE / size;
   let pts = [];
-  for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, st === 'ball' ? 0.5 : p[i + 2]]);
+  for (let i = 0; i < p.length; i += 3) pts.push([p[i] * k, p[i + 1] * k, p[i + 2]]);
   if (s.sv) pts = cleanPenEnd(pts); // 펜을 멈출 때 끝에 몰린 점·되돌아온 잔떨림 정리 (세로 획 끝이 잘록했다 뭉치던 것, 11/23)
+  if (st === 'ball') pts = pts.map((q) => [q[0], q[1], 0.5]); // 볼펜은 힘과 상관없이 같은 굵기 (끝 정리에는 실제 힘을 써요)
   if (s.po && !o.legacy && st !== 'ball' && !s.sh) startPressure(pts);
   if (o.sigma && !s.sh) { gaussSmooth(pts, o.sigma); smoothPressure(pts); }
   if (o.flat) applyFlatNib(pts, o.flat);
@@ -2231,12 +2232,14 @@ function cleanPenEnd(pts) {
   while (i0 > 0 && d < REF_SIZE * 1.2) { d += len(out[i0 - 1], out[i0]); i0--; }
   const dx = out[j][0] - out[i0][0], dy = out[j][1] - out[i0][1], dl = Math.hypot(dx, dy);
   if (dl < 1e-6) return out;
+  // 펜을 들면서 힘이 빠진 곳만 잔떨림으로 봐요. 힘을 준 채 작게 도는 원은 그대로 둬요 (11/24: 작은 원에서 끝이 잘려 버벅이며 따라오던 것)
+  let pRef = 0; for (let m = i0; m <= j; m++) pRef = Math.max(pRef, out[m][2] ?? 0.5);
   let cut = n, back = 0;
   for (let m = n - 1; m > j; m--) {
     const sx = out[m][0] - out[m - 1][0], sy = out[m][1] - out[m - 1][1];
     const sl = Math.hypot(sx, sy) || 1e-9;
-    // 진행 방향에서 60° 넘게 꺾인 끝(되돌아옴·옆으로 꺾임)은 펜을 떼며 생긴 잔떨림이에요
-    if ((sx * dx + sy * dy) / (dl * sl) < 0.5) { back += sl; cut = m; } else break;
+    // 진행 방향에서 60° 넘게 꺾인 끝 + 힘이 빠지는 중 = 펜을 떼며 생긴 잔떨림
+    if ((sx * dx + sy * dy) / (dl * sl) < 0.5 && (out[m][2] ?? 0.5) < pRef * 0.6) { back += sl; cut = m; } else break;
   }
   return back > 0 && back < REF_SIZE * 0.8 && cut > 2 ? out.slice(0, cut) : out;
 }

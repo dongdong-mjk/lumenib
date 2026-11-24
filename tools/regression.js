@@ -594,14 +594,18 @@ export async function run() {
     const pts = []; let y = 0;
     for (let i = 0; i < 40; i++) { y += 2; pts.push([0, y, 0.5]); }
     for (let i = 0; i < 20; i++) pts.push([0.01 * (i % 2), y + 0.01 * i, 0.5]); // 멈추며 몰린 점
-    for (let i = 1; i <= 4; i++) pts.push([0.2 * i, y - 0.5 * i, 0.5]); // 끝에서 살짝 되돌아옴
+    for (let i = 1; i <= 4; i++) pts.push([0.2 * i, y - 0.5 * i, 0.5 - 0.1 * i]); // 끝에서 살짝 되돌아옴 (펜을 들며 힘이 빠짐)
     const out = f(pts), last = out.at(-1);
     if (out.length > 45) return '몰린 점이 안 정리돼요 ' + out.length;
     if (last[1] < y - 0.3) return '되돌아온 끝이 남아 있어요 ' + last[1].toFixed(2);
     // 옆으로 살짝 꺾이며 뗀 끝도 빼요
-    const side = pts.slice(0, 40).concat([1, 2, 3, 4].map((i) => [0.55 * i, 80 + 0.05 * i, 0.5]));
+    const side = pts.slice(0, 40).concat([1, 2, 3, 4].map((i) => [0.55 * i, 80 + 0.05 * i, 0.5 - 0.1 * i]));
     const o2 = f(side).at(-1);
-    return o2[0] < 0.3 || '옆으로 꺾인 끝이 남아 있어요 ' + o2[0].toFixed(2);
+    if (o2[0] >= 0.3) return '옆으로 꺾인 끝이 남아 있어요 ' + o2[0].toFixed(2);
+    // 힘을 준 채 작게 도는 원의 끝은 자르지 않아요 (작은 원에서 끝이 버벅이던 것)
+    const circ = []; for (let i = 0; i <= 60; i++) { const a = i / 20 * Math.PI * 2; circ.push([4 * Math.cos(a), 4 * Math.sin(a), 0.5]); }
+    const oc = f(circ), lc = oc.at(-1), ec = circ.at(-1);
+    return Math.hypot(lc[0] - ec[0], lc[1] - ec[1]) < 0.5 || '작은 원의 끝이 잘려요';
   });
 
   await check('형광펜이 급히 되돌아 꺾여도 안쪽에 흰 틈이 없음', async () => {
