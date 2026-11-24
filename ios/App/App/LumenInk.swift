@@ -1097,6 +1097,12 @@ final class WebInkOverlay: UIView {
     /// 글씨 판이 새 획을 그리는 바로 그 순간(같은 화면 갱신)에 임시 획을 지워요. 둘이 겹쳐 보이는 틈이 없게
     private var handedOff = 0
     func handOffOldest() { guard !pending.isEmpty else { return }; remove(pending.removeFirst()); handedOff += 1 }
+    /// 쓰는 동안 그린 그 그림을 그대로 넘겨줘요 (노트 판이 다시 그리지 않고 이 그림을 남겨요)
+    func takeOldestPending() -> CAShapeLayer? {
+        guard !pending.isEmpty else { return nil }
+        let l = pending.removeFirst(); handedOff += 1
+        return l
+    }
     func dropOldestPending(immediately: Bool = false) {
         if handedOff > 0 { handedOff -= 1; return } // 이미 넘긴 획
 
@@ -1275,11 +1281,21 @@ final class NoteInkView: UIView {
     }
 
     /// 웹이 알려 준 이 장의 획 (순서 = 그리는 순서, 형광펜 먼저)
-    func apply(page i: Int, ids: [Int], add: [String: Any], rect: CGRect, scale s: CGFloat) {
+    func apply(page i: Int, ids: [Int], add: [String: Any], rect: CGRect, scale s: CGFloat, adopt: CAShapeLayer? = nil, adoptFrom: UIView? = nil) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         scale = s
         setPage(i, rect: rect)
         for (k, v) in add { if let id = Int(k), let d = v as? [String: Any], let sd = Self.parse(d) { data[id] = sd; layers[id]?.removeFromSuperlayer(); layers[id] = nil } }
+        // 방금 뗀 획: 쓰는 동안 그린 그림을 그대로 옮겨 남겨요 (다시 그려 바꿔치기하지 않아요, 11/24)
+        if let l = adopt, let from = adoptFrom, add.count == 1, let k = add.keys.first, let id = Int(k), let path = l.path {
+            let o = convert(CGPoint.zero, from: from)
+            var t = CGAffineTransform(translationX: o.x - rect.minX, y: o.y - rect.minY)
+            l.removeFromSuperlayer()
+            l.path = path.copy(using: &t)
+            l.mask = nil; l.opacity = 1; l.removeAllAnimations()
+            l.frame = CGRect(origin: .zero, size: rect.size)
+            layers[id] = l; layerScale[id] = s
+        }
         let keep = Set(ids)
         for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil }
         pageIds[i] = ids
