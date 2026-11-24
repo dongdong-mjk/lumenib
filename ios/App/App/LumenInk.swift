@@ -1053,7 +1053,7 @@ final class WebInkOverlay: UIView {
             if let l = pts.last { let dx = p.x - l.x, dy = p.y - l.y; if dx * dx + dy * dy < 0.25 { continue } }
             pts.append(p)
         }
-        redraw(predicted: predicted)
+        redraw(predicted: []) // 예측 점은 안 써요: 작은 원에서 바깥으로 튀고, 떼는 순간 사라져 끝이 바뀌었어요 (11/24)
     }
     // 펜을 뗀 획은 웹이 노트에 그릴 때까지 잠깐 남겨 둬요 (바로 지우면 한 번 깜빡였어요)
     private var pending: [CAShapeLayer] = []
@@ -1088,7 +1088,13 @@ final class WebInkOverlay: UIView {
         return l
     }
     /// 웹이 다 그렸다고 알려 주면 가장 오래된 남겨 둔 획을 지워요
+    var hasPending: Bool { !pending.isEmpty }
+    /// 글씨 판이 새 획을 그리는 바로 그 순간(같은 화면 갱신)에 임시 획을 지워요. 둘이 겹쳐 보이는 틈이 없게
+    private var handedOff = 0
+    func handOffOldest() { guard !pending.isEmpty else { return }; remove(pending.removeFirst()); handedOff += 1 }
     func dropOldestPending(immediately: Bool = false) {
+        if handedOff > 0 { handedOff -= 1; return } // 이미 넘긴 획
+
         guard !pending.isEmpty else { return }
         let l = pending.removeFirst()
         if immediately { remove(l); return }

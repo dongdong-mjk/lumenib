@@ -102,7 +102,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             guard let i = (b["i"] as? NSNumber)?.intValue, let r = rect(b["rect"]) else { return }
             if noteInk.superview == nil, inkConfig.enabled { attachNoteInk(area: inkConfig.area) }
             let ids = (b["ids"] as? [Any] ?? []).compactMap { ($0 as? NSNumber)?.intValue }
-            noteInk.apply(page: i, ids: ids, add: b["add"] as? [String: Any] ?? [:], rect: r, scale: CGFloat((b["scale"] as? NSNumber)?.doubleValue ?? 1))
+            let add = b["add"] as? [String: Any] ?? [:]
+            // 방금 뗀 획이 판에 들어오면, 같은 화면 갱신 안에서 임시 획을 지워요 (둘이 겹쳐 잠깐 굵어 보이던 것)
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            noteInk.apply(page: i, ids: ids, add: add, rect: r, scale: CGFloat((b["scale"] as? NSNumber)?.doubleValue ?? 1))
+            if !add.isEmpty && inkOverlay.hasPending { inkOverlay.handOffOldest() }
+            CATransaction.commit()
         case "notePinch":
             noteInk.pinch((b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue })
         case "noteClear":
