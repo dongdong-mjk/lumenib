@@ -1117,10 +1117,10 @@ final class WebInkOverlay: UIView {
     var hasPending: Bool { !pending.isEmpty }
     /// 글씨 판이 새 획을 그리는 바로 그 순간(같은 화면 갱신)에 임시 획을 지워요. 둘이 겹쳐 보이는 틈이 없게
     private var handedOff = 0
-    func handOffOldest() { guard let l = pending.first, l.compositingFilter == nil else { return }; remove(pending.removeFirst()); handedOff += 1 } // 형광펜은 웹이 그려요 (inkDrawn 때 지움)
+    func handOffOldest() { guard !pending.isEmpty else { return }; remove(pending.removeFirst()); handedOff += 1 }
     /// 쓰는 동안 그린 그 그림을 그대로 넘겨줘요 (노트 판이 다시 그리지 않고 이 그림을 남겨요)
     func takeOldestPending() -> CAShapeLayer? {
-        guard let f = pending.first, f.compositingFilter == nil else { return nil } // 형광펜은 판으로 안 옮겨요
+        guard !pending.isEmpty else { return nil }
         let l = pending.removeFirst(); handedOff += 1
         return l
     }
@@ -1129,7 +1129,7 @@ final class WebInkOverlay: UIView {
 
         guard !pending.isEmpty else { return }
         let l = pending.removeFirst()
-        if immediately && l.compositingFilter == nil { remove(l); return } // 형광펜은 웹이 글씨 밑에 서서히 그리니 같이 서서히
+        if immediately { remove(l); return }
         // 형광펜은 반투명이라 웹 획과 겹치는 순간 진해졌다 옅어져서 깜빡여 보였어요. 아주 짧게 흐려지며 사라지게 해요
         if l.compositingFilter != nil { // 웹 획이 서서히 나타나는 동안(0.16초) 같이 서서히 사라져요
             CATransaction.begin()

@@ -60,8 +60,6 @@ export class Paper {
     this.readonly = !!opts.readonly;
     // 아이패드 앱: 글씨는 앱이 처음부터 끝까지 그려요 (쓸 때와 뗄 때 똑같게, 11/24). 웹은 저장·지우개·올가미 계산만
     this.nativeCanvas = !this.readonly && !!window.webkit?.messageHandlers?.lumenibCanvas; // 이 통로는 글씨 판을 가진 새 앱에만 있어요
-    // 형광펜을 웹이 글자 밑에 그리는 새 앱(11/24~)인지. 옛 빌드는 이 통로가 없어서 예전처럼 앱이 형광펜까지 그려요
-    this.webHl = this.nativeCanvas && !!window.webkit?.messageHandlers?.lumenibHlUnder;
     this.onChange = opts.onChange || (() => {});
     this.onHistory = opts.onHistory || (() => {});
     this.onLayout = opts.onLayout;
@@ -682,19 +680,17 @@ export class Paper {
   drawPage(page, rect = null) {
     if (page.released) { this.allocPage(page); page.dirty = true; }
     if (page.dirty) { page.dirty = false; this.drawBackground(page); rect = null; }
-    // 아이패드 앱: 펜 글씨는 앱이 그리고, 형광펜은 웹이 그려요. 앱 판은 웹 글자 위에 있어서 인용·본문 글자를 덮었어요 (11/24). 웹 base 캔버스는 곱하기로 글자 밑에 깔려요
-    const nat = this.nativeCanvas;
-    if (nat) this.nativeSync(page);
-    if (nat && !this.webHl) { // 옛 빌드: 형광펜도 앱이 그려요
+    if (this.nativeCanvas) {
+      this.nativeSync(page);
       if (!rect) { this.clearLive(page, false); this.clearHlLive(page); if (this.selection && this.selection.page === page.i) this.drawSelection(page); }
       return;
     }
-    const ctx = this.ctxFor(page.base, page), ictx = nat ? null : this.ctxFor(page.ink, page);
-    const cxs = nat ? [ctx] : [ctx, ictx];
+    const ctx = this.ctxFor(page.base, page), ictx = this.ctxFor(page.ink, page);
     if (rect) {
-      for (const cx of cxs) { cx.save(); cx.beginPath(); cx.rect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.clip(); cx.clearRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.__clip = rect; }
+      for (const cx of [ctx, ictx]) { cx.save(); cx.beginPath(); cx.rect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.clip(); cx.clearRect(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); cx.__clip = rect; }
     } else {
-      for (const cx of cxs) cx.clearRect(0, 0, PAGE_W, PAGE_H);
+      ctx.clearRect(0, 0, PAGE_W, PAGE_H);
+      ictx.clearRect(0, 0, PAGE_W, PAGE_H);
     }
     const strokes = this.note.pages[page.i].strokes;
     const sel = this.selection && this.selection.page === page.i ? this.selection : null;
@@ -711,8 +707,8 @@ export class Paper {
       cx.restore();
     };
     for (const s of strokes) if (s.tool === 'hl' && !(sel && sel.set.has(s)) && !this._hlFading?.has(s) && !hid?.has(s) && near(s)) draw(ctx, s);
-    if (!nat) for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s) && near(s)) draw(ictx, s);
-    if (rect) { for (const cx of cxs) { cx.restore(); cx.__clip = null; } return; } // 부분만 다시 그릴 땐 위 층(쓰는 중·선택)은 그대로 둬요
+    for (const s of strokes) if (s.tool !== 'hl' && !(sel && sel.set.has(s)) && !hid?.has(s) && near(s)) draw(ictx, s);
+    if (rect) { ctx.restore(); ictx.restore(); ctx.__clip = ictx.__clip = null; return; } // 부분만 다시 그릴 땐 위 층(쓰는 중·선택)은 그대로 둬요
     this.clearLive(page, false);
     this.clearHlLive(page);
     if (sel) this.drawSelection(page);
@@ -724,7 +720,7 @@ export class Paper {
     const h = window.webkit?.messageHandlers?.lumenibCanvas;
     if (!h) return;
     const sel = this.selection && this.selection.page === page.i ? this.selection : null, hid = this._hidden;
-    const list = this.note.pages[page.i].strokes.filter((q) => !(this.webHl && q.tool === 'hl') && !(sel && sel.set.has(q)) && !hid?.has(q)); // 형광펜은 웹이 그려요 (글자 밑에 깔리게)
+    const list = this.note.pages[page.i].strokes.filter((q) => !(sel && sel.set.has(q)) && !hid?.has(q));
     const sent = page._nsent || (page._nsent = new Set());
     const ids = [], add = {}, clip = {};
     const cover = this.citeCoverBoxes(page); // 인용 묶음 글씨는 위에 겹친 인용 자리에서 안 보여요
@@ -753,10 +749,8 @@ export class Paper {
     for (const pg of this.pages || []) {
       if (!pg) continue;
       for (const cv of [pg.base, pg.ink]) { const c = cv?.getContext('2d'); if (c) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); c.restore(); } }
-      pg.dirty = true; // 형광펜은 웹이 다시 그려요 (보이는 장부터)
       this.nativeSync(pg);
     }
-    this.flushPages();
   }
   nativeLayout() {
     if (!this.nativeCanvas || !this.pages) return;
@@ -785,7 +779,7 @@ export class Paper {
 
   // 새 획 하나만 덧그려요. 장 전체를 다시 그리면 글씨가 많을수록 무거워졌어요 (새 획은 맨 위에 그려지니 결과는 같아요)
   drawAdded(page, s) {
-    if (this.nativeCanvas && (s.tool !== 'hl' || !this.webHl)) { this.nativeSync(page); return; }
+    if (this.nativeCanvas) { this.nativeSync(page); return; }
     const sel = this.selection && this.selection.page === page.i;
     if (page.dirty || sel || this._hidden || this._hlFading?.size) return this.drawPage(page);
     drawStroke(this.ctxFor(s.tool === 'hl' ? page.base : page.ink, page), s);
@@ -1698,7 +1692,7 @@ export class Paper {
   // 형광펜은 반투명이라 네이티브 임시 획과 겹치거나 비는 순간이 티가 났어요.
   // 새 획을 따로 깐 캔버스에서 서서히 나타나게 하고(네이티브는 같은 시간 동안 서서히 사라짐), 다 나타나면 원래 캔버스로 합쳐요.
   fadeInHl(page, s, onStart) {
-    if (this.nativeCanvas && !this.webHl) { this.nativeSync(page); onStart?.(); return; } // 옛 빌드: 앱이 그린 그대로 남아요
+    if (this.nativeCanvas) { this.nativeSync(page); onStart?.(); return; } // 앱이 그린 그대로 남아요 (서서히 바꿔치기 없음)
     this._hlFading ||= new WeakSet();
     this._hlFading.add(s);
     this.drawPage(page);
