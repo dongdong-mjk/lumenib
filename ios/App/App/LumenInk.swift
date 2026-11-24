@@ -1574,6 +1574,12 @@ final class NoteInkView: UIView {
         }
     }
 
+    func resetPinch() {
+        pinchReset?.cancel(); pinchReset = nil
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        layer.sublayerTransform = CATransform3DIdentity
+        CATransaction.commit()
+    }
     /// 두 손가락 확대 중: 웹 종이와 같은 변환 [기준x, 기준y, 이동x, 이동y, 배율]
     func pinch(_ t: [Double]?) {
         if let t = t, t.count == 5 {

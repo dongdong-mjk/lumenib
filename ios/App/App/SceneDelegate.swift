@@ -74,6 +74,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     /// 확대하는 동안만 글씨 판을 웹 위 같은 자리(종이 칸 크기로 잘라서)에 띄워 두고, 끝나면 다시 종이 스크롤에 붙여요
     private func liftNoteInkForPinch() {
         guard !pinchLifted, let web = webView, let sv = noteInk.superview as? UIScrollView else { return }
+        landScroll = sv
         let f = sv.convert(sv.bounds, to: web)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         pinchHost.frame = f
@@ -114,8 +115,42 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         // 판을 붙이기 전에 받은 버튼 자리도 바로 비워요 (노트를 막 열었을 때 버튼 위로 글씨가 겹쳐 보이던 것)
         noteInk.setUIHoles(inkConfig.ui.map { (noteInk.convert($0.0, from: web), $0.1) })
     }
+    // 손을 뗀 뒤: 웹이 새 배율로 종이를 다시 깔고 스크롤 자리를 옮기는 건 웹 화면이 실제로 바뀌는 순간(조금 뒤)에 보여요.
+    // 앱이 먼저 바꾸면 한 번 깜빡이고, 축소 땐 글씨가 종이 밖에 잠깐 보였어요 (11/24).
+    // 그래서 그 사이 온 소식은 모아 두었다가, 종이 스크롤의 크기·자리가 실제로 바뀌는 그 순간에 한꺼번에 반영해요
+    private var landing = false
+    private var landQueue: [[String: Any]] = []
+    private var landObs: [NSKeyValueObservation] = []
+    private var landTimer: DispatchWorkItem?
+    private weak var landScroll: UIScrollView?
+    private func beginLanding() {
+        landing = true; landQueue = []
+        landObs = []
+        if let sv = landScroll {
+            landObs = [sv.observe(\.contentSize, options: [.new, .old]) { [weak self] _, c in if c.newValue != c.oldValue { self?.finishLanding() } },
+                       sv.observe(\.contentOffset, options: [.new, .old]) { [weak self] _, c in if c.newValue != c.oldValue { self?.finishLanding() } }]
+        }
+        landTimer?.cancel()
+        let w = DispatchWorkItem { [weak self] in self?.finishLanding() } // 배율이 그대로라 바뀔 게 없을 때
+        landTimer = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: w)
+    }
+    private func finishLanding() {
+        guard landing else { return }
+        landing = false
+        landTimer?.cancel(); landTimer = nil
+        let obs = landObs; landObs = []
+        DispatchQueue.main.async { obs.forEach { $0.invalidate() } }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        noteInk.resetPinch()
+        let q = landQueue; landQueue = []
+        for m in q { noteCanvasMessage(m) }
+        landNoteInk()
+        CATransaction.commit()
+    }
     private func noteCanvasMessage(_ b: [String: Any]) {
         let action = b["action"] as? String ?? ""
+        if landing && action != "notePinch" && action != "noteClear" { landQueue.append(b); return }
         func rect(_ a: Any?) -> CGRect? {
             guard let a = a as? [Any], a.count >= 4 else { return nil }
             let v = a.map { ($0 as? NSNumber)?.doubleValue ?? 0 }
@@ -159,11 +194,13 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             noteInk.hole(page: i, box: n?.count == 4 ? CGRect(x: n![0], y: n![1], width: n![2] - n![0], height: n![3] - n![1]) : nil)
         case "notePinch":
             let t = (b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
-            if t != nil { liftNoteInkForPinch() }
-            noteInk.pinch(t)
-            // 보통은 곧 오는 noteLayout이 다시 붙여요. 안 오면 잠시 뒤 붙여요
-            if t == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.landNoteInk() } }
+            if let t = t {
+                if landing { finishLanding() }
+                liftNoteInkForPinch()
+                noteInk.pinch(t)
+            } else { beginLanding() } // 앱 글씨는 손 뗀 순간 모습 그대로 두었다가 웹과 같이 바꿔요
         case "noteClear":
+            landing = false; landQueue = []; landObs = []; landTimer?.cancel()
             noteInk.clearAll(); noteInk.removeFromSuperview(); noteInkOn = false; pinchLifted = false; pinchHost.isHidden = true
         default: break
         }
