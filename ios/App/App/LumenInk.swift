@@ -1300,7 +1300,9 @@ final class NoteInkView: UIView {
         for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil }
         pageIds[i] = ids
         guard let hl = hlLayer[i], let pen = penLayer[i] else { CATransaction.commit(); return }
-        var hlIdx: UInt32 = 0, penIdx: UInt32 = 0
+        // 순서대로 줄 세운 뒤 다르면 한 번에 바꿔 끼워요 (지우개처럼 자주 바뀔 때 글씨가 많아도 가볍게, 11/24)
+        var hlList: [CALayer] = [], penList: [CALayer] = []
+        hlList.reserveCapacity(ids.count); penList.reserveCapacity(ids.count)
         for id in ids {
             guard let d = data[id] else { continue }
             let l: CAShapeLayer
@@ -1308,11 +1310,11 @@ final class NoteInkView: UIView {
                 layers[id]?.removeFromSuperlayer()
                 l = build(d); layers[id] = l; layerScale[id] = scale
             }
-            let parent = d.tool == "hl" ? hl : pen
-            let idx = d.tool == "hl" ? hlIdx : penIdx
-            if l.superlayer !== parent || parent.sublayers?.firstIndex(of: l) != Int(idx) { parent.insertSublayer(l, at: idx) }
-            if d.tool == "hl" { hlIdx += 1 } else { penIdx += 1 }
+            if d.tool == "hl" { hlList.append(l) } else { penList.append(l) }
         }
+        func same(_ a: [CALayer]?, _ b: [CALayer]) -> Bool { guard let a = a, a.count == b.count else { return b.isEmpty && (a?.isEmpty ?? true) }; for j in 0..<a.count where a[j] !== b[j] { return false }; return true }
+        if !same(hl.sublayers, hlList) { hl.sublayers = hlList }
+        if !same(pen.sublayers, penList) { pen.sublayers = penList }
         CATransaction.commit()
     }
 
