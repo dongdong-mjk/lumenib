@@ -67,8 +67,35 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     private let noteInk = NoteInkView()
     private var noteInkOn = false
     /// 웹 종이 스크롤(화면 좌표 area)과 같은 자리의 스크롤 뷰를 찾아 글씨 판을 붙여요. 종이와 같이 스크롤돼요
+    private var noteArea: CGRect = .zero
+    private let pinchHost: UIView = { let v = UIView(); v.clipsToBounds = true; v.isUserInteractionEnabled = false; v.backgroundColor = .clear; return v }()
+    private var pinchLifted = false
+    /// 두 손가락 확대 동안: 웹은 종이에 확대 효과를 걸면서 안쪽 층을 새로 짜요. 그 사이 종이 스크롤 안에 붙은 글씨 판이 가려져 사라졌어요 (11/24).
+    /// 확대하는 동안만 글씨 판을 웹 위 같은 자리(종이 칸 크기로 잘라서)에 띄워 두고, 끝나면 다시 종이 스크롤에 붙여요
+    private func liftNoteInkForPinch() {
+        guard !pinchLifted, let web = webView, let sv = noteInk.superview as? UIScrollView else { return }
+        let f = sv.convert(sv.bounds, to: web)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        pinchHost.frame = f
+        if pinchHost.superview !== web { web.addSubview(pinchHost) }
+        web.bringSubviewToFront(pinchHost)
+        let size = noteInk.frame.size
+        noteInk.removeFromSuperview()
+        pinchHost.addSubview(noteInk)
+        noteInk.frame = CGRect(origin: CGPoint(x: -sv.contentOffset.x, y: -sv.contentOffset.y), size: size) // 판 좌표 = 종이 스크롤 안쪽 좌표 그대로
+        pinchHost.isHidden = false
+        CATransaction.commit()
+        pinchLifted = true
+    }
+    private func landNoteInk() {
+        guard pinchLifted else { return }
+        pinchLifted = false
+        attachNoteInk(area: noteArea.isEmpty ? inkConfig.area : noteArea)
+        pinchHost.isHidden = true
+    }
     private func attachNoteInk(area: CGRect) {
         guard let web = webView, !area.isEmpty else { return }
+        noteArea = area
         var best: UIScrollView?
         func walk(_ v: UIView) {
             if let sv = v as? UIScrollView, sv !== web.scrollView, best == nil {
@@ -96,7 +123,11 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         }
         switch action {
         case "noteLayout":
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            pinchLifted = false
             if let area = rect(b["area"]) { attachNoteInk(area: area) }
+            pinchHost.isHidden = true
+            CATransaction.commit()
             let pages: [(Int, CGRect)] = (b["pages"] as? [[Any]] ?? []).compactMap { a in
                 guard a.count >= 5, let i = (a[0] as? NSNumber)?.intValue, let r = rect(Array(a[1...])) else { return nil }
                 return (i, r)
@@ -127,9 +158,13 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             let n = (b["box"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
             noteInk.hole(page: i, box: n?.count == 4 ? CGRect(x: n![0], y: n![1], width: n![2] - n![0], height: n![3] - n![1]) : nil)
         case "notePinch":
-            noteInk.pinch((b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue })
+            let t = (b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
+            if t != nil { liftNoteInkForPinch() }
+            noteInk.pinch(t)
+            // 보통은 곧 오는 noteLayout이 다시 붙여요. 안 오면 잠시 뒤 붙여요
+            if t == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.landNoteInk() } }
         case "noteClear":
-            noteInk.clearAll(); noteInk.removeFromSuperview(); noteInkOn = false
+            noteInk.clearAll(); noteInk.removeFromSuperview(); noteInkOn = false; pinchLifted = false; pinchHost.isHidden = true
         default: break
         }
     }
