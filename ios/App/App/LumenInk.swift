@@ -1574,6 +1574,8 @@ final class NoteInkView: UIView {
         }
     }
 
+    /// 모든 장을 합친 자리 (판 좌표 = 종이 스크롤 안쪽 좌표)
+    var pagesBox: CGRect { pageLayer.values.reduce(CGRect.null) { $0.union($1.frame) } }
     func resetPinch() {
         pinchReset?.cancel(); pinchReset = nil
         CATransaction.begin(); CATransaction.setDisableActions(true)
