@@ -319,6 +319,7 @@ export class Paper {
   // 끄는 인용 자리만큼 그 장의 글씨 판(펜·형광펜)에 구멍을 내요. 옮기는 인용 글씨는 따로 그린 판이라 그대로 보여요
   citeHole(d, tp, box) {
     if (d.holePage && d.holePage !== tp) { for (const cv of [d.holePage.ink, d.holePage.base]) cv.style.clipPath = ''; d.holePage = null; }
+    if (this.nativeCanvas) window.webkit.messageHandlers.lumenibCanvas.postMessage(tp ? { action: 'noteHole', i: tp.i, box } : { action: 'noteHole' }); // 앱이 그리는 글씨 판에도 같은 구멍
     if (!tp) return;
     const k = this.scale, W = tp.ink.offsetWidth, H = tp.ink.offsetHeight;
     const [x0, y0, x1, y1] = box.map((v) => v * k);
@@ -720,19 +721,35 @@ export class Paper {
     const sel = this.selection && this.selection.page === page.i ? this.selection : null, hid = this._hidden;
     const list = this.note.pages[page.i].strokes.filter((q) => !(sel && sel.set.has(q)) && !hid?.has(q));
     const sent = page._nsent || (page._nsent = new Set());
-    const ids = [], add = {};
+    const ids = [], add = {}, clip = {};
+    const cover = this.citeCoverBoxes(page); // 인용 묶음 글씨는 위에 겹친 인용 자리에서 안 보여요
     for (const q of [...list.filter((x) => x.tool === 'hl'), ...list.filter((x) => x.tool !== 'hl')]) {
       const id = nativeId(q);
       ids.push(id);
-      if (!sent.has(id)) add[id] = { tool: q.tool, color: q.color, w: q.w, a: q.a, st: q.st, sh: q.sh ? 1 : 0, ps: q.ps, po: q.po, sv: q.sv, pts: q.pts };
+      const cb = q.cg && cover.get(q.cg);
+      if (cb) clip[id] = cb;
+      // 같은 획인데 자리·색·굵기가 바뀌었으면(제자리에서 고친 경우) 다시 보내요
+      const sig = q.pts.length + ',' + q.pts[0] + ',' + q.pts[1] + ',' + q.pts[q.pts.length - 2] + ',' + q.color + ',' + q.w;
+      const fresh = _nsig.get(q) !== sig;
+      _nsig.set(q, sig);
+      if (!sent.has(id) || fresh) add[id] = { tool: q.tool, color: q.color, w: q.w, a: q.a, st: q.st, sh: q.sh ? 1 : 0, ps: q.ps, po: q.po, sv: q.sv, pts: q.pts };
     }
     page._nsent = new Set(ids);
-    h.postMessage({ action: 'notePage', i: page.i, ids, add, rect: this.nativeRect(page), scale: this.scale });
+    h.postMessage({ action: 'notePage', i: page.i, ids, add, clip, rect: this.nativeRect(page), scale: this.scale });
   }
   // 종이 자리 (종이 스크롤 안쪽 좌표)
   nativeRect(page) {
     const pr = page.el.getBoundingClientRect(), sr = this.scrollEl.getBoundingClientRect();
     return [pr.left - sr.left + this.scrollEl.scrollLeft - this.scrollEl.clientLeft, pr.top - sr.top + this.scrollEl.scrollTop - this.scrollEl.clientTop, pr.width, pr.height];
+  }
+  // PDF처럼 웹이 잠깐 직접 그린 뒤: 글씨 캔버스를 비우고 다시 앱이 그리게 해요 (겹쳐 진해지지 않게)
+  restoreNativeCanvas() {
+    this.nativeCanvas = true;
+    for (const pg of this.pages || []) {
+      if (!pg) continue;
+      for (const cv of [pg.base, pg.ink]) { const c = cv?.getContext('2d'); if (c) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); c.restore(); } }
+      this.nativeSync(pg);
+    }
   }
   nativeLayout() {
     if (!this.nativeCanvas || !this.pages) return;
@@ -1845,6 +1862,7 @@ const shapeWidth = (w, o) => w * 1.25 * o.scale * (1 - (o.thinning || 0) * 0.5);
 const _penPath = new WeakMap();
 // 앱 글씨 판에서 획을 알아보는 번호 (획 객체마다 하나, 저장되지 않아요)
 const _nid = new WeakMap(); let _nidSeq = 0;
+const _nsig = new WeakMap(); // 앱에 보낸 획의 모양 요약
 const nativeId = (s) => { let id = _nid.get(s); if (!id) { id = ++_nidSeq; _nid.set(s, id); } return id; };
 const citeRs = new WeakMap();
 const citeW = (c) => c.w || PAGE_W - 40; // 인용 상자 너비 (종이 단위, 기본은 가로 전체)

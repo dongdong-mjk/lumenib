@@ -107,9 +107,21 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             CATransaction.begin(); CATransaction.setDisableActions(true)
             // 방금 뗀 획이면 쓰는 동안 그린 그림 자체를 판으로 옮겨요 (교체 없음)
             let adopt = add.count == 1 && inkOverlay.hasPending ? inkOverlay.takeOldestPending() : nil
-            noteInk.apply(page: i, ids: ids, add: add, rect: r, scale: CGFloat((b["scale"] as? NSNumber)?.doubleValue ?? 1), adopt: adopt, adoptFrom: inkOverlay)
+            var clip: [Int: [CGRect]] = [:]
+            for (k, v) in b["clip"] as? [String: Any] ?? [:] {
+                guard let id = Int(k), let arr = v as? [[Any]] else { continue }
+                clip[id] = arr.compactMap { a in
+                    let n = a.compactMap { ($0 as? NSNumber)?.doubleValue }
+                    return n.count == 4 ? CGRect(x: n[0], y: n[1], width: n[2] - n[0], height: n[3] - n[1]) : nil
+                }
+            }
+            noteInk.apply(page: i, ids: ids, add: add, rect: r, scale: CGFloat((b["scale"] as? NSNumber)?.doubleValue ?? 1), clip: clip, adopt: adopt, adoptFrom: inkOverlay)
             if adopt == nil && !add.isEmpty && inkOverlay.hasPending { inkOverlay.handOffOldest() }
             CATransaction.commit()
+        case "noteHole":
+            guard let i = (b["i"] as? NSNumber)?.intValue else { noteInk.hole(page: -1, box: nil); return }
+            let n = (b["box"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
+            noteInk.hole(page: i, box: n?.count == 4 ? CGRect(x: n![0], y: n![1], width: n![2] - n![0], height: n![3] - n![1]) : nil)
         case "notePinch":
             noteInk.pinch((b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue })
         case "noteClear":

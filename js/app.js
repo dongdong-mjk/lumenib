@@ -1116,6 +1116,9 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     const p = ns.paper;
     if (!p || pdfBusy) return;
     pdfBusy = true;
+    // 앱이 글씨를 그리는 중이면 종이 캔버스에는 글씨가 없어요. 내보내는 동안만 웹이 직접 그려요 (11/24: PDF에 손글씨가 빠지던 것)
+    const nat = p.nativeCanvas;
+    if (nat) { p.nativeCanvas = false; for (const pg of p.pages) if (pg) pg.dirty = true; }
     track('note_pdf_export');
     toast('PDF 만드는 중…', 60000);
     try {
@@ -1160,6 +1163,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
       toast('PDF를 만들지 못했어요. 인터넷 연결을 확인해 주세요');
     } finally {
       pdfBusy = false;
+      if (nat) p.restoreNativeCanvas();
     }
   }
 

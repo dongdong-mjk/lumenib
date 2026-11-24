@@ -1265,6 +1265,8 @@ final class NoteInkView: UIView {
     private(set) var scale: CGFloat = 1
     private var layerScale: [Int: CGFloat] = [:]        // 번호 → 그 층을 만든 배율
     private var boxes: [Int: CGRect] = [:]              // 번호 → 획 상자 (종이 단위, 지우개 검사용)
+    private var clipOf: [Int: [CGRect]] = [:]           // 번호 → 이 획을 덮는 위 인용 상자들 (종이 단위). 그 자리에서는 안 보여요
+    private var clipScale: [Int: CGFloat] = [:]
     private var erased: Set<Int> = []                   // 지우개가 닿아 바로 숨긴 획
     private let ring = CAShapeLayer()                   // 지우개 동그라미
     private var unhideWork: DispatchWorkItem?
@@ -1405,6 +1407,21 @@ final class NoteInkView: UIView {
         return false
     }
 
+    /// 끄는 인용 자리만큼 그 장의 글씨에 구멍 (웹 citeHole 과 같음). box 없으면 구멍 없앰
+    func hole(page i: Int, box: CGRect?) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        for (j, pl) in pageLayer where j != i || box == nil { pl.mask = nil }
+        guard let b = box, let pl = pageLayer[i] else { return }
+        let m = (pl.mask as? CAShapeLayer) ?? CAShapeLayer()
+        let path = CGMutablePath()
+        path.addRect(pl.bounds)
+        path.addRect(CGRect(x: b.minX * scale, y: b.minY * scale, width: b.width * scale, height: b.height * scale))
+        m.path = path; m.fillRule = .evenOdd; m.fillColor = UIColor.black.cgColor
+        m.frame = pl.bounds
+        pl.mask = m
+    }
+
     func clearAll() {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         pageLayer.values.forEach { $0.removeFromSuperlayer() }
@@ -1429,7 +1446,7 @@ final class NoteInkView: UIView {
     }
 
     /// 웹이 알려 준 이 장의 획 (순서 = 그리는 순서, 형광펜 먼저)
-    func apply(page i: Int, ids: [Int], add: [String: Any], rect: CGRect, scale s: CGFloat, adopt: CAShapeLayer? = nil, adoptFrom: UIView? = nil) {
+    func apply(page i: Int, ids: [Int], add: [String: Any], rect: CGRect, scale s: CGFloat, clip: [Int: [CGRect]] = [:], adopt: CAShapeLayer? = nil, adoptFrom: UIView? = nil) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         scale = s
         setPage(i, rect: rect)
@@ -1445,7 +1462,7 @@ final class NoteInkView: UIView {
             layers[id] = l; layerScale[id] = s
         }
         let keep = Set(ids)
-        for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil; boxes[old] = nil; erased.remove(old) }
+        for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil; boxes[old] = nil; erased.remove(old); clipOf[old] = nil; clipScale[old] = nil }
         pageIds[i] = ids
         guard let hl = hlLayer[i], let pen = penLayer[i] else { CATransaction.commit(); return }
         // 순서대로 줄 세운 뒤 다르면 한 번에 바꿔 끼워요 (지우개처럼 자주 바뀔 때 글씨가 많아도 가볍게, 11/24)
@@ -1458,6 +1475,20 @@ final class NoteInkView: UIView {
                 layers[id]?.removeFromSuperlayer()
                 l = build(d); layers[id] = l; layerScale[id] = scale
                 if erased.contains(id) { l.isHidden = true }
+            }
+            // 인용 묶음 글씨: 그 인용을 덮은 다른 인용 자리는 비워요 (웹 citeCoverBoxes 와 같음, 11/24)
+            let want = clip[id] ?? []
+            if want != (clipOf[id] ?? []) || (l.mask == nil) != want.isEmpty || (!want.isEmpty && clipScale[id] != scale) {
+                if want.isEmpty { l.mask = nil } else {
+                    let m = CAShapeLayer(), path = CGMutablePath()
+                    path.addRect(CGRect(x: -50, y: -50, width: rect.width + 100, height: rect.height + 100))
+                    for b in want { path.addRect(CGRect(x: b.minX * scale, y: b.minY * scale, width: b.width * scale, height: b.height * scale)) }
+                    m.path = path; m.fillRule = .evenOdd; m.fillColor = UIColor.black.cgColor
+                    l.frame = CGRect(origin: .zero, size: rect.size)
+                    m.frame = l.bounds
+                    l.mask = m
+                }
+                clipOf[id] = want.isEmpty ? nil : want; clipScale[id] = scale
             }
             if d.tool == "hl" { hlList.append(l) } else { penList.append(l) }
         }
