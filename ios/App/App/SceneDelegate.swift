@@ -148,7 +148,18 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     }
     private func noteCanvasMessage(_ b: [String: Any]) {
         let action = b["action"] as? String ?? ""
-        if landing && action != "notePinch" && action != "noteClear" { landQueue.append(b); return }
+        if landing && action != "notePinch" && action != "noteClear" {
+            landQueue.append(b)
+            // 배율이 그대로면(예: 1배에서 더 줄이려 할 때) 종이 크기·스크롤이 안 바뀌어 기다릴 신호가 없어요.
+            // 웹은 손 뗀 뒤 한두 화면 갱신 안에 원래 자리로 돌아가니 그만큼만 기다렸다 같이 돌아가요 (종이 밖에 글씨가 잠깐 남던 것, 11/24 영상)
+            if action == "noteLayout", let sc = (b["scale"] as? NSNumber)?.doubleValue, abs(CGFloat(sc) - noteInk.scale) < 0.0001 {
+                landTimer?.cancel()
+                let w = DispatchWorkItem { [weak self] in self?.finishLanding() }
+                landTimer = w
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.035, execute: w)
+            }
+            return
+        }
         func rect(_ a: Any?) -> CGRect? {
             guard let a = a as? [Any], a.count >= 4 else { return nil }
             let v = a.map { ($0 as? NSNumber)?.doubleValue ?? 0 }
