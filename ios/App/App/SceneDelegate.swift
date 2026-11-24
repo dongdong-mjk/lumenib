@@ -53,6 +53,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibNative")
         // 글씨 판 통로: 이게 있으면 웹은 다 쓴 글씨를 직접 그리지 않고 앱에 맡겨요 (11/24)
         webView?.configuration.userContentController.add(self, name: "lumenibCanvas")
+        // 형광펜은 웹이 글자 밑에 그려요 (인용·본문 글자를 덮지 않게, 11/24). 이 통로가 있는 앱만
+        webView?.configuration.userContentController.add(self, name: "lumenibHlUnder")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
