@@ -925,6 +925,18 @@ export async function run() {
     return !$('.home [data-act="write-note"]') || '홈에도 펜 버튼이 보여요';
   });
 
+  await check('본문 고르기 처음: 권 목록에 표시(테두리) 없음 · 권을 고르면 표시', async () => {
+    const W = wait;
+    window.__lumenibGo?.('pick'); await W(800);
+    if (!$('.book-btn')) return '처음에 권 목록이 안 보여요';
+    if ($('.book-btn.cur')) return '처음인데 권에 표시가 있어요: ' + $('.book-btn.cur').textContent;
+    $$('.book-btn').find((b) => b.textContent.trim() === '출애굽기')?.click(); await W(500);
+    $('.bp-head [data-act="books"], .bp-book-dd, .bp-dd')?.click(); await W(400);
+    const cur = $('.book-btn.cur')?.textContent.trim();
+    window.__lumenibGo?.('home'); await W(300);
+    return !cur || cur === '출애굽기' || '고른 권 표시가 달라요 ' + cur;
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

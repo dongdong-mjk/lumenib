@@ -19,6 +19,8 @@ export class BiblePanel {
     this.view = opts.start ? 'verses' : 'books';
     this.sort = 'toc';
     this.book = opts.start?.book || 1;
+    // 처음 들어와 아직 권을 안 골랐으면 권 목록에 표시(테두리)를 안 해요 (11/26 민정님). 권·구절로 이동하면 표시
+    this.picked = !!opts.start;
     this.ch = opts.start?.ch || 1;
     this.sel = null;
     this.query = '';
@@ -27,7 +29,7 @@ export class BiblePanel {
   }
 
   setLocation(book, ch, sel = null, scrollTo) {
-    this.book = book; this.ch = ch; this.view = 'verses'; this.sel = sel;
+    this.book = book; this.ch = ch; this.view = 'verses'; this.sel = sel; this.picked = true;
     this.render({ scrollTo: scrollTo || sel?.from });
     this.o.onChange?.();
   }
@@ -104,13 +106,13 @@ export class BiblePanel {
     let grid;
     if (this.sort === 'toc') {
       grid = ['old', 'new'].map((t) => `<div class="group-label">${t === 'old' ? '구약' : '신약'}</div>
-        <div class="book-grid">${all.filter((b) => b.testament === t).map((b) => `<button class="book-btn${b.id === this.book ? ' cur' : ''}" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
+        <div class="book-grid">${all.filter((b) => b.testament === t).map((b) => `<button class="book-btn${this.picked && b.id === this.book ? ' cur' : ''}" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
     } else {
       const sorted = [...all].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
       const groups = {};
       sorted.forEach((b) => (groups[firstCho(b.name)] ||= []).push(b));
       grid = Object.entries(groups).map(([k, list]) => `<div class="group-label">${k}</div>
-        <div class="book-grid">${list.map((b) => `<button class="book-btn${b.id === this.book ? ' cur' : ''}" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
+        <div class="book-grid">${list.map((b) => `<button class="book-btn${this.picked && b.id === this.book ? ' cur' : ''}" data-book="${b.id}">${esc(b.name)}</button>`).join('')}</div>`).join('');
     }
     body.innerHTML = `<div class="recent">최근 ${recent}</div>
       <div class="seg"><button data-sort="toc" class="${this.sort === 'toc' ? 'on' : ''}">목차순</button><button data-sort="abc" class="${this.sort === 'abc' ? 'on' : ''}">가나다순</button></div>
@@ -208,7 +210,7 @@ export class BiblePanel {
     el.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { this.view = b.dataset.go; this.query = ''; this.render({ scrollTo: this.sel?.from }); }));
     el.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => { this.sort = b.dataset.sort; this.render(); }));
     el.querySelectorAll('[data-book]').forEach((b) => b.addEventListener('click', () => {
-      this.book = +b.dataset.book; this.sel = null; pushRecentBook(this.book);
+      this.book = +b.dataset.book; this.sel = null; pushRecentBook(this.book); this.picked = true;
       if (B.chapterCount(this.book) === 1) { this.ch = 1; this.view = 'verses'; } else this.view = 'chapters';
       this.render(); this.o.onChange?.();
     }));
@@ -217,7 +219,7 @@ export class BiblePanel {
     }));
     el.querySelectorAll('[data-jump]').forEach((b) => b.addEventListener('click', () => {
       const [bk, ch, v] = b.dataset.jump.split('|').map((x) => +x || null);
-      this.book = bk; this.query = ''; pushRecentBook(bk);
+      this.book = bk; this.query = ''; pushRecentBook(bk); this.picked = true;
       if (!ch) { this.view = B.chapterCount(bk) === 1 ? 'verses' : 'chapters'; this.ch = 1; this.render(); this.o.onChange?.(); return; }
       this.setLocation(bk, ch, v ? { from: v, to: v } : null, v);
     }));
