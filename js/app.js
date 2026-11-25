@@ -274,18 +274,23 @@ function NotesScreen() {
     </button>`;
   }
 
+  function listHTML() {
+    const all = S.allNotes();
+    const gs = groups(all.filter(matches));
+    const emptyMsg = all.length ? `'${esc(st.q.trim())}'에 맞는 노트가 없어요` : '설교를 기록하면 여기에 최근 노트가 보여요';
+    return gs.length ? gs.map((g) => `<section class="nl-group">
+        <h3 class="nl-gh">${esc(g.label)}<span>${g.notes.length}</span></h3>
+        <div class="nl-grid">${g.notes.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`;
+  }
   function render() {
     const all = S.allNotes();
-    const shown = all.filter(matches);
-    const gs = groups(shown);
     const sorts = SORTS[st.view], cur = sorts.find((x) => x[0] === st.sort[st.view]) || sorts[0];
     const n = st.sel.size;
-    const emptyMsg = all.length ? `'${esc(st.q.trim())}'에 맞는 노트가 없어요` : '설교를 기록하면 여기에 최근 노트가 보여요';
     app.innerHTML = `<div class="home notes"><div class="nl-wrap">
       ${tabBar('notes')}
       <div class="nl-head">
         ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>
-        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"></label>`}
+        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.q ? '' : 'hidden'}>${icon.x}</button></label>`}
       </div>
       <div class="nl-controls">
         <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist">
@@ -302,9 +307,7 @@ function NotesScreen() {
           <button class="nl-btn outline" data-act="select" ${all.length ? '' : 'disabled'}>선택</button>
         </div>`}
       </div>
-      <div class="nl-list">${gs.length ? gs.map((g) => `<section class="nl-group">
-        <h3 class="nl-gh">${esc(g.label)}<span>${g.notes.length}</span></h3>
-        <div class="nl-grid">${g.notes.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`}</div>
+      <div class="nl-list">${listHTML()}</div>
     </div></div>`;
     bind();
     slideTabPill();
@@ -314,14 +317,18 @@ function NotesScreen() {
     app.querySelector('[data-act="home"]').addEventListener('click', () => go('home'));
     app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
     app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
+    // 검색바: 본문 고르기 화면(성경 패널) 검색바와 같은 상태 — 포커스(테두리 진하게) · 입력 중(값 + 지우기 ×) · 입력 완료
+    // 입력할 때는 목록만 다시 그려서 키보드·커서가 그대로예요
     const input = app.querySelector('.nl-search input');
     if (input) {
+      const clear = app.querySelector('.nl-search .bp-search-clear');
       input.addEventListener('input', () => {
-        st.q = input.value;
-        const pos = input.selectionStart;
-        render();
-        const i2 = app.querySelector('.nl-search input'); i2.focus(); try { i2.setSelectionRange(pos, pos); } catch {}
+        st.q = input.value; clear.hidden = !input.value;
+        app.querySelector('.nl-list').innerHTML = listHTML(); bindCards();
       });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); }); // 입력 완료: 키보드 닫힘
+      clear.addEventListener('pointerdown', (e) => e.preventDefault()); // 키보드 포커스 유지
+      clear.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); });
     }
     app.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       if (st.selecting || st.view === b.dataset.view) return;
@@ -346,6 +353,9 @@ function NotesScreen() {
       st.selecting = false; st.sel.clear(); render();
       toastAction(`노트 ${ids.length}개를 삭제했어요`, '되돌리기', () => { S.restoreNotes(snap); track('notes_delete_undo'); if (curScreen === 'notes') render(); });
     });
+    bindCards();
+  }
+  function bindCards() {
     app.querySelectorAll('.nl-card').forEach((c) => c.addEventListener('click', () => {
       const id = c.dataset.id;
       if (st.selecting) { if (st.sel.has(id)) st.sel.delete(id); else st.sel.add(id); render(); return; }

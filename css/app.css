@@ -701,7 +701,6 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .notes h1.nl-title { margin: 0; padding: 0; height: 44px; font-size: 34px; line-height: 44px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
 .nl-count { font-size: 20px; line-height: 28px; font-weight: 400; color: var(--text-tertiary); }
 .nl-search { width: 360px; height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--bg-input); border: 1px solid var(--border-panel); border-radius: 12px; }
-.nl-search:focus-within { border-color: var(--border-strong); }
 .nl-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; padding: 0; font: inherit; font-size: 16px; line-height: 24px; color: var(--text-primary); letter-spacing: var(--ls); -webkit-appearance: none; appearance: none; }
 .nl-search input::placeholder { color: var(--text-tertiary); }
 .nl-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
@@ -771,3 +770,6 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .tab-pill { transition-property: transform, width, background-color, box-shadow, scale; }
 .nl-ico.nl-notefill { --m: url(../icons/notes/note-fill.svg); width: 18px; height: 18px; }
 @media (prefers-reduced-motion: reduce) { .tab-pill { transition: none; } }
+/* 노트 목록 검색바 상태: 성경 패널 검색바(피그마 Search Bar)와 같게 — 포커스·입력 중 테두리 text/secondary, 값이 있으면 지우기 × */
+.nl-search:focus-within { border-color: var(--text-secondary); }
+.nl-search .bp-search-clear { margin-right: -6px; }
