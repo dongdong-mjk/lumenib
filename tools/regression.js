@@ -62,7 +62,8 @@ export async function run() {
   const lastPaper = S.settings.lastPaper;
   // 0. 점검용 노트 만들기: 홈 → 본문 고르기 → 본문 없이 먼저 쓰기
   location.hash = '';
-  const home = $$('button').find((b) => b.textContent.trim() === '홈'); home?.click(); await wait(600);
+  if (window.__lumenibGo) window.__lumenibGo('home'); else $$('button').find((b) => b.textContent.trim() === '홈')?.click();
+  await wait(600);
   await check('본문 고르기 화면: 선택 취소(×) 버튼', async () => {
     $$('button').find((b) => b.textContent.includes('본문 고르기'))?.click(); await wait(800);
     $$('button').find((b) => b.textContent.trim() === '창세기')?.click(); await wait(400);
@@ -853,7 +854,7 @@ export async function run() {
     };
     $('.bt-v[data-n="16"]').click(); await W(80); $('[data-a="copy"]').click(); await W(150);
     document.execCommand = ex;
-    if (!got || !/독생자/.test(got) || !/요한복음 3:16/.test(got)) return '복사한 글이 클립보드에 안 들어가요 ' + got;
+    if (!got || !/^요한복음 3:16\n\n16\. 하나님이 세상을/.test(got)) return '복사한 글이 "출처, 빈 줄, 16. 말씀" 모양이 아니에요 ' + got;
     // 다 읽은 뒤에도 다음 버튼은 글자 버튼
     S.setRead(43, 3, false); window.__lumenibGo?.('bible', { book: 43, ch: 3 }); await W(700);
     $('[data-a="read"]').click(); await W(200);
@@ -863,7 +864,11 @@ export async function run() {
     if (!nextOk) return '다 읽은 뒤 다음 버튼 모양이 바뀌어요';
     // 노트 쓰기 → 본문 고르기에서 뒤로 → 성경, 노트까지 가서 뒤로 → 성경
     window.__lumenibGo?.('bible', { book: 43, ch: 3 }); await W(700);
+    const bibleTop = Math.round($('.bt-left').getBoundingClientRect().top);
     $('.bt-v[data-n="16"]').click(); await W(80); $('[data-a="write"]').click(); await W(700);
+    if ($('.pill-back')?.textContent.trim() !== '성경') return '성경에서 온 본문 고르기의 뒤로 버튼 이름이 "성경"이 아니에요';
+    const pickTop = Math.round($('.bible-panel').getBoundingClientRect().top);
+    if (pickTop !== bibleTop) return `본문 고르기 패널 위치(${pickTop})가 성경 탭(${bibleTop})과 달라요`;
     $('[data-act="home"]').click(); await W(700);
     if (!$('.bible-tab')) return '본문 고르기에서 뒤로 가면 성경으로 안 가요';
     $('.bt-v[data-n="16"]').click(); await W(80); $('[data-a="write"]').click(); await W(700);

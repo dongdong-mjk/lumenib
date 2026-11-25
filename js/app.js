@@ -513,8 +513,9 @@ function BibleScreen(arg = {}) {
         <div class="bt-hacts"><button data-a="bm">${marked ? '북마크 해제' : '북마크'}</button><button data-a="copy">복사</button><button data-a="write">노트 쓰기</button><button class="x" data-a="x" aria-label="선택 취소">${bIco('close')}</button></div>`;
       headEl.querySelector('[data-a="x"]').addEventListener('click', () => setSel(null));
       headEl.querySelector('[data-a="copy"]').addEventListener('click', async () => {
-        const text = verses.filter((v) => v.n >= p.from && v.n <= p.to).map((v) => v.t).join(' ');
-        const ok = await copyText(`${text}\n(${ref(p)})`);
+        // 출처 먼저, 한 줄 띄우고 절마다 "1. 말씀" (11/26 민정님)
+        const lines = verses.filter((v) => v.n >= p.from && v.n <= p.to).map((v) => `${v.n}. ${v.t}`).join('\n');
+        const ok = await copyText(`${ref(p)}\n\n${lines}`);
         track(ok ? 'bible_copy' : 'bible_copy_fail'); setSel(null);
         const r = ref(p, true); rtoast(ok ? `${r}${objJosa(r)} 복사했어요` : '복사하지 못했어요. 다시 눌러 주세요');
       });
@@ -916,7 +917,7 @@ function Pick(arg = {}) {
   // 성경 탭 "노트 쓰기": 고른 구절을 본문으로 정해서 열어요 (정책 14)
   const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: arg.passage ? [arg.passage] : [], paper: PAPERS.some((p) => p[0] === S.settings.lastPaper) ? S.settings.lastPaper : 'lined' }; // 마지막에 고른 종이로 시작
   app.innerHTML = `<div class="screen">
-    <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${icon.arrowLeft.replace('width="24" height="24"', 'width="18" height="18"')} 홈</button></div>
+    <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${bIco('cl')}${arg.passage ? '성경' : '홈'}</button></div>
       <div class="title">오늘 설교 기록하기</div><div class="right"></div></header>
     <div class="workspace">
       <section class="panel bible-panel"></section>
