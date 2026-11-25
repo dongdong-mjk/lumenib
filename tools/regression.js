@@ -810,12 +810,13 @@ export async function run() {
     const inp = $('.bt-search input'); inp.value = '고후 4:17'; inp.dispatchEvent(new Event('input')); await W(100);
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); await W(700);
     if (!/고린도후서 4장/.test($('.bt-htitle').textContent)) return '검색으로 바로 이동이 안 돼요 ' + $('.bt-htitle').textContent;
-    // 읽기 기록 초기화 (확인 창)
+    // 읽기 기록 지우기는 설정에서만 (11/26): 장 패널엔 초기화 버튼이 없어요
     window.__lumenibGo?.('bible', { book: 57, ch: 1 }); await W(700);
-    $('[data-act="reset"]').click(); await W(150);
-    if (!/빌레몬서 읽기 기록을 지울까요/.test($('.dim .modal')?.textContent || '')) return '초기화 확인 창이 안 떠요';
-    $('.dim [data-a="yes"]').click(); await W(200);
-    if (S.isRead(57, 1)) return '초기화가 안 돼요';
+    if ($('.bt-left [data-act="reset"]') || /초기화/.test($('.bt-left').textContent)) return '장 패널에 읽기 기록 초기화가 남아 있어요';
+    $('.home-nav [data-act="settings"]').click(); await W(300);
+    if (!$('.dim [data-act="reset-reading"]')) return '설정에 성경 읽기 기록 초기화가 없어요';
+    $('.dim [data-act="close"]').click(); await W(200);
+    S.resetBookReading(57);
     S.settings.bibleLoc = loc0; S.saveSettings();
     window.__lumenibGo?.('home'); await W(300);
     return true;
@@ -883,23 +884,29 @@ export async function run() {
     return new Set(navs).size === 1 || '내비게이션 높이가 화면마다 달라요 ' + navs;
   });
 
-  await check('성경 탭 북마크: 여러 절을 북마크하면 그 절 전부 표시 · 다시 고르면 북마크 해제', async () => {
+  await check('성경 탭 북마크(묶음): 여러 절 전부 표시 · 똑같은 범위는 흐리게 · 겹쳐도 따로 저장 · 해제 없음 · 저장 되돌리기', async () => {
     const W = wait;
     const mine = () => S.bookmarks().filter((x) => x.book === 19 && x.ch === 100);
-    mine().forEach((x) => S.removeBookmark(x));
+    const clean = () => mine().forEach((x) => S.removeBookmark(x));
+    clean();
     window.__lumenibGo?.('bible', { book: 19, ch: 100 }); await W(700);
     $('.bt-v[data-n="2"]').click(); await W(80); $('.bt-v[data-n="4"]').click(); await W(150);
     $('[data-a="bm"]').click(); await W(400);
     const marks = $$('.bt-v').filter((v) => v.querySelector('.bt-bm')).map((v) => +v.dataset.n).join(',');
-    if (marks !== '2,3,4') { mine().forEach((x) => S.removeBookmark(x)); return '북마크 표시가 2,3,4절이 아니에요: ' + marks; }
+    if (marks !== '2,3,4') { clean(); return '북마크 표시가 2,3,4절이 아니에요: ' + marks; }
+    $('.bt-v[data-n="2"]').click(); await W(80); $('.bt-v[data-n="4"]').click(); await W(150);
+    if (!$('[data-a="bm"]').disabled) { clean(); return '똑같은 범위인데 북마크 버튼이 흐려지지 않아요'; }
+    if (/해제/.test($('.bt-hacts').textContent)) { clean(); return '성경 탭에 북마크 해제가 있어요'; }
+    $('[data-a="x"]').click(); await W(150);
     $('.bt-v[data-n="3"]').click(); await W(150);
-    const label = $('[data-a="bm"]')?.textContent;
+    if ($('[data-a="bm"]').disabled) { clean(); return '겹치는 다른 범위인데 북마크 버튼이 막혀요'; }
     $('[data-a="bm"]').click(); await W(400);
-    const left = mine().length;
-    mine().forEach((x) => S.removeBookmark(x));
-    window.__lumenibGo?.('home'); await W(300);
-    if (label !== '북마크 해제') return '북마크된 절을 고르면 "북마크 해제"가 아니에요: ' + label;
-    return left === 0 || '해제가 안 돼요';
+    const n2 = mine().length;
+    $('#toast button')?.click(); await W(400);
+    const n3 = mine().length;
+    clean(); window.__lumenibGo?.('home'); await W(300);
+    if (n2 !== 2) return '겹치는 범위가 따로 저장되지 않아요 ' + n2;
+    return n3 === 1 || '저장 토스트의 되돌리기가 안 돼요 ' + n3;
   });
 
   await check('노트 탭 노트 쓰기(펜) 버튼: 설정 왼쪽 · 누르면 본문 고르기(뒤로 = 노트) · 노트 쓰고 나오면 노트 목록', async () => {

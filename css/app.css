@@ -829,7 +829,6 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .bt-chip { height: 44px; border-radius: 10px; font-size: 16px; line-height: 24px; color: var(--text-primary); }
 .bt-chip.read { background: var(--bg-panel-inset); }
 .bt-chip.cur { font-weight: 600; }
-.bt-reset { display: block; margin: 4px auto 16px; padding: 8px 12px; font-size: 13px; line-height: 18px; color: var(--text-tertiary); }
 
 /* 왼쪽: 권 고르기 */
 .bt-bhead { flex: none; display: flex; flex-direction: column; gap: 10px; }
@@ -861,7 +860,7 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 
 /* 본문 (가운데 640) */
 .bt-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.bt-col { width: 640px; max-width: 100%; margin: 0 auto; }
+.bt-col { width: 640px; max-width: calc(100% - 48px); margin: 0 auto; } /* 좌우 24: 작은 화면에서도 왼쪽 북마크 표시(-18)가 안 잘리게 (11/26) */
 .bt-notes { padding-bottom: 12px; }
 .bt-notes > div, .bt-nbar { background: var(--bg-panel-inset); }
 .bt-notes { border-radius: 14px; }
@@ -915,3 +914,5 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .nav-write .nav-tip { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 6px 10px; border-radius: 8px; background: var(--bg-inverse); color: var(--text-on-primary); font-size: 13px; line-height: 18px; font-weight: 600; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 20; }
 .nav-write.tip .nav-tip { opacity: 1; }
 @media (hover: hover) { .nav-write:hover .nav-tip { opacity: 1; transition-delay: .5s; } }
+
+.bt-hacts button:disabled { opacity: .4; pointer-events: none; } /* 이미 북마크한 범위 */

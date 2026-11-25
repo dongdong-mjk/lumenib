@@ -450,17 +450,9 @@ function BibleScreen(arg = {}) {
       <div class="bt-lscroll"><div class="bt-chips">${b.verses.map((_, i) => {
         const c = i + 1, on = S.isRead(st.book, c);
         return `<button class="bt-chip${on ? ' read' : ''}${c === st.ch ? ' cur' : ''}" data-ch="${c}">${chLabel(st.book, c)}</button>`;
-      }).join('')}</div>
-      ${read ? `<button class="bt-reset" data-act="reset">${esc(b.name)} 읽기 기록 초기화</button>` : ''}</div>`;
+      }).join('')}</div></div>`; // 읽기 기록 지우기는 설정에서만 (11/26)
     leftEl.querySelector('[data-act="books"]').addEventListener('click', () => { st.left = 'books'; st.query = ''; renderLeft(); });
     leftEl.querySelectorAll('[data-ch]').forEach((x) => x.addEventListener('click', () => openChapter(st.book, +x.dataset.ch)));
-    leftEl.querySelector('[data-act="reset"]')?.addEventListener('click', () => {
-      modal(`<div class="modal"><h3>${esc(b.name)} 읽기 기록을 지울까요?</h3><p class="desc">읽은 장 ${read}개의 표시가 지워져요. 노트와 북마크는 그대로 남아요.</p>
-        <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">지우기</button></div></div>`, (d, close) => {
-        d.querySelector('[data-a="no"]').addEventListener('click', close);
-        d.querySelector('[data-a="yes"]').addEventListener('click', () => { S.resetBookReading(st.book); track('bible_reset_book'); close(); st.justRead = null; renderLeft(); renderEnd(); rtoast(`${b.name} 읽기 기록을 지웠어요`); });
-      });
-    });
     const cur = leftEl.querySelector('.bt-chip.cur'), sc = leftEl.querySelector('.bt-lscroll');
     if (cur && sc) sc.scrollTop = Math.max(0, cur.offsetTop - sc.clientHeight / 2);
   }
@@ -522,16 +514,16 @@ function BibleScreen(arg = {}) {
     S.bookmarks().forEach((x) => { if (x.book === st.book && x.ch === st.ch) for (let v = x.from; v <= x.to; v++) set.add(v); });
     return set;
   }
-  const overlapBookmarks = (p) => S.bookmarks().filter((x) => x.book === p.book && x.ch === p.ch && x.from <= p.to && x.to >= p.from);
   // ---------- 오른쪽 머리줄 ----------
   function renderHead() {
     const b = bookOf(st.book);
     if (st.sel) {
       const p = { book: st.book, ch: st.ch, from: st.sel.from, to: st.sel.to };
-      const bmV = bmVerses();
-      let marked = true; for (let v = p.from; v <= p.to; v++) if (!bmV.has(v)) { marked = false; break; }
+      // 북마크는 고른 범위 그대로 묶어서 저장 (11/26 민정님 결정). 성경 탭은 추가만, 지우기는 북마크 탭에서.
+      // 겹치는 범위(1-3절이 있는데 1절만)는 따로 또 저장돼요. 똑같은 범위만 이미 저장됨으로 막아요
+      const saved = !!S.findBookmark(p);
       headEl.innerHTML = `<div class="bt-htitle"><b>${esc(ref(p))}</b><span>선택</span></div>
-        <div class="bt-hacts"><button data-a="bm">${marked ? '북마크 해제' : '북마크'}</button><button data-a="copy">복사</button><button data-a="write">노트 쓰기</button><button class="x" data-a="x" aria-label="선택 취소">${bIco('close')}</button></div>`;
+        <div class="bt-hacts"><button data-a="bm"${saved ? ' disabled aria-disabled="true" title="이미 북마크했어요"' : ''}>북마크</button><button data-a="copy">복사</button><button data-a="write">노트 쓰기</button><button class="x" data-a="x" aria-label="선택 취소">${bIco('close')}</button></div>`;
       headEl.querySelector('[data-a="x"]').addEventListener('click', () => setSel(null));
       headEl.querySelector('[data-a="copy"]').addEventListener('click', async () => {
         // 출처 먼저, 한 줄 띄우고 절마다 "1. 말씀" (11/26 민정님)
@@ -541,9 +533,9 @@ function BibleScreen(arg = {}) {
         const r = ref(p, true); rtoast(ok ? `${r}${objJosa(r)} 복사했어요` : '복사하지 못했어요. 다시 눌러 주세요');
       });
       headEl.querySelector('[data-a="bm"]').addEventListener('click', () => {
-        if (marked) { overlapBookmarks(p).forEach((x) => S.removeBookmark(x)); track('bible_bookmark_off'); setSel(null); rtoast('북마크를 해제했어요'); return; }
+        if (saved) return;
         S.addBookmark(p); track('bible_bookmark'); setSel(null);
-        rtoastAct('북마크에 저장했어요', '북마크 보기', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }); // 북마크 탭은 아직
+        rtoastAct('북마크에 저장했어요', '되돌리기', () => { S.removeBookmark(p); track('bible_bookmark_undo'); const sc = scrollEl.scrollTop; renderText().then(() => { scrollEl.scrollTop = sc; }); }); // 지우기는 북마크 탭에서 (탭은 아직)
       });
       headEl.querySelector('[data-a="write"]').addEventListener('click', () => { track('bible_write_note'); go('pick', { passage: p }); });
       return;
@@ -774,6 +766,7 @@ function openSettings() {
     ${accountHTML()}
     <div class="toggle-row">화면 모드 <div class="seg2"><button data-th="dark" class="${S.settings.theme === 'dark' ? 'on' : ''}">다크</button><button data-th="light" class="${S.settings.theme === 'light' ? 'on' : ''}">라이트</button></div></div>
     <button class="toggle-row" data-act="finger"><span>손가락으로도 필기하기<small class="toggle-sub">애플펜슬이 없을 때 켜요. 켜면 두 손가락으로 스크롤해요.</small></span> <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>
+    <button class="toggle-row" data-act="reset-reading"><span>성경 읽기 기록 초기화<small class="toggle-sub">읽은 장 표시를 모두 지워요. 노트와 북마크는 그대로예요.</small></span></button>
     ${loggedIn ? '' : `<button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기</button>`}
     <div class="about"><div class="logo"></div>1차 사용성 테스트 버전 · 성경 본문: 개역한글 (대한성서공회)<br>사용 기록(Clarity): ${isTracking() ? '켜짐' : '꺼짐'}</div>
     <div class="modal-actions"><button class="btn btn-primary" data-act="close">닫기</button></div>
@@ -819,6 +812,18 @@ function openSettings() {
     d.querySelector('[data-act="finger"]').addEventListener('click', (e) => {
       S.settings.fingerDraw = !S.settings.fingerDraw; S.saveSettings();
       e.currentTarget.querySelector('.switch').classList.toggle('on', S.settings.fingerDraw);
+    });
+    d.querySelector('[data-act="reset-reading"]').addEventListener('click', () => {
+      close();
+      const n = S.readingArray(B.books()).reduce((a, r) => a + r, 0);
+      modal(`<div class="modal"><h3>성경 읽기 기록을 모두 지울까요?</h3><p class="desc">읽은 장 ${n}개의 표시가 지워져요. 노트와 북마크는 그대로 남아요.</p>
+        <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">지우기</button></div></div>`, (d2, close2) => {
+        d2.querySelector('[data-a="no"]').addEventListener('click', close2);
+        d2.querySelector('[data-a="yes"]').addEventListener('click', () => {
+          B.books().forEach((b) => S.resetBookReading(b.id)); track('bible_reset_all'); close2();
+          go(app.querySelector('.bible-tab') ? 'bible' : 'home'); toast('성경 읽기 기록을 지웠어요');
+        });
+      });
     });
     d.querySelector('[data-act="reset"]')?.addEventListener('click', () => {
       close();
