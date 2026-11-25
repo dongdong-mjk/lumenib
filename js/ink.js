@@ -62,6 +62,8 @@ export class Paper {
     this.nativeCanvas = !this.readonly && !!window.webkit?.messageHandlers?.lumenibCanvas; // 이 통로는 글씨 판을 가진 새 앱에만 있어요
     // 인용을 끌 때 같이 가는 글씨를 앱이 직접 옮기는 새 앱(11/25~). 옛 빌드는 웹이 따로 그린 판으로 옮겨요
     this.nativeCarry = this.nativeCanvas && !!window.webkit?.messageHandlers?.lumenibCarry;
+    // 두 손가락 확대 동안 종이(웹 화면)까지 앱이 직접 키우는 새 앱(11/25~). 웹이 키우면 한두 화면 늦게 따라왔어요
+    this.nativeZoom = this.nativeCanvas && !!window.webkit?.messageHandlers?.lumenibPinch;
     this.onChange = opts.onChange || (() => {});
     this.onHistory = opts.onHistory || (() => {});
     this.onLayout = opts.onLayout;
@@ -170,6 +172,7 @@ export class Paper {
   startPinch(cx, cy, dist) {
     const r = this.scrollEl.getBoundingClientRect();
     this._pan = { cx, cy, dist, ox: cx - r.left, oy: cy - r.top, z: 1, sl: this.scrollEl.scrollLeft, st: this.scrollEl.scrollTop };
+    if (this.nativeZoom) return; // 앱이 종이 칸째로 키워요
     this.pagesEl.style.willChange = 'transform'; // 확대하는 동안만 그림처럼 (끝나면 글자를 다시 선명하게)
     const pr = this.pagesEl.getBoundingClientRect();
     this.pagesEl.style.transformOrigin = `${cx - pr.left}px ${cy - pr.top}px`;
@@ -178,7 +181,7 @@ export class Paper {
     const p = this._pan;
     const z = Math.min(3 / this.zoom, Math.max(1 / this.zoom, dist / p.dist));
     p.z = z;
-    this.pagesEl.style.transform = `translate(${cx - p.cx}px, ${cy - p.cy}px) scale(${z})`;
+    if (!this.nativeZoom) this.pagesEl.style.transform = `translate(${cx - p.cx}px, ${cy - p.cy}px) scale(${z})`;
     p.lx = cx; p.ly = cy;
     if (this.nativeCanvas) {
       // 앱 글씨 판도 같은 변환으로 (기준점 = 종이 묶음 안 기준점, 종이 스크롤 안쪽 좌표)
@@ -771,7 +774,7 @@ export class Paper {
   }
   nativePinch(t) {
     if (!this.nativeCanvas) return;
-    window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'notePinch', t });
+    window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'notePinch', t, sv: this.nativeZoom ? 1 : 0 });
   }
   // 같은 프레임 안의 여러 번 다시 그리기를 한 번으로 모아요
   drawPageSoon(page, rect = null) {

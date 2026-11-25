@@ -55,6 +55,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibCanvas")
         // 인용 끌 때 같이 가는 글씨를 앱이 옮길 수 있다는 표시 (웹은 이 통로가 있으면 noteCarry를 보내요, 11/25)
         webView?.configuration.userContentController.add(self, name: "lumenibCarry")
+        // 두 손가락 확대 동안 종이 칸(웹 화면 포함)을 앱이 직접 키워요. 웹은 이 통로가 있으면 스스로 키우지 않아요 (11/25)
+        webView?.configuration.userContentController.add(self, name: "lumenibPinch")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
@@ -228,6 +230,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     private var landObs: [NSKeyValueObservation] = []
     private var landTimer: DispatchWorkItem?
     private weak var landScroll: UIScrollView?
+    private weak var zoomingSV: UIScrollView?
     private func beginLanding() {
         landing = true; landQueue = []
         landObs = []
@@ -248,6 +251,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         DispatchQueue.main.async { obs.forEach { $0.invalidate() } }
         CATransaction.begin(); CATransaction.setDisableActions(true)
         noteInk.resetPinch()
+        zoomingSV?.layer.sublayerTransform = CATransform3DIdentity; zoomingSV = nil
         let q = landQueue; landQueue = []
         for m in q { noteCanvasMessage(m) }
         landNoteInk()
@@ -326,6 +330,21 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             noteInk.carryEnd()
         case "notePinch":
             let t = (b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
+            if ((b["sv"] as? NSNumber)?.intValue ?? 0) == 1 {
+                // 종이 스크롤 층 전체(웹 종이·인용·본문 + 앱 글씨 판)를 한 변환으로: 같은 순간에 같이 움직여서 어긋나거나 늦을 수 없어요
+                if let t = t, t.count == 5 {
+                    if landing { finishLanding() }
+                    guard let sv = noteInk.superview as? UIScrollView else { return }
+                    landScroll = sv; zoomingSV = sv
+                    let a = CGPoint(x: sv.layer.bounds.midX, y: sv.layer.bounds.midY) // 층 변환의 기준점(가운데)
+                    let z = CGFloat(t[4]), ox = CGFloat(t[0]), oy = CGFloat(t[1])
+                    let m = CGAffineTransform(translationX: (1 - z) * (ox - a.x) + CGFloat(t[2]), y: (1 - z) * (oy - a.y) + CGFloat(t[3])).scaledBy(x: z, y: z)
+                    CATransaction.begin(); CATransaction.setDisableActions(true)
+                    sv.layer.sublayerTransform = CATransform3DMakeAffineTransform(m)
+                    CATransaction.commit()
+                } else { beginLanding() }
+                return
+            }
             if let t = t {
                 if landing { finishLanding() }
                 dragLand?.cancel(); dragLand = nil; dragOffObs = nil
