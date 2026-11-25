@@ -945,6 +945,69 @@ export async function run() {
     return !cur || cur === '출애굽기' || '고른 권 표시가 달라요 ' + cur;
   });
 
+  await check('북마크 탭(T10): 상단 탭으로 열림 · 카드(구절·역본·본문) · 본문별 · 검색 · 카드 누르면 성경 그 절 · 선택 삭제와 되돌리기 · 역본 다르면 따로', async () => {
+    const W = wait;
+    const before = S.bookmarks().map((b) => ({ ...b }));
+    before.forEach((b) => S.removeBookmark(b));
+    S.addBookmark({ book: 43, ch: 3, from: 16, to: 16 });
+    S.addBookmark({ book: 19, ch: 23, from: 1, to: 2 });
+    S.addBookmark({ book: 19, ch: 23, from: 1, to: 2, tr: 'snb' }); // 역본이 다르면 따로
+    const restore = () => { S.bookmarks().forEach((b) => S.removeBookmark(b)); S.restoreBookmarks(before); };
+    try {
+      if (S.bookmarks().length !== 3) return '역본이 다른 같은 구절이 따로 저장되지 않아요';
+      window.__lumenibGo?.('home'); await W(400);
+      $('.home-nav [data-act="bookmarks"]').click(); await W(1200);
+      if (!/북마크\s*3/.test($('.nl-title')?.textContent || '')) return '북마크 탭이 안 열리거나 개수가 달라요 ' + $('.nl-title')?.textContent;
+      const c = $$('.bm-card').find((x) => /요 3:16/.test(x.textContent));
+      if (!c || !/개역한글/.test(c.textContent) || !/독생자/.test(c.querySelector('.bm-text').textContent)) return '카드에 구절·역본·본문이 없어요';
+      if (!$$('.bm-card').some((x) => /표준새번역/.test(x.textContent))) return '다른 역본 이름이 안 보여요';
+      const tr = $$('.bm-tr').find((x) => /표준새번역/.test(x.textContent));
+      if (tr.scrollWidth > tr.clientWidth + 1 || tr.getBoundingClientRect().height > 20) return '"표준새번역"이 한 줄에 안 들어가요';
+      // 본문별: 권으로 묶고 성경 순서 (시편이 요한복음보다 먼저)
+      $('[data-view="passage"]').click(); await W(300);
+      const heads = $$('.nl-gh').map((h) => h.firstChild.textContent.trim());
+      if (heads.join(',') !== '시편,요한복음') return '본문별 묶음이 달라요 ' + heads;
+      $('[data-view="date"]').click(); await W(300);
+      // 검색: 본문 글자로
+      const inp = $('.nl-search input'); inp.value = '독생자'; inp.dispatchEvent(new Event('input')); await W(200);
+      if ($$('.bm-card').length !== 1) return '본문 검색이 안 돼요 ' + $$('.bm-card').length;
+      inp.value = ''; inp.dispatchEvent(new Event('input')); await W(200);
+      // 선택 삭제 → 되돌리기
+      $('[data-act="select"]').click(); await W(200);
+      if ($('.bm-card .bm-date')) return '선택 모드에서 날짜가 안 숨겨져요';
+      $$('.bm-card')[0].click(); await W(150);
+      if (!/1개 선택됨/.test($('.nl-title').textContent)) return '선택 표시가 달라요';
+      $('[data-act="del"]').click(); await W(300);
+      if (S.bookmarks().length !== 2) return '삭제가 안 돼요';
+      $('#toast button')?.click(); await W(300);
+      if (S.bookmarks().length !== 3) return '되돌리기가 안 돼요';
+      // 카드 누르면 성경 탭 그 장 · 그 절
+      $$('.bm-card').find((x) => /요 3:16/.test(x.textContent)).click(); await W(900);
+      if (!/요한복음 3장/.test($('.bt-htitle')?.textContent || '')) return '카드를 누르면 성경 그 장으로 안 가요';
+      if ($('.bt-v.sel')) return '카드로 열었는데 구절이 선택돼 있어요';
+      return true;
+    } finally { restore(); window.__lumenibGo?.('home'); await W(300); }
+  });
+
+  await check('바텀시트(Aa): 화면 아래에서 12 · 아래로 밀면 닫힘', async () => {
+    const W = wait;
+    window.__lumenibGo?.('bible', { book: 43, ch: 3 }); await W(700);
+    $('[data-a="aa"]').click(); await W(400);
+    const sh = $('.bsheet');
+    if (!sh) return '바텀시트가 안 열려요';
+    sh.style.animation = 'none'; // 숨은 창에선 올라오는 애니메이션이 멈춰 있어서 끝 상태로 재요
+    const gap = Math.round(innerHeight - sh.getBoundingClientRect().bottom);
+    if (gap !== 12) return '화면 아래 간격이 12가 아니에요: ' + gap;
+    const r = sh.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + 120;
+    const pe = (type, yy) => sh.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: yy, pointerId: 77, pointerType: 'touch', bubbles: true, button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
+    pe('pointerdown', y);
+    for (let i = 1; i <= 10; i++) { pe('pointermove', y + i * 20); await W(16); }
+    pe('pointerup', y + 200); await W(500);
+    const closed = !$('.bsheet');
+    window.__lumenibGo?.('home'); await W(300);
+    return closed || '아래로 밀어도 안 닫혀요';
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

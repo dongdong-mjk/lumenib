@@ -892,7 +892,9 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .bt-booklink { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; line-height: 18px; color: var(--text-tertiary); padding: 4px 8px; }
 
 /* Aa 바텀시트 (피그마 Bottom Sheet · Stepper) */
-.dim.bs-dim { place-items: end center; padding-bottom: calc(22px + var(--safe-bottom, 0px)); }
+.dim.bs-dim { place-items: end center; padding-bottom: 12px; } /* 화면 아래에서 12 (11/26 피그마) */
+.bsheet.dragging { transition: none; }
+.bsheet.settle { transition: transform .22s cubic-bezier(.2, 0, 0, 1); }
 .bsheet { width: 600px; max-width: calc(100vw - 32px); background: var(--bg-panel); border-radius: 28px; padding-bottom: 32px; display: flex; flex-direction: column; align-items: center; animation: bs-up .2s ease; }
 @keyframes bs-up { from { transform: translateY(24px); opacity: 0; } }
 .bs-handle { width: 120px; height: 44px; display: grid; place-items: center; }
@@ -921,3 +923,16 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 @media (max-width: 1163px) {
   .bt-book, .book-btn { font-size: 13px; line-height: 18px; }
 }
+
+/* ===== T10 북마크 탭 (11/26) · 피그마 "북마크 탭 (11-26, Claude)" · Bookmark Card ===== */
+.bm-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.bm-card { position: relative; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 20px 24px; border-radius: 20px; background: var(--bg-panel); border: 1px solid var(--border-panel); text-align: left; min-width: 0; overflow: hidden; color: var(--text-primary); }
+.bm-card.on { border-color: var(--border-strong); }
+.bm-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; height: 24px; }
+.bm-rt { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+.bm-rt b { font-size: 16px; line-height: 24px; font-weight: 600; color: var(--text-primary); }
+.bm-tr { flex: none; font-size: 13px; line-height: 18px; color: var(--text-secondary); } /* 역본: "표준새번역"까지 한 줄 */
+.bm-date { flex: none; font-size: 13px; line-height: 18px; color: var(--text-tertiary); }
+.bm-card .nl-check { position: static; flex: none; }
+.bm-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 81px; font-family: var(--font-serif); font-size: 16px; line-height: 27px; letter-spacing: -0.02em; color: var(--text-secondary); }
+.bsheet { touch-action: none; } /* 아래로 밀어 닫기: 브라우저 스크롤이 끼어들지 않게 */

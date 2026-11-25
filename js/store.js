@@ -269,10 +269,22 @@ export const readingArray = (books) => { const out = []; books.forEach((b) => b.
 // ---------- 북마크 (성경 탭에서 구절 범위 하나 = 북마크 하나) ----------
 const KEY_BM = 'lumenib.v1.bookmarks';
 export const bookmarks = () => read(KEY_BM, []);
-export const findBookmark = (p) => bookmarks().find((b) => b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to);
-export function addBookmark(p) { write(KEY_BM, [{ book: p.book, ch: p.ch, from: p.from, to: p.to, t: Date.now() }, ...bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))]); logBible('b', bmKey(p), 1); }
-export function removeBookmark(p) { write(KEY_BM, bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))); logBible('b', bmKey(p), 0); }
-const bmKey = (p) => `${p.book}:${p.ch}:${p.from}-${p.to}`;
+// 북마크 = 고른 범위 하나로 묶음 + 역본(tr). 같은 구절이라도 역본이 다르면 따로 저장해요 (11/26 민정님)
+export const DEFAULT_TR = 'krv'; // 개역한글
+const trOf = (p) => p.tr || DEFAULT_TR;
+const sameBm = (a, b) => a.book === b.book && a.ch === b.ch && a.from === b.from && a.to === b.to && trOf(a) === trOf(b);
+export const findBookmark = (p) => bookmarks().find((b) => sameBm(b, p));
+export function addBookmark(p) { write(KEY_BM, [{ book: p.book, ch: p.ch, from: p.from, to: p.to, tr: trOf(p), t: Date.now() }, ...bookmarks().filter((b) => !sameBm(b, p))]); logBible('b', bmKey(p), 1); }
+export function removeBookmark(p) { write(KEY_BM, bookmarks().filter((b) => !sameBm(b, p))); logBible('b', bmKey(p), 0); }
+// 북마크 탭 선택 삭제 · 되돌리기 (저장 날짜 그대로 돌려놔요)
+export function removeBookmarks(list) { const snap = list.map((b) => ({ ...b })); snap.forEach((b) => removeBookmark(b)); return snap; }
+export function restoreBookmarks(snap) {
+  const rest = bookmarks().filter((b) => !snap.some((x) => sameBm(x, b)));
+  write(KEY_BM, [...snap, ...rest].sort((a, b) => (b.t || 0) - (a.t || 0)));
+  snap.forEach((b) => logBible('b', bmKey(b), 1));
+}
+// 개역한글은 예전 키 그대로(이미 저장된 기록과 맞게), 다른 역본은 @역본을 붙여요
+const bmKey = (p) => `${p.book}:${p.ch}:${p.from}-${p.to}${trOf(p) === DEFAULT_TR ? '' : '@' + trOf(p)}`;
 
 // ---------- 읽기 기록 · 북마크를 로그인 계정에 같이 보관 (11/25 민정님) ----------
 // 바꾼 것마다 [켬/끔, 바꾼 시각]을 남겨 두고, 서버 것과 합칠 때 더 나중에 바꾼 쪽을 따라요 (아이패드 두 대에서 따로 읽어도 다 모여요)
@@ -311,8 +323,9 @@ export function mergeBibleLog(remote) {
     const list = [];
     for (const [k, v] of Object.entries(bibleLog.b)) {
       if (!v[0]) continue;
-      const [book, ch, range] = k.split(':'); const [from, to] = range.split('-').map(Number);
-      list.push(old.get(k) || { book: +book, ch: +ch, from, to, t: v[1] });
+      const [base, tr = DEFAULT_TR] = k.split('@');
+      const [book, ch, range] = base.split(':'); const [from, to] = range.split('-').map(Number);
+      list.push(old.get(k) || { book: +book, ch: +ch, from, to, tr, t: v[1] });
     }
     write(KEY_BM, list.sort((a, b) => (b.t || 0) - (a.t || 0)));
   }

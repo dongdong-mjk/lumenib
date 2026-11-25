@@ -81,7 +81,7 @@ function go(screen, arg) {
   curScreen = screen;
   if (screen === 'home' && C.currentUser() && Date.now() - C.syncStatus().lastSync > 30000) C.sync();
   trackScreen(screen === 'note' && arg?.noteId ? 'note_view' : screen);
-  ({ home: Home, pick: Pick, note: NoteScreen, notes: NotesScreen, bible: BibleScreen })[screen](arg);
+  ({ home: Home, pick: Pick, note: NoteScreen, notes: NotesScreen, bible: BibleScreen, bookmarks: BookmarksScreen })[screen](arg);
   window.__lumenibGo = go; // 회귀 점검(tools/regression.js)에서 화면을 바로 옮길 때 씀
 }
 
@@ -189,7 +189,7 @@ function tabBar(active, { write = false } = {}) {
       ${t('home', 'home', '홈', 'data-act="home"')}
       ${t('bible', 'book', '성경', 'data-act="bible"')}
       ${t('notes', 'note', '노트', 'data-act="notes"')}
-      ${t('bookmark', 'bookmark', '북마크', 'data-oos')}
+      ${t('bookmark', 'bookmark', '북마크', 'data-act="bookmarks"')}
     </div>
     ${write ? '<button class="icon-btn gear nav-write" data-act="write-note" aria-label="노트 쓰기"><i class="nav-ico gear-ico ni-pen" aria-hidden="true"></i><span class="nav-tip" role="tooltip">노트 쓰기</span></button>' : ''}
     <button class="icon-btn gear" data-act="settings" aria-label="설정"><i class="nav-ico gear-ico ni-settings" aria-hidden="true"></i></button>
@@ -205,6 +205,40 @@ function bindWriteBtn(btn, onTap) {
   btn.addEventListener('pointerleave', () => { if (!held) clearTimeout(t); });
   btn.addEventListener('contextmenu', (e) => e.preventDefault());
   btn.addEventListener('click', () => { if (held) { held = false; return; } onTap(); });
+}
+// 바텀시트를 아래로 밀면 닫혀요 (11/26 민정님). 버튼·스테퍼를 누를 땐 그대로 눌리고, 아래로 충분히(또는 빠르게) 밀면 내려가며 닫혀요
+function sheetDragClose(sheet, close) {
+  if (!sheet) return;
+  let y0 = 0, t0 = 0, dy = 0, id = null, moved = false;
+  sheet.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    id = e.pointerId; y0 = e.clientY; t0 = performance.now(); dy = 0; moved = false;
+  });
+  sheet.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== id) return;
+    dy = Math.max(0, e.clientY - y0);
+    if (!moved && dy > 8) { moved = true; sheet.classList.add('dragging'); try { sheet.setPointerCapture(id); } catch {} }
+    if (moved) sheet.style.transform = `translateY(${dy}px)`;
+  });
+  const end = (e) => {
+    if (e.pointerId !== id) return;
+    id = null;
+    if (!moved) return;
+    sheet.classList.remove('dragging');
+    const v = dy / Math.max(1, performance.now() - t0); // px/ms
+    sheet.classList.add('settle');
+    if (dy > Math.min(120, sheet.offsetHeight * 0.3) || v > 0.6) {
+      sheet.style.transform = `translateY(${sheet.offsetHeight + 40}px)`;
+      setTimeout(close, 200);
+    } else {
+      sheet.style.transform = '';
+      setTimeout(() => sheet.classList.remove('settle'), 240);
+    }
+  };
+  sheet.addEventListener('pointerup', end);
+  sheet.addEventListener('pointercancel', end);
+  // 밀고 난 뒤에 손을 뗀 자리의 버튼이 눌리지 않게
+  sheet.addEventListener('click', (e) => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
 }
 function slideTabPill() {
   // 유리알 미끄러짐 애니메이션은 뺐어요 (11/25 민정님: 노트 화면 버튼을 누를 때마다 알약이 움직였음 · 나중에 네이티브 진짜 유리알로)
@@ -382,6 +416,184 @@ function NotesScreen() {
 }
 
 
+
+// =========================================================
+// T10 북마크 탭 (11/26) · 피그마 "북마크 탭 (11-26, Claude)" · 정책 15
+// 구성은 노트 목록(T8)과 같아요: 제목 · 검색 · [날짜별 | 본문별] · 정렬 · 선택. 카드 두 열
+// =========================================================
+const TR_NAME = { krv: '개역한글', nkrv: '개역개정', snb: '표준새번역' }; // 역본 이름 (지금은 개역한글만)
+const BM_SORTS = {
+  date: [['new', '최신순'], ['old', '오래된순']],
+  passage: [['bible', '성경 순서'], ['abc', '가나다순']],
+};
+const bmText = new Map(); // 카드 본문 (역본·구절별로 한 번만 불러요)
+const bmTextKey = (b) => `${b.tr || 'krv'}:${b.book}:${b.ch}:${b.from}-${b.to}`;
+function BookmarksScreen() {
+  const st = {
+    view: S.settings.bmView === 'passage' ? 'passage' : 'date',
+    sort: { date: 'new', passage: 'bible', ...(S.settings.bmSort || {}) },
+    q: '', selecting: false, sel: new Set(), menu: false,
+  };
+  const remember = () => { S.settings.bmView = st.view; S.settings.bmSort = st.sort; S.saveSettings(); };
+  const keyOf = (b) => bmTextKey(b) + ':' + (b.t || 0);
+  const all = () => S.bookmarks();
+  // 검색: 구절(짧은·긴 이름)과 본문. 역본과 상관없이 구절 기준
+  const matches = (b) => {
+    const q = st.q.trim().toLowerCase();
+    if (!q) return true;
+    const hay = [B.refText(b, true), B.refText(b), bmText.get(bmTextKey(b)) || ''].join(' ').toLowerCase();
+    return q.split(/\s+/).every((w) => hay.includes(w));
+  };
+  const bibleOrder = (a, b) => a.book - b.book || a.ch - b.ch || a.from - b.from || a.to - b.to || (b.t || 0) - (a.t || 0);
+  const ymd = (t) => { const d = new Date(t || 0); return [d.getFullYear(), d.getMonth() + 1, d.getDate()]; };
+  const pad = (n) => String(n).padStart(2, '0');
+
+  function groups(list) {
+    if (st.view === 'date') {
+      const l = list.slice().sort((a, b) => (b.t || 0) - (a.t || 0));
+      if (st.sort.date === 'old') l.reverse();
+      const out = [];
+      for (const b of l) {
+        const [y, m] = ymd(b.t), key = `${y}-${m}`;
+        let g = out.at(-1);
+        if (!g || g.key !== key) out.push(g = { key, label: `${y}년 ${m}월`, items: [] });
+        g.items.push(b);
+      }
+      return out;
+    }
+    // 본문별: 권으로 묶고, 같은 권 안에서는 장·절 순서
+    const map = new Map();
+    for (const b of list) {
+      if (!map.has(b.book)) map.set(b.book, { key: b.book, label: B.book(b.book).name, items: [] });
+      map.get(b.book).items.push(b);
+    }
+    const out = [...map.values()];
+    out.forEach((g) => g.items.sort(bibleOrder));
+    if (st.sort.passage === 'abc') out.sort((a, b) => a.label.localeCompare(b.label, 'ko') || a.key - b.key);
+    else out.sort((a, b) => a.key - b.key);
+    return out;
+  }
+
+  function card(b) {
+    const k = keyOf(b), on = st.sel.has(k);
+    const [y, m, d] = ymd(b.t);
+    const date = st.view === 'date' ? `${pad(m)}.${pad(d)}` : `${String(y).slice(2)}.${pad(m)}.${pad(d)}`;
+    return `<button class="bm-card${on ? ' on' : ''}" data-k="${esc(k)}">
+      <span class="bm-top"><span class="bm-rt"><b>${esc(B.refText(b, true))}</b><span class="bm-tr">${esc(TR_NAME[b.tr || 'krv'] || b.tr)}</span></span>${st.selecting ? `<span class="nl-check">${NOTE_ICON(on ? 'cb-on' : 'cb-off')}</span>` : `<span class="bm-date">${date}</span>`}</span>
+      <span class="bm-text">${esc(bmText.get(bmTextKey(b)) || '')}</span>
+    </button>`;
+  }
+  const visible = () => all().filter(matches);
+  const allPicked = () => { const ks = visible().map(keyOf); return ks.length > 0 && ks.every((k) => st.sel.has(k)); };
+  function listHTML() {
+    const list = all();
+    const gs = groups(list.filter(matches));
+    const emptyMsg = list.length ? `'${esc(st.q.trim())}'에 맞는 북마크가 없어요` : '성경을 읽다가 구절을 골라 북마크하면 여기에 모여요';
+    return gs.length ? gs.map((g) => `<section class="nl-group">
+        <h3 class="nl-gh">${esc(g.label)}<span>${g.items.length}</span></h3>
+        <div class="bm-grid">${g.items.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`;
+  }
+  function render() {
+    const list = all();
+    const sorts = BM_SORTS[st.view], cur = sorts.find((x) => x[0] === st.sort[st.view]) || sorts[0];
+    const n = st.sel.size;
+    app.innerHTML = `<div class="home notes bookmarks"><div class="nl-wrap">
+      ${tabBar('bookmark')}
+      <div class="nl-head">
+        ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">북마크<span class="nl-count">${list.length}</span></h1>
+        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="구절, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.q ? '' : 'hidden'}>${icon.x}</button></label>`}
+      </div>
+      <div class="nl-controls">
+        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist">
+          <button class="${st.view === 'date' ? 'on' : ''}" data-view="date">날짜별</button>
+          <button class="${st.view === 'passage' ? 'on' : ''}" data-view="passage">본문별</button>
+        </div>
+        ${st.selecting ? `<div class="nl-right sel">
+          <button class="nl-btn text" data-act="all">${allPicked() ? '선택 해제' : '전체 선택'}</button>
+          <button class="nl-btn outline" data-act="cancel">취소</button>
+          <button class="nl-btn primary" data-act="del" ${n ? '' : 'disabled'}>삭제</button>
+        </div>` : `<div class="nl-right">
+          <div class="nl-sort"><button class="nl-dd" data-act="sort">${cur[1]}${NOTE_ICON(st.menu ? 'up' : 'down')}</button>
+          ${st.menu ? `<div class="nl-menu">${sorts.map(([k, l]) => `<button class="nl-mi${k === cur[0] ? ' on' : ''}" data-sort="${k}">${l}${k === cur[0] ? NOTE_ICON('tick') : ''}</button>`).join('')}</div>` : ''}</div>
+          <button class="nl-btn outline" data-act="select" ${list.length ? '' : 'disabled'}>선택</button>
+        </div>`}
+      </div>
+      <div class="nl-list">${listHTML()}</div>
+    </div></div>`;
+    bind();
+    slideTabPill();
+  }
+  // 카드 본문 불러오기: 처음 한 번 (책 파일은 한 번 받으면 다시 안 받아요)
+  async function loadTexts() {
+    const need = all().filter((b) => !bmText.has(bmTextKey(b)));
+    if (!need.length) return;
+    await Promise.all(need.map(async (b) => {
+      const vs = await B.getVerses(b.book, b.ch, b.from, b.to).catch(() => []);
+      bmText.set(bmTextKey(b), vs.map((v) => v.t).join(' '));
+    }));
+    if (curScreen === 'bookmarks') { const l = app.querySelector('.nl-list'); if (l) { l.innerHTML = listHTML(); bindCards(); } }
+  }
+
+  function bind() {
+    app.querySelector('.home-nav [data-act="home"]').addEventListener('click', () => go('home'));
+    app.querySelector('.home-nav [data-act="bible"]').addEventListener('click', () => go('bible'));
+    app.querySelector('.home-nav [data-act="notes"]').addEventListener('click', () => go('notes'));
+    app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
+    const input = app.querySelector('.nl-search input');
+    if (input) {
+      const clear = app.querySelector('.nl-search .bp-search-clear');
+      input.addEventListener('input', () => {
+        st.q = input.value; clear.hidden = !input.value;
+        app.querySelector('.nl-list').innerHTML = listHTML(); bindCards();
+      });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+      clear.addEventListener('pointerdown', (e) => e.preventDefault());
+      clear.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); });
+    }
+    app.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
+      if (st.selecting || st.view === b.dataset.view) return;
+      st.view = b.dataset.view; st.menu = false; remember(); track('bm_view_' + st.view); render();
+    }));
+    app.querySelector('[data-act="sort"]')?.addEventListener('click', (e) => { e.stopPropagation(); st.menu = !st.menu; render(); });
+    app.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation(); st.sort[st.view] = b.dataset.sort; st.menu = false; remember(); render();
+    }));
+    app.querySelector('[data-act="select"]')?.addEventListener('click', () => { st.selecting = true; st.menu = false; st.sel.clear(); render(); });
+    app.querySelector('[data-act="cancel"]')?.addEventListener('click', () => { st.selecting = false; st.sel.clear(); render(); });
+    app.querySelector('[data-act="all"]')?.addEventListener('click', () => {
+      const ks = visible().map(keyOf), allOn = ks.every((k) => st.sel.has(k));
+      st.sel = new Set(allOn ? [] : ks); render();
+    });
+    app.querySelector('[data-act="del"]')?.addEventListener('click', () => {
+      const pick = all().filter((b) => st.sel.has(keyOf(b)));
+      if (!pick.length) return;
+      const snap = S.removeBookmarks(pick);
+      track('bm_delete');
+      st.selecting = false; st.sel.clear(); render();
+      toastAction(`북마크 ${pick.length}개를 삭제했어요`, '되돌리기', () => { S.restoreBookmarks(snap); track('bm_delete_undo'); if (curScreen === 'bookmarks') render(); });
+    });
+    bindCards();
+  }
+  function bindCards() {
+    app.querySelectorAll('.bm-card').forEach((c) => c.addEventListener('click', () => {
+      const k = c.dataset.k;
+      if (st.selecting) { if (st.sel.has(k)) st.sel.delete(k); else st.sel.add(k); render(); return; }
+      const b = all().find((x) => keyOf(x) === k);
+      if (b) { track('bm_open'); go('bible', { book: b.book, ch: b.ch, verse: b.from }); } // 그 장을 열고 북마크한 절까지 (선택은 안 해요)
+    }));
+  }
+
+  const outside = (e) => { if (st.menu && !e.target.closest('.nl-sort')) { st.menu = false; render(); } };
+  document.addEventListener('pointerdown', outside, true);
+  const off = C.on((w) => { if ((w === 'bible' || w === 'user') && curScreen === 'bookmarks' && !st.selecting) { render(); loadTexts(); } });
+  cleanup = () => { document.removeEventListener('pointerdown', outside, true); off?.(); };
+  render();
+  loadTexts();
+}
+
+// 상단 바 "북마크" 탭: 어느 화면에서 눌러도 북마크 탭으로 (11/26)
+document.addEventListener('click', (e) => { if (e.target.closest?.('.home-nav [data-act="bookmarks"]') && curScreen !== 'bookmarks') go('bookmarks'); });
+
 // =========================================================
 // T9 성경 탭 (11/25) · 피그마 "성경 탭 (11-25, Claude)" 라이트 시안 · 정책 14
 // 왼쪽 376 = 장 고르기 / 권 고르기, 오른쪽 = 장 읽기(가운데 640)
@@ -418,7 +630,7 @@ function BibleScreen(arg = {}) {
     sel: null, notesOpen: false,
     justRead: null, // 이 장에 머무는 동안 "방금 읽음" 상태(②)를 유지해요 { key, bookDone }
   };
-  if (arg.book) { st.book = arg.book; st.ch = arg.ch || 1; st.scrollTo = arg.verse || 1; }
+  if (arg.book) { st.book = arg.book; st.ch = arg.ch || 1; st.scrollTo = arg.verse || 1; st.left = 'chapters'; st.bookMarked = true; } // 북마크 카드 등에서 바로 그 장으로
   let verses = [];
 
   app.innerHTML = `<div class="home bible-tab">${tabBar('bible')}
@@ -660,6 +872,7 @@ function BibleScreen(arg = {}) {
       };
       const save = (patch) => { S.settings.bibleView = { ...bibleView(), ...patch }; S.saveSettings(); track('bible_view'); colEl.setAttribute('style', viewStyle()); draw(); };
       d.querySelector('[data-a="close"]').addEventListener('click', cl);
+      sheetDragClose(d.querySelector('.bsheet'), cl);
       draw();
     });
     return close;
