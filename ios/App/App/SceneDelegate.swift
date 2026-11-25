@@ -74,7 +74,31 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     private var pinchSnap: UIView?
     private var pinchOff: CGPoint = .zero
     private var paperBg: UIColor = .white
-    private func liftNoteInkForPinch() {
+    // 인용구를 끄는 동안에도 종이 스크롤 안 글씨 판이 안 보였어요(32에서도). 확대 때처럼 끄는 동안만 웹 위에 띄워 두고,
+    // 끌면서 종이가 저절로 스크롤되면 글씨 판도 같이 옮겨요 (11/25)
+    private var dragLand: DispatchWorkItem?
+    private var dragOffObs: NSKeyValueObservation?
+    private func liftForDrag() {
+        dragLand?.cancel(); dragLand = nil
+        guard !pinchLifted else { return }
+        liftNoteInkForPinch(snapshot: false)
+        guard pinchLifted, let sv = landScroll else { return }
+        dragOffObs = sv.observe(\.contentOffset, options: [.new]) { [weak self] sv, _ in
+            guard let self, self.pinchLifted, self.noteInk.superview === self.pinchContent else { return }
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            self.noteInk.frame.origin = CGPoint(x: -sv.contentOffset.x, y: -sv.contentOffset.y)
+            CATransaction.commit()
+        }
+    }
+    private func landAfterDrag() {
+        dragLand?.cancel()
+        guard pinchLifted else { return }
+        // 놓은 뒤 웹이 다시 그린 화면이 올라올 때까지 아주 잠깐 띄운 채로 두었다가 붙여요
+        let w = DispatchWorkItem { [weak self] in self?.dragOffObs = nil; self?.landNoteInk() }
+        dragLand = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: w)
+    }
+    private func liftNoteInkForPinch(snapshot: Bool = true) {
         guard !pinchLifted, let web = webView, let sv = noteInk.superview as? UIScrollView else { return }
         landScroll = sv
         let f = sv.convert(sv.bounds, to: web)
@@ -97,7 +121,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         // (29: 사진을 찍은 뒤 글씨 판을 숨겼더니 사진에 글씨가 안 담겨 확대 중 글씨가 사라졌어요)
         pinchSnap?.removeFromSuperview(); pinchSnap = nil
         let vis = sv.bounds.intersection(noteInk.pagesBox)
-        if !vis.isNull, vis.width > 1, vis.height > 1,
+        if snapshot, !vis.isNull, vis.width > 1, vis.height > 1,
            let snap = sv.resizableSnapshotView(from: vis, afterScreenUpdates: false, withCapInsets: .zero) {
             snap.frame = vis.offsetBy(dx: -pinchOff.x, dy: -pinchOff.y) // 사진 자리 (pinchHost 좌표)
             pinchContent.insertSubview(snap, belowSubview: noteInk); pinchSnap = snap
@@ -237,10 +261,15 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         switch action {
         case "noteLayout":
             CATransaction.begin(); CATransaction.setDisableActions(true)
-            dropPinchSnap()
-            pinchLifted = false
-            if let area = rect(b["area"]) { attachNoteInk(area: area) }
-            pinchHost.isHidden = true
+            if dragOffObs != nil, let area = rect(b["area"]) {
+                // 인용을 끄는 중(다른 장으로 넘어가며 장이 늘어날 때 등): 띄운 채로 자리만 맞춰요
+                noteArea = area
+            } else {
+                dropPinchSnap()
+                pinchLifted = false
+                if let area = rect(b["area"]) { attachNoteInk(area: area) }
+                pinchHost.isHidden = true
+            }
             CATransaction.commit()
             readPaperBg()
             let pages: [(Int, CGRect)] = (b["pages"] as? [[Any]] ?? []).compactMap { a in
@@ -270,20 +299,22 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             CATransaction.commit()
         case "noteHole":
             if !pinchLifted, noteInkOn, noteInk.window == nil || noteInk.layer.superlayer == nil { attachNoteInk(area: noteArea.isEmpty ? inkConfig.area : noteArea) } // 끄는 동안 종이 스크롤이 바뀌었으면 다시 붙여요
-            guard let i = (b["i"] as? NSNumber)?.intValue else { noteInk.hole(page: -1, box: nil); return }
+            guard let i = (b["i"] as? NSNumber)?.intValue else { noteInk.hole(page: -1, box: nil); landAfterDrag(); return }
+            if noteInkOn { liftForDrag() }
             let n = (b["box"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
             noteInk.hole(page: i, box: n?.count == 4 ? CGRect(x: n![0], y: n![1], width: n![2] - n![0], height: n![3] - n![1]) : nil)
         case "notePinch":
             let t = (b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
             if let t = t {
                 if landing { finishLanding() }
+                dragLand?.cancel(); dragLand = nil; dragOffObs = nil
                 liftNoteInkForPinch()
                 pinchMove(t)
             } else { beginLanding() } // 앱 글씨는 손 뗀 순간 모습 그대로 두었다가 웹과 같이 바꿔요
         case "noteClear":
             landing = false; landQueue = []; landObs = []; landTimer?.cancel()
             dropPinchSnap()
-            inkLayerObs = nil; inkLayerHost = nil
+            inkLayerObs = nil; inkLayerHost = nil; dragOffObs = nil; dragLand?.cancel(); dragLand = nil
             noteInk.clearAll(); noteInk.removeFromSuperview(); noteInkOn = false; pinchLifted = false; pinchHost.isHidden = true
         default: break
         }
