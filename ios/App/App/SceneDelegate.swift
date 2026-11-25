@@ -121,10 +121,17 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         // (29: 사진을 찍은 뒤 글씨 판을 숨겼더니 사진에 글씨가 안 담겨 확대 중 글씨가 사라졌어요)
         pinchSnap?.removeFromSuperview(); pinchSnap = nil
         let vis = sv.bounds.intersection(noteInk.pagesBox)
-        if snapshot, !vis.isNull, vis.width > 1, vis.height > 1,
-           let snap = sv.resizableSnapshotView(from: vis, afterScreenUpdates: false, withCapInsets: .zero) {
-            snap.frame = vis.offsetBy(dx: -pinchOff.x, dy: -pinchOff.y) // 사진 자리 (pinchHost 좌표)
-            pinchContent.insertSubview(snap, belowSubview: noteInk); pinchSnap = snap
+        // snapshotView는 고정된 사진이 아니라 웹 화면을 실시간으로 비추는 거울이었어요. 웹이 따로 확대한 것까지 비쳐 인용구가 덜 따라왔어요 (11/25).
+        // 지금 화면을 진짜 그림(비트맵)으로 한 번 그려 써요
+        if snapshot, !vis.isNull, vis.width > 1, vis.height > 1 {
+            let fmt = UIGraphicsImageRendererFormat.preferred()
+            fmt.opaque = false
+            let img = UIGraphicsImageRenderer(size: vis.size, format: fmt).image { _ in
+                sv.drawHierarchy(in: CGRect(x: sv.bounds.minX - vis.minX, y: sv.bounds.minY - vis.minY, width: sv.bounds.width, height: sv.bounds.height), afterScreenUpdates: false)
+            }
+            let iv = UIImageView(image: img)
+            iv.frame = vis.offsetBy(dx: -pinchOff.x, dy: -pinchOff.y) // 사진 자리 (pinchHost 좌표)
+            pinchContent.insertSubview(iv, belowSubview: noteInk); pinchSnap = iv
         }
         pinchHost.isHidden = false
         CATransaction.commit()
