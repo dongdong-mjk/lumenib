@@ -320,6 +320,7 @@ button { touch-action: manipulation; }
 .cite-moving .cite-rs { visibility: hidden; }
 .cite-ui.covered, .cite-rs.covered { visibility: hidden; } /* 위에 겹친 인용이 덮는 자리의 아이콘은 숨김 */
 .cite-block.moving { z-index: 1; box-shadow: 0 6px 20px rgba(0,0,0,.18); border-color: #111; }
+.cite-block.moving, .cite-ui.moving { will-change: transform; } /* 끄는 동안 transform으로만 옮겨요 (다시 그리지 않아 빨라요) */
 .cite-block h5 { padding-right: 70px; }
 .mode2 { display: flex; background: #f0f0f0; border-radius: 10px; padding: 3px; }
 .mode2 button { height: 34px; padding: 0 12px; border-radius: 8px; font-size: 13px; color: #555; }

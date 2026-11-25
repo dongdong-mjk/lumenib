@@ -443,7 +443,10 @@ export class Paper {
       if (carry.length && this.nativeCarry) {
         // 아이패드 앱: 앱이 그 글씨 층을 그대로 옮겨요. 웹 판과 앱 판을 바꿔치기하지 않아 형광펜이 진해졌다 연해지지 않아요 (11/25)
         d.ncarry = true; d.org = this.nativeRect(page);
-        window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarry', i: page.i, ids: [...inside].map(nativeId) });
+        // 같이 갈 글씨는 새 획(복사본)으로 바뀌었어요. 앱 판에도 복사본을 먼저 알리고 그 번호로 옮겨요
+        // (원래 획 번호로 옮기면 앱이 못 찾아, 끄는 동안 위 인용 글씨가 안 보였어요, 11/25)
+        this.nativeSync(page);
+        window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarry', i: page.i, ids: carry.map((x) => nativeId(x.s)) });
       } else if (carry.length) {
         // 끄는 동안엔 같이 갈 글씨를 따로 그린 판을 통째로 옮기기만 해요 (매번 페이지 전체를 다시 그리면 렉이 걸렸어요)
         this._hidden = new Set(carry.map((x) => x.s));
@@ -456,6 +459,9 @@ export class Paper {
         d.layers = [hc, ic];
       }
       el.classList.add('moving'); u.classList.add('moving');
+      d.bx = citeX(c); d.by = c.y; // 끄는 동안엔 자리(top·left)는 그대로 두고 transform으로만 옮겨요 (다시 그리지 않아 빨라요)
+      // 누르는 순간부터 이 인용 자리만큼 아래 글씨를 가려요 (누르자마자 아래 인용 글씨가 비치던 것, 11/25)
+      if (cov0) this.citeHole(d, page, [citeX(c), c.y, citeX(c) + citeW(c), c.y + el.offsetHeight]);
       this.scrollEl.classList.add('cite-moving'); // 끄는 동안 다른 인용의 아이콘은 숨겨요 (옮기는 인용 위로 보이던 것)
       // 종이 위·아래 끝 가까이 끌고 가면 종이가 저절로 따라 스크롤돼요
       const tick = () => {
@@ -467,6 +473,16 @@ export class Paper {
       };
       d.raf = requestAnimationFrame(tick);
     });
+    // 인용 상자·손잡이를 지금 자리에 그대로 놓아요 (transform 없이)
+    const placeFull = () => {
+      const h = el.offsetHeight;
+      el.style.transform = u.style.transform = '';
+      el.style.left = citeX(c) + 'px';
+      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
+      el.style.top = u.style.top = c.y + 'px';
+      const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.transform = ''; rsEl.style.top = (c.y + h - 28) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 28) + 'px'; }
+      if (d) { d.bx = citeX(c); d.by = c.y; }
+    };
     const apply = () => {
       // 손가락이 있는 페이지로 인용을 옮겨요 (다음·이전 페이지로 넘기기, 11/21)
       const h = d.h || (d.h = el.offsetHeight); // 끄는 동안 높이는 그대로라 한 번만 재요
@@ -479,7 +495,7 @@ export class Paper {
       const ny = Math.max(10, Math.min(PAGE_H - h - 10, (d.lastY - top) / this.scale - d.grab));
       if (tp !== d.cur) {
         // 블록·손잡이·같이 가는 글씨 판을 새 페이지로 옮겨 달아요
-        tp.inner.appendChild(el); tp.ui.appendChild(u);
+        tp.inner.appendChild(el); tp.ui.appendChild(u); d.rebase = true;
         if (d.layers) { tp.base.after(d.layers[0]); tp.ink.after(d.layers[1]); }
         d.cur = tp; c.page = tp.i; d.moved = true;
       }
@@ -489,10 +505,8 @@ export class Paper {
       const nx = Math.round(Math.max(20, Math.min(citeMaxX(c), d.cx + (d.lastX - d.x0) / this.scale)));
       if (nx !== d.cx || c.x != null) c.x = nx;
       if (Math.abs(nx - d.cx) > 1) d.moved = true;
-      el.style.left = citeX(c) + 'px';
-      u.style.right = (PAGE_W - citeX(c) - citeW(c) + 5) + 'px';
-      el.style.top = u.style.top = c.y + 'px';
-      const rsEl = citeRs.get(c); if (rsEl) { rsEl.style.top = (c.y + h - 28) + 'px'; rsEl.style.left = (citeX(c) + citeW(c) - 28) + 'px'; }
+      if (d.rebase) { placeFull(); d.rebase = false; }
+      else { const dx = citeX(c) - d.bx, dy = c.y - d.by, tf = dx || dy ? `translate(${dx}px, ${dy}px)` : ''; el.style.transform = u.style.transform = tf; const rsEl = citeRs.get(c); if (rsEl) rsEl.style.transform = tf; }
       // 옮기는 인용 자리에는 아래 글씨가 비치지 않게 (올가미로 옮길 때처럼, 11/23)
       this.citeHole(d, tp, [citeX(c), c.y, citeX(c) + citeW(c), c.y + h]);
       if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
@@ -510,6 +524,7 @@ export class Paper {
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
+      placeFull(); // 놓은 자리에 실제로 놓아요
       el.classList.remove('moving'); u.classList.remove('moving');
       this.scrollEl.classList.remove('cite-moving');
       this.citeHole(d, null);

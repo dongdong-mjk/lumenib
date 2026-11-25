@@ -1478,7 +1478,8 @@ final class NoteInkView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         scale = s
         setPage(i, rect: rect)
-        for (k, v) in add { if let id = Int(k), let d = v as? [String: Any], let sd = Self.parse(d) { data[id] = sd; boxes[id] = nil; layers[id]?.removeFromSuperlayer(); layers[id] = nil } }
+        // 다시 온 획(인용을 놓아 자리가 바뀐 것 등)은 옮기던 층에서도 빼고 새 자리로 다시 그려요
+        for (k, v) in add { if let id = Int(k), let d = v as? [String: Any], let sd = Self.parse(d) { data[id] = sd; boxes[id] = nil; carried.remove(id); layers[id]?.removeFromSuperlayer(); layers[id] = nil } }
         // 방금 뗀 획: 쓰는 동안 그린 그림을 그대로 옮겨 남겨요 (다시 그려 바꿔치기하지 않아요, 11/24)
         if let l = adopt, let from = adoptFrom, add.count == 1, let k = add.keys.first, let id = Int(k), let path = l.path {
             let o = convert(CGPoint.zero, from: from)
