@@ -137,6 +137,29 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             self?.paperBg = UIColor(red: n[0] / 255, green: n[1] / 255, blue: n[2] / 255, alpha: 1)
         }
     }
+    /// 웹킷은 종이 스크롤의 층 목록을 통째로 새로 끼울 때가 있어요(확대·인용 끌기처럼 웹 층이 새로 생길 때).
+    /// 그때 앱 글씨 판 층이 목록에서 빠져 글씨가 안 보였어요 (11/25). 빠지는 그 순간 바로 다시 끼워요
+    private var inkLayerObs: NSKeyValueObservation?
+    private weak var inkLayerHost: UIScrollView?
+    private func watchInkLayer(_ sv: UIScrollView) {
+        if inkLayerHost === sv, inkLayerObs != nil { return }
+        inkLayerHost = sv
+        inkLayerObs = sv.layer.observe(\.sublayers, options: []) { [weak self] _, _ in
+            guard let self, self.noteInkOn, !self.pinchLifted, let host = self.inkLayerHost, self.noteInk.superview === host else { return }
+            if self.noteInk.layer.superlayer !== host.layer || host.layer.sublayers?.last !== self.noteInk.layer {
+                DispatchQueue.main.async { [weak self] in self?.reinsertInk() } // 웹킷이 바꾸는 도중엔 건드리지 않고 바로 다음에
+                self.reinsertInk()
+            }
+        }
+    }
+    private func reinsertInk() {
+        guard let host = inkLayerHost, noteInk.superview === host, !pinchLifted else { return }
+        if noteInk.layer.superlayer === host.layer && host.layer.sublayers?.last === noteInk.layer { return }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if noteInk.layer.superlayer !== host.layer { noteInk.removeFromSuperview(); host.addSubview(noteInk) }
+        else { host.bringSubviewToFront(noteInk) }
+        CATransaction.commit()
+    }
     private func attachNoteInk(area: CGRect) {
         guard let web = webView, !area.isEmpty else { return }
         noteArea = area
@@ -150,7 +173,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         }
         walk(web.scrollView)
         guard let sv = best else { return }
-        if noteInk.superview !== sv { noteInk.removeFromSuperview(); sv.addSubview(noteInk) }
+        if noteInk.superview !== sv || noteInk.layer.superlayer !== sv.layer { noteInk.removeFromSuperview(); sv.addSubview(noteInk) }
+        watchInkLayer(sv)
         let size = CGSize(width: max(sv.contentSize.width, sv.bounds.width) + 2000, height: max(sv.contentSize.height, sv.bounds.height) + 4000)
         noteInk.frame = CGRect(origin: .zero, size: size)
         sv.bringSubviewToFront(noteInk)
@@ -245,6 +269,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             if adopt == nil && !add.isEmpty && inkOverlay.hasPending { inkOverlay.handOffOldest() }
             CATransaction.commit()
         case "noteHole":
+            if !pinchLifted, noteInkOn, noteInk.window == nil || noteInk.layer.superlayer == nil { attachNoteInk(area: noteArea.isEmpty ? inkConfig.area : noteArea) } // 끄는 동안 종이 스크롤이 바뀌었으면 다시 붙여요
             guard let i = (b["i"] as? NSNumber)?.intValue else { noteInk.hole(page: -1, box: nil); return }
             let n = (b["box"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
             noteInk.hole(page: i, box: n?.count == 4 ? CGRect(x: n![0], y: n![1], width: n![2] - n![0], height: n![3] - n![1]) : nil)
@@ -258,6 +283,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         case "noteClear":
             landing = false; landQueue = []; landObs = []; landTimer?.cancel()
             dropPinchSnap()
+            inkLayerObs = nil; inkLayerHost = nil
             noteInk.clearAll(); noteInk.removeFromSuperview(); noteInkOn = false; pinchLifted = false; pinchHost.isHidden = true
         default: break
         }
