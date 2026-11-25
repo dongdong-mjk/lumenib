@@ -883,6 +883,25 @@ export async function run() {
     return new Set(navs).size === 1 || '내비게이션 높이가 화면마다 달라요 ' + navs;
   });
 
+  await check('성경 탭 북마크: 여러 절을 북마크하면 그 절 전부 표시 · 다시 고르면 북마크 해제', async () => {
+    const W = wait;
+    const mine = () => S.bookmarks().filter((x) => x.book === 19 && x.ch === 100);
+    mine().forEach((x) => S.removeBookmark(x));
+    window.__lumenibGo?.('bible', { book: 19, ch: 100 }); await W(700);
+    $('.bt-v[data-n="2"]').click(); await W(80); $('.bt-v[data-n="4"]').click(); await W(150);
+    $('[data-a="bm"]').click(); await W(400);
+    const marks = $$('.bt-v').filter((v) => v.querySelector('.bt-bm')).map((v) => +v.dataset.n).join(',');
+    if (marks !== '2,3,4') { mine().forEach((x) => S.removeBookmark(x)); return '북마크 표시가 2,3,4절이 아니에요: ' + marks; }
+    $('.bt-v[data-n="3"]').click(); await W(150);
+    const label = $('[data-a="bm"]')?.textContent;
+    $('[data-a="bm"]').click(); await W(400);
+    const left = mine().length;
+    mine().forEach((x) => S.removeBookmark(x));
+    window.__lumenibGo?.('home'); await W(300);
+    if (label !== '북마크 해제') return '북마크된 절을 고르면 "북마크 해제"가 아니에요: ' + label;
+    return left === 0 || '해제가 안 돼요';
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

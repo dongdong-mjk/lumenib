@@ -503,12 +503,20 @@ function BibleScreen(arg = {}) {
   }
   const renderLeft = () => (st.left === 'books' ? renderBooks() : renderChapters());
 
+  // 이 장에서 북마크된 절 번호 모두 (범위 북마크는 그 안의 절 전부)
+  function bmVerses() {
+    const set = new Set();
+    S.bookmarks().forEach((x) => { if (x.book === st.book && x.ch === st.ch) for (let v = x.from; v <= x.to; v++) set.add(v); });
+    return set;
+  }
+  const overlapBookmarks = (p) => S.bookmarks().filter((x) => x.book === p.book && x.ch === p.ch && x.from <= p.to && x.to >= p.from);
   // ---------- 오른쪽 머리줄 ----------
   function renderHead() {
     const b = bookOf(st.book);
     if (st.sel) {
       const p = { book: st.book, ch: st.ch, from: st.sel.from, to: st.sel.to };
-      const marked = !!S.findBookmark(p);
+      const bmV = bmVerses();
+      let marked = true; for (let v = p.from; v <= p.to; v++) if (!bmV.has(v)) { marked = false; break; }
       headEl.innerHTML = `<div class="bt-htitle"><b>${esc(ref(p))}</b><span>선택</span></div>
         <div class="bt-hacts"><button data-a="bm">${marked ? '북마크 해제' : '북마크'}</button><button data-a="copy">복사</button><button data-a="write">노트 쓰기</button><button class="x" data-a="x" aria-label="선택 취소">${bIco('close')}</button></div>`;
       headEl.querySelector('[data-a="x"]').addEventListener('click', () => setSel(null));
@@ -520,7 +528,7 @@ function BibleScreen(arg = {}) {
         const r = ref(p, true); rtoast(ok ? `${r}${objJosa(r)} 복사했어요` : '복사하지 못했어요. 다시 눌러 주세요');
       });
       headEl.querySelector('[data-a="bm"]').addEventListener('click', () => {
-        if (marked) { S.removeBookmark(p); track('bible_bookmark_off'); setSel(null); rtoast('북마크를 해제했어요'); return; }
+        if (marked) { overlapBookmarks(p).forEach((x) => S.removeBookmark(x)); track('bible_bookmark_off'); setSel(null); rtoast('북마크를 해제했어요'); return; }
         S.addBookmark(p); track('bible_bookmark'); setSel(null);
         rtoastAct('북마크에 저장했어요', '북마크 보기', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }); // 북마크 탭은 아직
       });
@@ -544,7 +552,7 @@ function BibleScreen(arg = {}) {
     const notes = chapterNotes();
     const noteV = new Set();
     notes.forEach((n) => n.passages.forEach((p) => { if (p.book === st.book && p.ch === st.ch) for (let v = p.from; v <= p.to; v++) noteV.add(v); }));
-    const bmFirst = new Set(S.bookmarks().filter((x) => x.book === st.book && x.ch === st.ch).map((x) => x.from));
+    const bmV = bmVerses();
     const s = st.sel;
     colEl.setAttribute('style', viewStyle());
     colEl.innerHTML = `${notes.length ? `<div class="bt-notes${st.notesOpen ? ' open' : ''}">
@@ -553,7 +561,7 @@ function BibleScreen(arg = {}) {
       </div>` : ''}
       <div class="bt-verses">${verses.map((v) => {
         const inSel = s && v.n >= s.from && v.n <= s.to;
-        return `<div class="verse bt-v${inSel ? ' sel' : ''}${inSel && v.n === s.from ? ' first' : ''}${inSel && v.n === s.to ? ' last' : ''}" data-n="${v.n}">${bmFirst.has(v.n) ? bIco('bm', ' title="북마크"') : ''}${noteV.has(v.n) ? '<i class="has-note"></i>' : ''}<span class="vn">${v.n}</span><span class="vt">${esc(v.t)}</span></div>`;
+        return `<div class="verse bt-v${inSel ? ' sel' : ''}${inSel && v.n === s.from ? ' first' : ''}${inSel && v.n === s.to ? ' last' : ''}" data-n="${v.n}">${bmV.has(v.n) ? bIco('bm', ' title="북마크"') : ''}${noteV.has(v.n) ? '<i class="has-note"></i>' : ''}<span class="vn">${v.n}</span><span class="vt">${esc(v.t)}</span></div>`;
       }).join('')}</div>
       <div class="bt-end"></div>`;
     colEl.querySelector('[data-act="notes"]')?.addEventListener('click', () => { st.notesOpen = !st.notesOpen; renderText(); });
