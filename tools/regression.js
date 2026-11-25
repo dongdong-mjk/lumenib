@@ -1011,6 +1011,33 @@ export async function run() {
     return closed || '아래로 밀어도 안 닫혀요';
   });
 
+  await check('홈 이어서 읽기 카드: 읽던 곳 없음 = 성경 읽기·창세기 1장부터 · 북마크 없음 문구 · 북마크 있으면 최근 칩(누르면 그 구절) · 읽던 곳 있으면 이어서 읽기', async () => {
+    const W = wait;
+    const loc0 = S.settings.bibleLoc, bm0 = S.bookmarks().map((b) => ({ ...b }));
+    try {
+      S.settings.bibleLoc = undefined; S.saveSettings(); bm0.forEach((b) => S.removeBookmark(b));
+      window.__lumenibGo?.('home'); await W(800);
+      const h = $('.continue-card h2').textContent.replace(/\s+/g, ' ').trim();
+      if (h !== '성경 읽기 창세기 1장부터') return '읽던 곳 없을 때 제목이 달라요: ' + h;
+      if (!/태초에/.test($('.gen81').textContent)) return '창 1:1 미리보기가 아니에요';
+      if (!/성경에서 구절을 골라 북마크하면 여기에 모여요/.test($('.bm-row').textContent) || $('.bm-row .chip')) return '북마크 없음 문구가 달라요';
+      const hh = $('.continue-card').getBoundingClientRect().height;
+      S.addBookmark({ book: 45, ch: 8, from: 28, to: 28 });
+      S.settings.bibleLoc = { book: 43, ch: 3, v: 16, t: Date.now() }; S.saveSettings();
+      window.__lumenibGo?.('home'); await W(800);
+      if (!/^이어서 읽기/.test($('.continue-card h2').textContent.trim()) || !/요한복음 3장 16절/.test($('.continue-card h2').textContent)) return '읽던 곳이 있을 때 이어서 읽기가 아니에요';
+      if (Math.abs($('.continue-card').getBoundingClientRect().height - hh) > 0.5) return '빈 상태와 카드 높이가 달라요';
+      const chip = $('.bm-row .chip');
+      if (!chip || chip.textContent.trim() !== '롬 8:28') return '최근 북마크 칩이 안 보여요';
+      chip.click(); await W(900);
+      if (!/로마서 8장/.test($('.bt-htitle')?.textContent || '')) return '칩을 누르면 그 구절로 안 가요';
+      return true;
+    } finally {
+      S.bookmarks().forEach((b) => S.removeBookmark(b)); S.restoreBookmarks(bm0);
+      S.settings.bibleLoc = loc0; S.saveSettings(); window.__lumenibGo?.('home'); await W(300);
+    }
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

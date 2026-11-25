@@ -91,7 +91,8 @@ function go(screen, arg) {
 function Home({ highlight } = {}) {
   const notes = S.allNotes();
   const reading = S.readingArray(B.books());
-  const loc = S.settings.bibleLoc;
+  const loc = S.settings.bibleLoc; // 이어서 읽기 = 마지막으로 읽던 곳 (없으면 "성경 읽기 · 창세기 1장부터", 11/26 정책 7)
+  const recentBm = S.bookmarks().slice().sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 3); // 최근 북마크 3개
   // 최근 노트: 내가 쓴 노트를 마지막으로 고친 순서대로 먼저, 남는 칸만 예시 노트로 (11/25)
   // 설교 날짜순으로만 고르면 날짜가 최근인 예시 노트에 밀려 방금 쓴 노트가 안 보였어요
   const mine = notes.filter((n) => !n.seed).sort((a, b) => (Number(b.updatedAt) || b.createdAt || 0) - (Number(a.updatedAt) || a.createdAt || 0));
@@ -122,16 +123,17 @@ function Home({ highlight } = {}) {
         <span class="rc-btn">본문 고르기 →</span>
       </button></div>
       <button class="continue-card" data-act="bible">
-        <h2>이어서 읽기 <small>${loc ? `${esc(B.book(loc.book).name)} ${loc.ch}${unitOf(loc.book)} ${loc.v || 1}절<i class="dot3"></i>${agoText(loc.t)}` : '창세기 1장 1절'}</small></h2>${icon.chevRight}
+        ${loc ? `<h2>이어서 읽기 <small>${esc(B.book(loc.book).name)} ${loc.ch}${unitOf(loc.book)} ${loc.v || 1}절<i class="dot3"></i>${agoText(loc.t)}</small></h2>`
+    : '<h2>성경 읽기 <small>창세기 1장부터</small></h2>'}${icon.chevRight}
         <p class="gen81">…</p>
-        <div class="bm-row">북마크 <span class="chip">롬 8:28</span><span class="chip">시 23:1</span><span class="chip">사 41:10</span></div>
+        <div class="bm-row"><b>북마크</b>${recentBm.length ? recentBm.map((b) => `<span class="chip" data-bm="${b.book}|${b.ch}|${b.from}|${b.to}">${esc(B.refText(b, true))}</span>`).join('') : '<span class="bm-empty">성경에서 구절을 골라 북마크하면 여기에 모여요</span>'}</div>
       </button>
     </div>
     <section class="home-sec read-sec">
       <div class="sec-head"><h3>성경 읽기 현황</h3><div class="legend"><span><i style="background:var(--accent-mid)"></i>읽은 장</span><span><i style="background:var(--chart-dot-empty)"></i>안 읽은 장</span></div></div>
       <div class="reading">
         <div class="hero">
-          <div class="donut"><svg width="128" height="128" viewBox="0 0 128 128"><circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--chart-track)" stroke-width="12.8"/><circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--accent-mid)" stroke-width="12.8" stroke-dasharray="${(C * read) / total} ${C}" transform="rotate(-90 64 64)" stroke-linecap="round"/></svg><b>${pct}%</b></div>
+          <div class="donut"><svg width="128" height="128" viewBox="0 0 128 128"><circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--chart-track)" stroke-width="12.8"/>${read ? `<circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--accent-mid)" stroke-width="12.8" stroke-dasharray="${(C * read) / total} ${C}" transform="rotate(-90 64 64)" stroke-linecap="round"/>` : ''}</svg><b>${pct}%</b></div>
           <div class="read-num"><small>읽은 장</small><div class="big">${read}<span>/${total.toLocaleString()}</span></div><a data-act="bible-books">66권 중 ${fullBooks}권 다 읽음 ${chev(12)}</a></div>
         </div>
         <div class="matrix">
@@ -159,7 +161,12 @@ function Home({ highlight } = {}) {
   const offResize = () => window.removeEventListener('resize', fitHome);
 
   B.getVerses(loc?.book || 1, loc?.ch || 1, loc?.v || 1, loc?.v || 1).then(([v]) => { const el = app.querySelector('.gen81'); if (el && v) el.textContent = v.t; });
-  app.querySelectorAll('[data-act="bible"]').forEach((b) => b.addEventListener('click', () => go('bible')));
+  app.querySelectorAll('[data-act="bible"]').forEach((b) => b.addEventListener('click', (e) => {
+    // 북마크 칩을 누르면 그 구절로 (잠깐 표시), 카드 나머지는 읽던 곳(없으면 창세기 1장)
+    const chip = e.target.closest?.('[data-bm]');
+    if (chip) { const [book, ch, from, to] = chip.dataset.bm.split('|').map(Number); track('home_bm_chip'); go('bible', { book, ch, verse: from, flash: { from, to } }); return; }
+    go('bible');
+  }));
   app.querySelector('[data-act="bible-books"]')?.addEventListener('click', () => go('bible', { books: true }));
   app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
   app.querySelector('[data-act="record"]').addEventListener('click', () => go('pick'));
