@@ -820,6 +820,23 @@ export async function run() {
     return true;
   });
 
+  await check('읽기 기록·북마크 계정 합치기: 더 나중에 바꾼 쪽이 이기고, 다른 기기 기록이 들어옴', async () => {
+    const before = S.bibleLogSnapshot();
+    const now = Date.now();
+    S.setRead(64, 1, true); // 요한3서 1장: 이 기기에서 읽음
+    const remote = { r: { '64:1': [0, now - 100000], '63:1': [1, now + 1000] }, b: { '63:1:1-2': [1, now + 1000] } };
+    const res = S.mergeBibleLog(remote);
+    const ok1 = S.isRead(64, 1) && S.isRead(63, 1) && !!S.findBookmark({ book: 63, ch: 1, from: 1, to: 2 });
+    // 서버 쪽이 더 나중에 "안 읽음"으로 바꿨으면 따라가요
+    S.mergeBibleLog({ r: { '64:1': [0, now + 5000] }, b: {} });
+    const ok2 = !S.isRead(64, 1);
+    // 되돌려 놓기
+    S.setRead(63, 1, false); S.removeBookmark({ book: 63, ch: 1, from: 1, to: 2 });
+    S.mergeBibleLog(before);
+    if (!res.needUpload) return '기기 쪽 새 기록을 올려야 한다고 못 알아채요';
+    return (ok1 && ok2) || '합치기가 달라요 ' + [ok1, ok2];
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

@@ -203,7 +203,7 @@ export function putRemote(uid, note) {
 }
 export function removeLocal(uid, id) { userNotes = userNotes.filter((n) => !(n.id === id && n.owner === uid)); }
 // 로그아웃하면 그 계정 노트는 이 기기에서 빼요 (서버에 그대로 있어요)
-export function dropOwner(uid) { userNotes = userNotes.filter((n) => n.owner !== uid); saveNotes(true); }
+export function dropOwner(uid) { userNotes = userNotes.filter((n) => n.owner !== uid); saveNotes(true); clearBibleLocal(); }
 
 // ---------- 설정 ----------
 export const settings = Object.assign({ theme: 'dark', fingerDraw: false, verseSize: 16 }, read(KEY_SET, {}));
@@ -254,11 +254,13 @@ export function initReading(books) {
 export const isRead = (book, ch) => !!readMap?.[`${book}:${ch}`];
 export function setRead(book, ch, on) {
   if (!readMap) readMap = {};
-  if (on) readMap[`${book}:${ch}`] = 1; else delete readMap[`${book}:${ch}`];
+  const k = `${book}:${ch}`;
+  if (on) readMap[k] = 1; else delete readMap[k];
   write(KEY_READ, readMap);
+  logBible('r', k, on ? 1 : 0);
 }
 export function resetBookReading(book) {
-  for (const k of Object.keys(readMap || {})) if (k.startsWith(book + ':')) delete readMap[k];
+  for (const k of Object.keys(readMap || {})) if (k.startsWith(book + ':')) { delete readMap[k]; logBible('r', k, 0); }
   write(KEY_READ, readMap);
 }
 export const readCount = (book, chapters) => { let n = 0; for (let c = 1; c <= chapters; c++) if (isRead(book, c)) n++; return n; };
@@ -268,5 +270,56 @@ export const readingArray = (books) => { const out = []; books.forEach((b) => b.
 const KEY_BM = 'lumenib.v1.bookmarks';
 export const bookmarks = () => read(KEY_BM, []);
 export const findBookmark = (p) => bookmarks().find((b) => b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to);
-export function addBookmark(p) { write(KEY_BM, [{ book: p.book, ch: p.ch, from: p.from, to: p.to, t: Date.now() }, ...bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))]); }
-export function removeBookmark(p) { write(KEY_BM, bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))); }
+export function addBookmark(p) { write(KEY_BM, [{ book: p.book, ch: p.ch, from: p.from, to: p.to, t: Date.now() }, ...bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))]); logBible('b', bmKey(p), 1); }
+export function removeBookmark(p) { write(KEY_BM, bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))); logBible('b', bmKey(p), 0); }
+const bmKey = (p) => `${p.book}:${p.ch}:${p.from}-${p.to}`;
+
+// ---------- 읽기 기록 · 북마크를 로그인 계정에 같이 보관 (11/25 민정님) ----------
+// 바꾼 것마다 [켬/끔, 바꾼 시각]을 남겨 두고, 서버 것과 합칠 때 더 나중에 바꾼 쪽을 따라요 (아이패드 두 대에서 따로 읽어도 다 모여요)
+const KEY_BLOG = 'lumenib.v1.bibleLog';
+let bibleLog = read(KEY_BLOG, null);
+if (!bibleLog) { // 처음: 지금 기기에 있는 기록을 남겨 둬요 (로그인하면 계정으로 올라가요)
+  bibleLog = { r: {}, b: {} };
+  for (const k of Object.keys(read(KEY_READ, {}) || {})) bibleLog.r[k] = [1, 1];
+  for (const b of read(KEY_BM, [])) bibleLog.b[bmKey(b)] = [1, b.t || 1];
+  write(KEY_BLOG, bibleLog);
+}
+export const bibleHooks = { changed: () => {} }; // cloud.js 가 채워요
+function logBible(kind, key, on) {
+  bibleLog[kind][key] = [on, Date.now()];
+  write(KEY_BLOG, bibleLog);
+  bibleHooks.changed();
+}
+export const bibleLogSnapshot = () => JSON.parse(JSON.stringify(bibleLog));
+// 서버 기록과 합쳐요. 돌려주는 값: { changedLocal, needUpload }
+export function mergeBibleLog(remote) {
+  let changedLocal = false, needUpload = false;
+  for (const kind of ['r', 'b']) {
+    const L = bibleLog[kind], R = remote?.[kind] || {};
+    for (const [k, rv] of Object.entries(R)) {
+      const lv = L[k];
+      if (!lv || rv[1] > lv[1]) { L[k] = rv; changedLocal = true; }
+    }
+    for (const [k, lv] of Object.entries(L)) { const rv = R[k]; if (!rv || lv[1] > rv[1]) needUpload = true; }
+  }
+  if (changedLocal) {
+    write(KEY_BLOG, bibleLog);
+    readMap = {};
+    for (const [k, v] of Object.entries(bibleLog.r)) if (v[0]) readMap[k] = 1;
+    write(KEY_READ, readMap);
+    const old = new Map(bookmarks().map((b) => [bmKey(b), b]));
+    const list = [];
+    for (const [k, v] of Object.entries(bibleLog.b)) {
+      if (!v[0]) continue;
+      const [book, ch, range] = k.split(':'); const [from, to] = range.split('-').map(Number);
+      list.push(old.get(k) || { book: +book, ch: +ch, from, to, t: v[1] });
+    }
+    write(KEY_BM, list.sort((a, b) => (b.t || 0) - (a.t || 0)));
+  }
+  return { changedLocal, needUpload };
+}
+// 로그아웃하면 그 계정 읽기 기록·북마크도 이 기기에서 빼요 (노트처럼, 서버에는 그대로)
+export function clearBibleLocal() {
+  readMap = {}; bibleLog = { r: {}, b: {} };
+  write(KEY_READ, readMap); write(KEY_BLOG, bibleLog); write(KEY_BM, []);
+}

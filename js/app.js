@@ -1888,7 +1888,10 @@ async function main() {
   S.initReading(B.books()); // 읽기 기록 (성경 탭 "다 읽었어요")
   C.ui.toast = toast;
   C.ui.askConsent = askConsentAfterLogin;
-  C.on((what) => { if ((what === 'notes' || what === 'user') && curScreen === 'home' && !overlay.querySelector('.dim')) go('home'); });
+  C.on((what) => {
+    if ((what === 'notes' || what === 'user' || what === 'bible') && curScreen === 'home' && !overlay.querySelector('.dim')) go('home');
+    if (what === 'bible' && curScreen === 'bible' && !overlay.querySelector('.dim') && !app.querySelector('.bt-v.sel')) go('bible'); // 다른 기기에서 읽은 기록이 들어오면
+  });
   C.restoreOwnerFast(); // 지난번 로그인한 계정 노트를 홈에 바로 (서버 확인은 뒤에서)
   go('home');
   C.init().catch((e) => console.warn('[cloud] init', e)); // 로그인돼 있으면 서버 노트를 받아 와요 (홈은 먼저 보여 줘요)

@@ -78,6 +78,7 @@ export async function init() {
   else { S.setOwner(null); emit('user'); } // 미리 보여 준 계정이 실제로는 로그아웃돼 있었으면 되돌려요
 
   S.hooks.changed = () => schedulePush();
+  S.bibleHooks.changed = () => { bibleDirty = true; schedulePush(); }; // 읽기 기록·북마크도 계정에
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushNow(); });
   window.addEventListener('online', () => { if (user) sync(); });
 }
@@ -176,6 +177,25 @@ export function providerName() {
 // ---------- 동기화 ----------
 const path = (id) => `${user.id}/${id}.json.gz`;
 
+// 읽기 기록 · 북마크: 계정 폴더의 파일 하나 (_bible.json.gz). 받아서 합치고, 기기 쪽이 더 새것이 있으면 올려요
+let bibleDirty = false;
+async function syncBible() {
+  if (!user) return false;
+  const file = `${user.id}/_bible.json.gz`;
+  let remote = null;
+  const { data, error } = await sb.storage.from(BUCKET).download(file);
+  if (!error && data) remote = JSON.parse(await gunzip(data));
+  const { changedLocal, needUpload } = S.mergeBibleLog(remote);
+  if (needUpload || !remote) {
+    const body = await gzip(JSON.stringify(S.bibleLogSnapshot()));
+    const { error: e2 } = await sb.storage.from(BUCKET).upload(file, body, { upsert: true, contentType: 'application/gzip' });
+    if (e2) throw e2;
+  }
+  bibleDirty = false;
+  if (changedLocal) emit('bible');
+  return changedLocal;
+}
+
 // 서버에 올릴 모양: 기기 전용 표시와 성경 본문 글자(데이터에서 다시 채움)는 빼요
 function packNote(n) {
   const { _dirty, owner, ...rest } = n;
@@ -234,7 +254,7 @@ export async function pushNow() {
   if (!user) return;
   if (running) { await running; }
   const dirty = S.ownedBy(user.id).filter((n) => n._dirty);
-  if (!dirty.length) return;
+  if (!dirty.length) { if (bibleDirty) await syncBible().catch((e) => console.warn('[cloud] bible', e)); return; }
   running = (async () => {
     setStatus('syncing');
     try {
@@ -245,6 +265,7 @@ export async function pushNow() {
         if (n.deleted && !n._dirty) S.removeLocal(user.id, n.id);
       }
       S.saveNotes();
+      if (bibleDirty) await syncBible();
       lastSync = Date.now();
       setStatus('ok');
     } catch (e) {
@@ -282,6 +303,7 @@ export async function sync({ skipId } = {}) {
     const remote = new Set(rows.map((r) => r.id));
     S.ownedBy(user.id).forEach((n) => { if (!remote.has(n.id) && !n.deleted) n._dirty = 1; });
     S.saveNotes(true);
+    try { await syncBible(); } catch (e) { console.warn('[cloud] bible', e); } // 읽기 기록·북마크
     lastSync = Date.now();
     setStatus('ok');
   } catch (e) {
