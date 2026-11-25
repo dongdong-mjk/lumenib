@@ -178,15 +178,17 @@ function Home({ highlight } = {}) {
 // 위 탭 바 (홈·노트 화면 공통). 고른 탭 뒤의 알약은 하나만 있고, 탭을 옮기면 유리알처럼 미끄러져 가요 (11/25)
 let tabPillFrom = null; // 직전 화면에서 알약이 있던 자리 (탭 바 기준 left·width)
 function tabBar(active) {
-  const t = (key, ico, label, attrs) => `<button class="home-tab${active === key ? ' on' : ''}" ${attrs}>${ico}${label}</button>`;
+  // 아이콘은 피그마 Icon 페이지의 outline(fill=false) / fill(fill=true) 세트 그대로. 고른 탭만 fill (11/25)
+  const ico = (name, on) => `<i class="nav-ico ni-${name}${on ? '-fill' : ''}" aria-hidden="true"></i>`;
+  const t = (key, name, label, attrs) => `<button class="home-tab${active === key ? ' on' : ''}" ${attrs}>${ico(name, active === key)}${label}</button>`;
   return `<nav class="home-nav">
     <div class="home-tabs"><span class="tab-pill" aria-hidden="true"></span>
-      ${t('home', active === 'home' ? icon.home : icon.homeLine, '홈', 'data-act="home"')}
-      ${t('bible', icon.book, '성경', 'data-oos')}
-      ${t('notes', active === 'notes' ? '<i class="nl-ico nl-notefill" aria-hidden="true"></i>' : icon.note, '노트', 'data-act="notes"')}
-      ${t('bookmark', icon.bookmark, '북마크', 'data-oos')}
+      ${t('home', 'home', '홈', 'data-act="home"')}
+      ${t('bible', 'book', '성경', 'data-oos')}
+      ${t('notes', 'note', '노트', 'data-act="notes"')}
+      ${t('bookmark', 'bookmark', '북마크', 'data-oos')}
     </div>
-    <button class="icon-btn gear" data-act="settings" aria-label="설정">${icon.settings}</button>
+    <button class="icon-btn gear" data-act="settings" aria-label="설정"><i class="nav-ico gear-ico ni-settings" aria-hidden="true"></i></button>
   </nav>`;
 }
 function slideTabPill() {
