@@ -1,6 +1,6 @@
 // lumenib 1차 테스트 앱: 화면 흐름
 // T1 홈 → T2·T3 본문 고르기 → T4 노트 쓰기 (T5 인용 · T6 이 장 노트 · T7 예전 노트 탭) → 완료 → 홈
-import { icon, esc, toast, toastAction, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
+import { icon, esc, toast, toastAction, firstCho, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
 import { Paper, tool, snapForNative, SIZE_RANGE, SIZE_DEFAULT, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
@@ -11,7 +11,6 @@ import * as C from './cloud.js';
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay-root');
 let cleanup = () => {};
-let reading = [];
 let lastLocation = null; // 본문 고르기에서 마지막으로 본 곳
 let curScreen = null;
 
@@ -70,6 +69,7 @@ function loadScript(src) {
 function go(screen, arg) {
   // 떠 있던 토스트(예: "노트가 저장됐어요")는 다른 화면으로 가면 그 자리에서 사라져요
   const t = document.getElementById('toast');
+  if (t) t.style.left = ''; // 성경 탭은 토스트를 읽기 칸 가운데에 띄워요. 다른 화면에선 원래대로
   if (t?.classList.contains('show')) {
     t.classList.add('leave'); t.classList.remove('show');
     setTimeout(() => t.classList.remove('leave'), 200);
@@ -81,7 +81,7 @@ function go(screen, arg) {
   curScreen = screen;
   if (screen === 'home' && C.currentUser() && Date.now() - C.syncStatus().lastSync > 30000) C.sync();
   trackScreen(screen === 'note' && arg?.noteId ? 'note_view' : screen);
-  ({ home: Home, pick: Pick, note: NoteScreen, notes: NotesScreen })[screen](arg);
+  ({ home: Home, pick: Pick, note: NoteScreen, notes: NotesScreen, bible: BibleScreen })[screen](arg);
   window.__lumenibGo = go; // 회귀 점검(tools/regression.js)에서 화면을 바로 옮길 때 씀
 }
 
@@ -90,6 +90,8 @@ function go(screen, arg) {
 // =========================================================
 function Home({ highlight } = {}) {
   const notes = S.allNotes();
+  const reading = S.readingArray(B.books());
+  const loc = S.settings.bibleLoc;
   // 최근 노트: 내가 쓴 노트를 마지막으로 고친 순서대로 먼저, 남는 칸만 예시 노트로 (11/25)
   // 설교 날짜순으로만 고르면 날짜가 최근인 예시 노트에 밀려 방금 쓴 노트가 안 보였어요
   const mine = notes.filter((n) => !n.seed).sort((a, b) => (Number(b.updatedAt) || b.createdAt || 0) - (Number(a.updatedAt) || a.createdAt || 0));
@@ -119,8 +121,8 @@ function Home({ highlight } = {}) {
         <p>말씀 본문을 고르고 바로 필기를 시작해요</p>
         <span class="rc-btn">본문 고르기 →</span>
       </button></div>
-      <button class="continue-card" data-oos>
-        <h2>이어서 읽기 <small>창세기 8장 1절<i class="dot3"></i>어제</small></h2>${icon.chevRight}
+      <button class="continue-card" data-act="bible">
+        <h2>이어서 읽기 <small>${loc ? `${esc(B.book(loc.book).name)} ${loc.ch}${unitOf(loc.book)} ${loc.v || 1}절<i class="dot3"></i>${agoText(loc.t)}` : '창세기 1장 1절'}</small></h2>${icon.chevRight}
         <p class="gen81">…</p>
         <div class="bm-row">북마크 <span class="chip">롬 8:28</span><span class="chip">시 23:1</span><span class="chip">사 41:10</span></div>
       </button>
@@ -130,7 +132,7 @@ function Home({ highlight } = {}) {
       <div class="reading">
         <div class="hero">
           <div class="donut"><svg width="128" height="128" viewBox="0 0 128 128"><circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--chart-track)" stroke-width="12.8"/><circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--accent-mid)" stroke-width="12.8" stroke-dasharray="${(C * read) / total} ${C}" transform="rotate(-90 64 64)" stroke-linecap="round"/></svg><b>${pct}%</b></div>
-          <div class="read-num"><small>읽은 장</small><div class="big">${read}<span>/${total.toLocaleString()}</span></div><a data-oos>66권 중 ${fullBooks}권 다 읽음 ${chev(12)}</a></div>
+          <div class="read-num"><small>읽은 장</small><div class="big">${read}<span>/${total.toLocaleString()}</span></div><a data-act="bible-books">66권 중 ${fullBooks}권 다 읽음 ${chev(12)}</a></div>
         </div>
         <div class="matrix">
           <div class="matrix-row"><span>구약</span><div class="dots">${dots(reading.slice(0, oldN))}</div></div>
@@ -156,7 +158,9 @@ function Home({ highlight } = {}) {
   window.addEventListener('resize', fitHome);
   const offResize = () => window.removeEventListener('resize', fitHome);
 
-  B.getVerses(1, 8, 1, 1).then(([v]) => { const el = app.querySelector('.gen81'); if (el) el.textContent = v.t; });
+  B.getVerses(loc?.book || 1, loc?.ch || 1, loc?.v || 1, loc?.v || 1).then(([v]) => { const el = app.querySelector('.gen81'); if (el && v) el.textContent = v.t; });
+  app.querySelectorAll('[data-act="bible"]').forEach((b) => b.addEventListener('click', () => go('bible')));
+  app.querySelector('[data-act="bible-books"]')?.addEventListener('click', () => go('bible', { books: true }));
   app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
   app.querySelector('[data-act="record"]').addEventListener('click', () => go('pick'));
   app.querySelectorAll('[data-act="notes"]').forEach((b) => b.addEventListener('click', () => go('notes')));
@@ -183,7 +187,7 @@ function tabBar(active) {
   return `<nav class="home-nav">
     <div class="home-tabs"><span class="tab-pill" aria-hidden="true"></span>
       ${t('home', 'home', '홈', 'data-act="home"')}
-      ${t('bible', 'book', '성경', 'data-oos')}
+      ${t('bible', 'book', '성경', 'data-act="bible"')}
       ${t('notes', 'note', '노트', 'data-act="notes"')}
       ${t('bookmark', 'bookmark', '북마크', 'data-oos')}
     </div>
@@ -307,6 +311,7 @@ function NotesScreen() {
 
   function bind() {
     app.querySelector('[data-act="home"]').addEventListener('click', () => go('home'));
+    app.querySelector('.home-nav [data-act="bible"]')?.addEventListener('click', () => go('bible'));
     app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
     app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
     // 검색바: 본문 고르기 화면(성경 패널) 검색바와 같은 상태 — 포커스(테두리 진하게) · 입력 중(값 + 지우기 ×) · 입력 완료
@@ -361,6 +366,307 @@ function NotesScreen() {
   const off = C.on((w) => { if ((w === 'notes' || w === 'user') && curScreen === 'notes' && !st.selecting) render(); });
   cleanup = () => { document.removeEventListener('pointerdown', outside, true); off?.(); };
   render();
+}
+
+
+// =========================================================
+// T9 성경 탭 (11/25) · 피그마 "성경 탭 (11-25, Claude)" 라이트 시안 · 정책 14
+// 왼쪽 376 = 장 고르기 / 권 고르기, 오른쪽 = 장 읽기(가운데 640)
+// =========================================================
+const unitOf = (book) => (book === 19 ? '편' : '장');
+const chLabel = (book, ch) => `${ch}${unitOf(book)}`;
+function agoText(t) {
+  if (!t) return '';
+  const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+  const days = Math.round((d0 - new Date(new Date(t).setHours(0, 0, 0, 0))) / 86400000);
+  return days <= 0 ? '오늘' : days === 1 ? '어제' : `${days}일 전`;
+}
+// 받침 있으면 "을", 없으면 "를" (숫자는 읽는 소리로)
+function objJosa(text) {
+  const ch = text.trim().slice(-1);
+  if (/\d/.test(ch)) return '013678'.includes(ch) ? '을' : '를';
+  const code = ch.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return '를';
+  return code % 28 ? '을' : '를';
+}
+const BV_SIZE = [80, 90, 100, 110, 120, 130, 140, 150, 160];
+const BV_LH = [1.45, 1.55, 1.7, 1.85, 2.0];
+const bibleView = () => ({ font: 'serif', size: 100, ls: 0, lh: 0, ...(S.settings.bibleView || {}) });
+const bIco = (name, extra = '') => `<i class="bt-ico bt-${name}" aria-hidden="true"${extra}></i>`;
+
+function BibleScreen(arg = {}) {
+  const books = B.books();
+  const loc0 = S.settings.bibleLoc || { book: 1, ch: 1, v: 1 }; // 처음엔 창세기 1장, 그 뒤로는 마지막 읽던 곳
+  const st = {
+    book: loc0.book, ch: loc0.ch, scrollTo: arg.verse || loc0.v || 1,
+    left: arg.books ? 'books' : 'chapters', sort: 'toc', query: '',
+    sel: null, notesOpen: false,
+    justRead: null, // 이 장에 머무는 동안 "방금 읽음" 상태(②)를 유지해요 { key, bookDone }
+  };
+  if (arg.book) { st.book = arg.book; st.ch = arg.ch || 1; st.scrollTo = arg.verse || 1; }
+  let verses = [];
+
+  app.innerHTML = `<div class="home bible-tab">${tabBar('bible')}
+    <div class="bt-wrap">
+      <section class="bt-left"></section>
+      <section class="bt-read"><div class="bt-head"></div><div class="bt-scroll"><div class="bt-col"></div></div></section>
+    </div></div>`;
+  slideTabPill();
+  const leftEl = app.querySelector('.bt-left'), headEl = app.querySelector('.bt-head');
+  const scrollEl = app.querySelector('.bt-scroll'), colEl = app.querySelector('.bt-col');
+  app.querySelector('.home-nav [data-act="home"]').addEventListener('click', () => go('home'));
+  app.querySelector('.home-nav [data-act="notes"]').addEventListener('click', () => go('notes'));
+  app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
+  app.querySelectorAll('.home-nav [data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
+
+  const bookOf = (id) => B.book(id);
+  const chCount = (id) => bookOf(id).verses.length;
+  const ref = (p, short = false) => B.refText(p, short);
+  const fullBooks = () => books.filter((b) => S.readCount(b.id, b.verses.length) === b.verses.length).length;
+  // 읽기 칸 가운데 아래 토스트
+  const placeToast = () => { const r = app.querySelector('.bt-read').getBoundingClientRect(); document.getElementById('toast').style.left = `${r.left + r.width / 2}px`; };
+  const rtoast = (msg) => { placeToast(); toast(msg); };
+  const rtoastAct = (msg, label, fn) => { placeToast(); toastAction(msg, label, fn); };
+  const saveLoc = (v) => { S.settings.bibleLoc = { book: st.book, ch: st.ch, v: v || 1, t: Date.now() }; S.saveSettings(); };
+
+  // ---------- 왼쪽: 장 고르기 ----------
+  function renderChapters() {
+    const b = bookOf(st.book), n = b.verses.length, read = S.readCount(st.book, n);
+    leftEl.innerHTML = `<div class="bt-lhead"><button class="nl-dd bt-dd" data-act="books">${esc(b.name)}${NOTE_ICON('down')}</button></div>
+      <div class="bt-sum"><span>${read === n ? '다 읽은 권이에요' : `${n}${unitOf(st.book)} 중 ${read}${unitOf(st.book)} 읽음`}</span><span class="bt-legend"><i class="sw"></i>읽음</span></div>
+      <div class="bt-lscroll"><div class="bt-chips">${b.verses.map((_, i) => {
+        const c = i + 1, on = S.isRead(st.book, c);
+        return `<button class="bt-chip${on ? ' read' : ''}${c === st.ch ? ' cur' : ''}" data-ch="${c}">${chLabel(st.book, c)}</button>`;
+      }).join('')}</div>
+      ${read ? `<button class="bt-reset" data-act="reset">${esc(b.name)} 읽기 기록 초기화</button>` : ''}</div>`;
+    leftEl.querySelector('[data-act="books"]').addEventListener('click', () => { st.left = 'books'; st.query = ''; renderLeft(); });
+    leftEl.querySelectorAll('[data-ch]').forEach((x) => x.addEventListener('click', () => openChapter(st.book, +x.dataset.ch)));
+    leftEl.querySelector('[data-act="reset"]')?.addEventListener('click', () => {
+      modal(`<div class="modal"><h3>${esc(b.name)} 읽기 기록을 지울까요?</h3><p class="desc">읽은 장 ${read}개의 표시가 지워져요. 노트와 북마크는 그대로 남아요.</p>
+        <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">지우기</button></div></div>`, (d, close) => {
+        d.querySelector('[data-a="no"]').addEventListener('click', close);
+        d.querySelector('[data-a="yes"]').addEventListener('click', () => { S.resetBookReading(st.book); track('bible_reset_book'); close(); st.justRead = null; renderLeft(); renderEnd(); rtoast(`${b.name} 읽기 기록을 지웠어요`); });
+      });
+    });
+    const cur = leftEl.querySelector('.bt-chip.cur'), sc = leftEl.querySelector('.bt-lscroll');
+    if (cur && sc) sc.scrollTop = Math.max(0, cur.offsetTop - sc.clientHeight / 2);
+  }
+
+  // ---------- 왼쪽: 권 고르기 (검색 · 최근 · 목차순/가나다순 · 읽은 장 비율) ----------
+  function renderBooks() {
+    const recent = S.recentBooks().map((id) => `<button class="bt-rchip" data-book="${id}">${esc(bookOf(id).name)}</button>`).join('');
+    leftEl.innerHTML = `<div class="bt-bhead">
+        <label class="nl-search bt-search">${NOTE_ICON('search')}<input type="search" enterkeyhint="search" placeholder="창세기111, ㄱㄹ413" value="${esc(st.query)}" autocomplete="off"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.query ? '' : 'hidden'}>${icon.x}</button></label>
+        <div class="bt-recent"><span>최근</span>${recent}</div>
+      </div><div class="bt-bbody"></div>`;
+    const body = leftEl.querySelector('.bt-bbody');
+    const fill = () => {
+      const q = st.query.trim();
+      if (q) { body.innerHTML = `<div class="bt-lscroll">${BiblePanel.prototype.searchHTML.call(null, q)}</div>`; bindBooks(); return; }
+      const grid = (list) => `<div class="bt-bgrid">${list.map((b) => {
+        const n = b.verses.length, r = S.readCount(b.id, n);
+        return `<button class="bt-book${b.id === st.book ? ' cur' : ''}" data-book="${b.id}"><span>${esc(b.name)}</span><i class="gt"><i style="width:${(r / n) * 100}%"></i></i></button>`;
+      }).join('')}</div>`;
+      let groups;
+      if (st.sort === 'toc') groups = [['구약', books.filter((b) => b.testament === 'old')], ['신약', books.filter((b) => b.testament === 'new')]];
+      else {
+        const m = {};
+        [...books].sort((a, b) => a.name.localeCompare(b.name, 'ko')).forEach((b) => (m[firstCho(b.name)] ||= []).push(b));
+        groups = Object.entries(m);
+      }
+      body.innerHTML = `<div class="bt-tabs"><button class="${st.sort === 'toc' ? 'on' : ''}" data-sort="toc">목차순</button><button class="${st.sort === 'abc' ? 'on' : ''}" data-sort="abc">가나다순</button></div>
+        <div class="bt-sum b"><span>66권 중 ${fullBooks()}권 다 읽음</span><span class="bt-legend"><i class="bar"></i>읽은 장 비율</span></div>
+        <div class="bt-lscroll">${groups.map(([label, list]) => `<div class="bt-glabel">${esc(label)}</div>${grid(list)}`).join('')}<div style="height:16px"></div></div>`;
+      bindBooks();
+      const cur = body.querySelector('.bt-book.cur'), sc = body.querySelector('.bt-lscroll');
+      if (cur && sc) sc.scrollTop = Math.max(0, cur.offsetTop - sc.clientHeight / 2);
+    };
+    const bindBooks = () => {
+      leftEl.querySelectorAll('[data-book]').forEach((x) => x.addEventListener('click', () => { S.pushRecentBook(+x.dataset.book); st.left = 'chapters'; openChapter(+x.dataset.book, 1); }));
+      body.querySelectorAll('[data-sort]').forEach((x) => x.addEventListener('click', () => { st.sort = x.dataset.sort; fill(); }));
+      body.querySelectorAll('[data-jump]').forEach((x) => x.addEventListener('click', () => {
+        const [bk, c, v] = x.dataset.jump.split('|').map((y) => +y || 0);
+        S.pushRecentBook(bk); st.left = 'chapters'; st.query = '';
+        openChapter(bk, c || 1, v || 1);
+      }));
+    };
+    const input = leftEl.querySelector('input'), clear = leftEl.querySelector('.bp-search-clear');
+    input.addEventListener('input', () => { st.query = input.value; clear.hidden = !input.value; fill(); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const first = body.querySelector('[data-jump]'); // "고후 4:17" 입력 후 검색 = 그 구절로 바로
+      if (first) first.click(); else input.blur();
+    });
+    clear.addEventListener('pointerdown', (e) => e.preventDefault());
+    clear.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); });
+    fill();
+  }
+  const renderLeft = () => (st.left === 'books' ? renderBooks() : renderChapters());
+
+  // ---------- 오른쪽 머리줄 ----------
+  function renderHead() {
+    const b = bookOf(st.book);
+    if (st.sel) {
+      const p = { book: st.book, ch: st.ch, from: st.sel.from, to: st.sel.to };
+      const marked = !!S.findBookmark(p);
+      headEl.innerHTML = `<div class="bt-htitle"><b>${esc(ref(p))}</b><span>선택</span></div>
+        <div class="bt-hacts"><button data-a="bm">${marked ? '북마크 해제' : '북마크'}</button><button data-a="copy">복사</button><button data-a="write">노트 쓰기</button><button class="x" data-a="x" aria-label="선택 취소">${bIco('close')}</button></div>`;
+      headEl.querySelector('[data-a="x"]').addEventListener('click', () => setSel(null));
+      headEl.querySelector('[data-a="copy"]').addEventListener('click', async () => {
+        const text = verses.filter((v) => v.n >= p.from && v.n <= p.to).map((v) => v.t).join(' ');
+        try { await navigator.clipboard.writeText(`${text}\n(${ref(p)})`); } catch {}
+        track('bible_copy'); setSel(null);
+        const r = ref(p, true); rtoast(`${r}${objJosa(r)} 복사했어요`);
+      });
+      headEl.querySelector('[data-a="bm"]').addEventListener('click', () => {
+        if (marked) { S.removeBookmark(p); track('bible_bookmark_off'); setSel(null); rtoast('북마크를 해제했어요'); return; }
+        S.addBookmark(p); track('bible_bookmark'); setSel(null);
+        rtoastAct('북마크에 저장했어요', '북마크 보기', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }); // 북마크 탭은 아직
+      });
+      headEl.querySelector('[data-a="write"]').addEventListener('click', () => { track('bible_write_note'); go('pick', { passage: p }); });
+      return;
+    }
+    headEl.innerHTML = `<div class="bt-htitle"><b>${esc(b.name)} ${chLabel(st.book, st.ch)}</b></div><div class="bt-hacts"><button class="aa" data-a="aa">Aa</button></div>`;
+    headEl.querySelector('[data-a="aa"]').addEventListener('click', openAa);
+  }
+
+  // ---------- 본문 ----------
+  function viewStyle() {
+    const v = bibleView(), size = 16 * v.size / 100;
+    return `--bv-size:${size}px;--bv-lh:${BV_LH[v.lh + 2]};--bv-ls:${(-2 + v.ls) / 100}em;--bv-font:${v.font === 'sans' ? 'var(--font-ui)' : 'var(--font-serif)'}`;
+  }
+  function chapterNotes() { return S.allNotes().filter((n) => n.passages.some((p) => p.book === st.book && p.ch === st.ch)); }
+  async function renderText() {
+    const tok = (renderText.t = (renderText.t || 0) + 1);
+    verses = await B.getVerses(st.book, st.ch);
+    if (tok !== renderText.t) return;
+    const notes = chapterNotes();
+    const noteV = new Set();
+    notes.forEach((n) => n.passages.forEach((p) => { if (p.book === st.book && p.ch === st.ch) for (let v = p.from; v <= p.to; v++) noteV.add(v); }));
+    const bmFirst = new Set(S.bookmarks().filter((x) => x.book === st.book && x.ch === st.ch).map((x) => x.from));
+    const s = st.sel;
+    colEl.setAttribute('style', viewStyle());
+    colEl.innerHTML = `${notes.length ? `<div class="bt-notes${st.notesOpen ? ' open' : ''}">
+        <button class="bt-nbar" data-act="notes"><span>이 장에 쓴 노트 <i class="bt-badge">${notes.length}</i></span>${bIco(st.notesOpen ? 'up16' : 'down16')}</button>
+        ${st.notesOpen ? `<div class="bt-nlist">${notes.map((n) => `<button class="bt-nrow" data-note="${n.id}"><span class="t"><span class="l1"><b>${esc(n.passages.map((p) => ref(p, true)).join(', '))}</b><i>·</i><em>${fmtShort(n.date)}</em></span><span class="l2"><span>${esc(n.title || '제목 없음')}</span>${n.preacher ? `<i>·</i><em>${esc(n.preacher)}</em>` : ''}</span></span>${bIco('rowchev')}</button>`).join('')}</div>` : ''}
+      </div>` : ''}
+      <div class="bt-verses">${verses.map((v) => {
+        const inSel = s && v.n >= s.from && v.n <= s.to;
+        return `<div class="verse bt-v${inSel ? ' sel' : ''}${inSel && v.n === s.from ? ' first' : ''}${inSel && v.n === s.to ? ' last' : ''}" data-n="${v.n}">${bmFirst.has(v.n) ? bIco('bm', ' title="북마크"') : ''}${noteV.has(v.n) ? '<i class="has-note"></i>' : ''}<span class="vn">${v.n}</span><span class="vt">${esc(v.t)}</span></div>`;
+      }).join('')}</div>
+      <div class="bt-end"></div>`;
+    colEl.querySelector('[data-act="notes"]')?.addEventListener('click', () => { st.notesOpen = !st.notesOpen; renderText(); });
+    colEl.querySelectorAll('[data-note]').forEach((x) => x.addEventListener('click', () => { saveLoc(firstVisible()); go('note', { noteId: x.dataset.note, from: 'bible' }); }));
+    colEl.querySelectorAll('.bt-v').forEach((x) => x.addEventListener('click', () => tapVerse(+x.dataset.n)));
+    renderEnd();
+    if (st.scrollTo) {
+      const t = colEl.querySelector(`.bt-v[data-n="${st.scrollTo}"]`);
+      scrollEl.scrollTop = t && st.scrollTo > 1 ? Math.max(0, t.offsetTop - 24) : 0;
+      st.scrollTo = null;
+    }
+  }
+  function tapVerse(n) {
+    const s = st.sel;
+    if (!s) setSel({ from: n, to: n });
+    else if (s.from === s.to && s.from === n) setSel(null);
+    else if (s.from === s.to) setSel({ from: Math.min(s.from, n), to: Math.max(s.from, n) });
+    else setSel({ from: n, to: n });
+  }
+  function setSel(sel) {
+    st.sel = sel;
+    // 고른 표시만 바꿔요 (목록을 다시 만들지 않아 스크롤이 그대로)
+    colEl.querySelectorAll('.bt-v').forEach((v) => {
+      const n = +v.dataset.n, inS = !!sel && n >= sel.from && n <= sel.to;
+      v.classList.toggle('sel', inS); v.classList.toggle('first', inS && n === sel.from); v.classList.toggle('last', inS && n === sel.to);
+    });
+    renderHead();
+    if (!sel) { const sc = scrollEl.scrollTop; renderText().then(() => { scrollEl.scrollTop = sc; }); } // 북마크 표시 반영
+  }
+
+  // ---------- 장 끝 (읽기 전 · 방금 읽음 · 이미 읽은 장 · 권을 다 읽음) ----------
+  const prevOf = () => (st.ch > 1 ? { book: st.book, ch: st.ch - 1 } : st.book > 1 ? { book: st.book - 1, ch: chCount(st.book - 1) } : null);
+  const nextOf = () => (st.ch < chCount(st.book) ? { book: st.book, ch: st.ch + 1 } : st.book < books.length ? { book: st.book + 1, ch: 1 } : null);
+  const navLabel = (t) => (t.book === st.book ? chLabel(t.book, t.ch) : `${bookOf(t.book).name} ${chLabel(t.book, t.ch)}`);
+  function renderEnd() {
+    const el = colEl.querySelector('.bt-end');
+    if (!el) return;
+    const key = `${st.book}:${st.ch}`, read = S.isRead(st.book, st.ch);
+    const jr = st.justRead?.key === key && read ? st.justRead : null;
+    const prev = prevOf(), next = nextOf();
+    const nextCls = jr ? 'secondary' : 'text'; // 방금 읽은 뒤엔 회색 버튼(검정이면 토스트와 겹쳐 보여서, 11/25 민정님)
+    let mid;
+    if (!read) mid = '<button class="bt-btn primary" data-a="read">다 읽었어요</button>';
+    else if (jr?.bookDone) mid = `<div class="bt-done">${bIco('checks')}${esc(bookOf(st.book).name)}${objJosa(bookOf(st.book).name)} 다 읽었어요</div><button class="bt-booklink" data-a="tobooks">66권 중 ${fullBooks()}권 다 읽음 ${bIco('rowchev')}</button>`;
+    else if (jr) mid = `<div class="bt-done">${bIco('checks')}다 읽은 장이에요</div>`;
+    else mid = `<div class="bt-done">${bIco('checks')}다 읽은 장이에요</div><button class="bt-btn outline-s" data-a="unread">읽음 취소</button>`;
+    el.innerHTML = `<div class="bt-div"></div><div class="bt-nav">
+      ${prev ? `<button class="bt-btn text" data-go="${prev.book}|${prev.ch}">${bIco('cl')}${esc(navLabel(prev))}</button>` : '<span></span>'}
+      <div class="bt-mid">${mid}</div>
+      ${next ? `<button class="bt-btn ${nextCls}" data-go="${next.book}|${next.ch}">${esc(navLabel(next))}${bIco('cr')}</button>` : '<span></span>'}
+    </div>`;
+    el.querySelectorAll('[data-go]').forEach((x) => x.addEventListener('click', () => { const [bk, c] = x.dataset.go.split('|').map(Number); openChapter(bk, c); }));
+    el.querySelector('[data-a="read"]')?.addEventListener('click', markRead);
+    el.querySelector('[data-a="unread"]')?.addEventListener('click', () => { S.setRead(st.book, st.ch, false); track('bible_unread'); st.justRead = null; renderLeft(); renderEnd(); });
+    el.querySelector('[data-a="tobooks"]')?.addEventListener('click', () => { st.left = 'books'; renderLeft(); });
+  }
+  function markRead() {
+    const b = bookOf(st.book), n = b.verses.length;
+    const wasLast = S.readCount(st.book, n) === n - 1; // 권의 마지막 안 읽은 장
+    S.setRead(st.book, st.ch, true);
+    track('bible_read');
+    st.justRead = { key: `${st.book}:${st.ch}`, bookDone: wasLast };
+    renderLeft(); renderEnd();
+    const undo = () => { S.setRead(st.book, st.ch, false); st.justRead = null; renderLeft(); renderEnd(); track('bible_read_undo'); };
+    if (wasLast) rtoastAct(`${b.name}${objJosa(b.name)} 다 읽었어요`, '되돌리기', undo);
+    else rtoastAct(`${b.name} ${chLabel(st.book, st.ch)}${objJosa(chLabel(st.book, st.ch))} 다 읽었어요`, '되돌리기', undo);
+  }
+
+  // ---------- Aa 보기 설정 (바텀시트: 바꾸면 바로 적용, 바깥·핸들로 닫기) ----------
+  function openAa() {
+    const close = modal(`<div class="bsheet" role="dialog" aria-label="보기 설정"><button class="bs-handle" data-a="close" aria-label="닫기"><i></i></button><div class="bs-body"></div></div>`, (d, cl) => {
+      d.classList.add('bs-dim');
+      const body = d.querySelector('.bs-body');
+      const draw = () => {
+        const v = bibleView();
+        const stepper = (key, label, val, atMin, atMax) => `<div class="bs-row"><span>${label}</span><div class="stepper"><button data-k="${key}" data-d="-1" ${atMin ? 'disabled' : ''} aria-label="${label} 줄이기"><i class="minus"></i></button><b>${val}</b><button data-k="${key}" data-d="1" ${atMax ? 'disabled' : ''} aria-label="${label} 키우기">${bIco('plus')}</button></div></div>`;
+        const lvl = (x) => (x === 0 ? '기본' : (x > 0 ? '+' : '') + x);
+        body.innerHTML = `<div class="bs-row"><span>글꼴</span><div class="nl-seg bs-seg"><button class="${v.font === 'serif' ? 'on' : ''} serif" data-font="serif">명조체</button><button class="${v.font === 'sans' ? 'on' : ''}" data-font="sans">고딕체</button></div></div>
+          <div class="bs-div"></div>
+          ${stepper('size', '글자 크기', v.size + '%', v.size <= BV_SIZE[0], v.size >= BV_SIZE.at(-1))}
+          ${stepper('ls', '글자 간격', lvl(v.ls), v.ls <= -2, v.ls >= 2)}
+          ${stepper('lh', '줄 간격', lvl(v.lh), v.lh <= -2, v.lh >= 2)}`;
+        body.querySelectorAll('[data-font]').forEach((x) => x.addEventListener('click', () => save({ font: x.dataset.font })));
+        body.querySelectorAll('[data-k]').forEach((x) => x.addEventListener('click', () => {
+          const k = x.dataset.k, dlt = +x.dataset.d, cur = bibleView();
+          if (k === 'size') save({ size: Math.min(160, Math.max(80, cur.size + dlt * 10)) });
+          else save({ [k]: Math.min(2, Math.max(-2, cur[k] + dlt)) });
+        }));
+      };
+      const save = (patch) => { S.settings.bibleView = { ...bibleView(), ...patch }; S.saveSettings(); track('bible_view'); colEl.setAttribute('style', viewStyle()); draw(); };
+      d.querySelector('[data-a="close"]').addEventListener('click', cl);
+      draw();
+    });
+    return close;
+  }
+
+  // ---------- 장 열기 · 읽던 곳 기억 ----------
+  function firstVisible() {
+    const top = scrollEl.getBoundingClientRect().top;
+    const v = [...colEl.querySelectorAll('.bt-v')].find((x) => x.getBoundingClientRect().bottom > top + 8);
+    return v ? +v.dataset.n : 1;
+  }
+  function openChapter(book, ch, verse = 1) {
+    if (book !== st.book || ch !== st.ch) { st.justRead = null; st.notesOpen = false; }
+    st.book = book; st.ch = ch; st.sel = null; st.scrollTo = verse;
+    saveLoc(verse);
+    renderLeft(); renderHead(); renderText();
+  }
+  let saveT = 0;
+  scrollEl.addEventListener('scroll', () => { clearTimeout(saveT); saveT = setTimeout(() => saveLoc(firstVisible()), 400); }, { passive: true });
+  cleanup = () => { clearTimeout(saveT); };
+
+  saveLoc(st.scrollTo);
+  renderLeft(); renderHead(); renderText();
 }
 
 // 홈은 스크롤 없이 한 화면에 맞춰요.
@@ -603,8 +909,9 @@ function openLogin() {
 // =========================================================
 // T2 · T3 본문 고르기
 // =========================================================
-function Pick() {
-  const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: [], paper: PAPERS.some((p) => p[0] === S.settings.lastPaper) ? S.settings.lastPaper : 'lined' }; // 마지막에 고른 종이로 시작
+function Pick(arg = {}) {
+  // 성경 탭 "노트 쓰기": 고른 구절을 본문으로 정해서 열어요 (정책 14)
+  const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: arg.passage ? [arg.passage] : [], paper: PAPERS.some((p) => p[0] === S.settings.lastPaper) ? S.settings.lastPaper : 'lined' }; // 마지막에 고른 종이로 시작
   app.innerHTML = `<div class="screen">
     <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${icon.arrowLeft.replace('width="24" height="24"', 'width="18" height="18"')} 홈</button></div>
       <div class="title">오늘 설교 기록하기</div><div class="right"></div></header>
@@ -615,7 +922,7 @@ function Pick() {
   const right = app.querySelector('.right-panel');
   const bp = new BiblePanel(app.querySelector('.bible-panel'), {
     mode: 'pick',
-    start: null,
+    start: arg.passage ? { book: arg.passage.book, ch: arg.passage.ch, verse: arg.passage.from } : null,
     marks: () => ({
       today: [...st.passages],
       noteVerses: (() => {
@@ -756,7 +1063,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   app.innerHTML = `<div class="screen">
     <header class="topbar">
       <div class="left"><button class="icon-btn" data-act="back" aria-label="뒤로">${icon.back}</button><button class="icon-btn" data-act="side" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
-      <div class="mid"><div class="tb-slot"></div><div class="title">${mainReadonly ? esc(main.title) : from === 'home' || from === 'notes' ? '노트' : '오늘 설교 기록하기'}</div></div>
+      <div class="mid"><div class="tb-slot"></div><div class="title">${mainReadonly ? esc(main.title) : from === 'home' || from === 'notes' || from === 'bible' ? '노트' : '오늘 설교 기록하기'}</div></div>
       <div class="right">${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
     </header>
     <div class="workspace">
@@ -1507,7 +1814,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   // 왼쪽 위 뒤로 (피그마 Top Bar 화면=노트 쓰기, 11/21): 오른쪽 위 완료와 같은 방식으로 나가요 (저장 · 본문 확인)
   app.querySelector('[data-act="back"]').addEventListener('click', () => { track('note_back'); app.querySelector('[data-act="done"]').click(); });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
-    if (mainReadonly) return go(from === 'notes' ? 'notes' : 'home');
+    if (mainReadonly) return go(from === 'notes' || from === 'bible' ? from : 'home');
     if (!main.passages.length) return askPassage();
     finish();
   });
@@ -1518,7 +1825,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     S.touch(main);
     // 홈으로 먼저 넘어가고 저장은 바로 다음에 (노트가 클수록 나가는 순간이 늦던 것, 11/23). 앱을 닫을 땐 그때 바로 저장돼요
     // 노트 목록에서 열었으면 목록으로 돌아가요 (정책 13: 완료 → 노트 목록)
-    if (from === 'notes') go('notes'); else go('home', { highlight: main.id });
+    if (from === 'notes' || from === 'bible') go(from); else go('home', { highlight: main.id }); // 성경 탭에서 열었으면 읽던 곳으로
     setTimeout(() => S.saveNotes(true), 0);
   }
 
@@ -1578,7 +1885,7 @@ async function main() {
   applyTheme();
   const t0 = Date.now();
   await B.loadIndex();
-  reading = S.readingSeed(B.books().map((b) => b.verses.length));
+  S.initReading(B.books()); // 읽기 기록 (성경 탭 "다 읽었어요")
   C.ui.toast = toast;
   C.ui.askConsent = askConsentAfterLogin;
   C.on((what) => { if ((what === 'notes' || what === 'user') && curScreen === 'home' && !overlay.querySelector('.dim')) go('home'); });

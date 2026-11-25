@@ -774,6 +774,52 @@ export async function run() {
     return $$('.nl-card').length === total || '되돌린 뒤 카드 수가 달라요';
   });
 
+  await check('성경 탭(T9): 장 열기 · 다 읽었어요/되돌리기 · 권 완독 · 이전/다음 끝 장 · 구절 선택 · 권 목록 · 읽기 기록 초기화', async () => {
+    const W = wait;
+    const read0 = JSON.stringify(Object.fromEntries([...Array(17)].map((_, c) => [c, S.isRead(57, c)]))); // 빌레몬서(1장)와 디도서(3장)로 점검
+    const loc0 = S.settings.bibleLoc;
+    S.resetBookReading(56); S.resetBookReading(57);
+    window.__lumenibGo?.('bible', { book: 56, ch: 1 }); await W(800);
+    if (!$('.bt-chip.cur') || $('.bt-htitle')?.textContent.trim() !== '디도서 1장') return '장이 안 열려요 ' + $('.bt-htitle')?.textContent;
+    $('[data-a="read"]').click(); await W(200);
+    if (!S.isRead(56, 1)) return '다 읽었어요가 저장 안 돼요';
+    if (!$('.bt-chip.cur.read')) return '장 칩이 읽음으로 안 바뀌어요';
+    if (!/다 읽은 장이에요/.test($('.bt-mid').textContent)) return '방금 읽은 상태가 안 보여요';
+    $('#toast button')?.click(); await W(200);
+    if (S.isRead(56, 1)) return '되돌리기가 안 돼요';
+    // 권 완독: 빌레몬서 1장
+    window.__lumenibGo?.('bible', { book: 57, ch: 1 }); await W(700);
+    $('[data-a="read"]').click(); await W(200);
+    if (!/빌레몬서를 다 읽었어요/.test($('.bt-mid').textContent)) return '권 완독 문구가 안 보여요 ' + $('.bt-mid').textContent;
+    if ($('.bt-sum span').textContent !== '다 읽은 권이에요') return '왼쪽 문구가 다 읽은 권이 아니에요';
+    if (!$$('.bt-nav > button').some((b) => /히브리서 1장/.test(b.textContent))) return '권 마지막 장의 다음 버튼이 다음 권 이름이 아니에요';
+    // 끝 장: 창세기 1장엔 이전 없음, 계 22장엔 다음 없음, 시편은 편
+    window.__lumenibGo?.('bible', { book: 1, ch: 1 }); await W(700);
+    if ($$('.bt-nav > button').length !== 1) return '창세기 1장에 이전 장이 있어요';
+    window.__lumenibGo?.('bible', { book: 19, ch: 23 }); await W(700);
+    if (!/시편 23편/.test($('.bt-htitle').textContent)) return '시편이 편으로 안 보여요';
+    // 구절 선택 → 머리줄
+    $('.bt-v[data-n="1"]').click(); await W(80); $('.bt-v[data-n="3"]').click(); await W(80);
+    if (!/시편 23:1-3/.test($('.bt-htitle').textContent) || !$('[data-a="write"]')) return '구절 선택 머리줄이 달라요 ' + $('.bt-htitle').textContent;
+    $('[data-a="x"]').click(); await W(150);
+    if ($('.bt-v.sel')) return '선택 취소가 안 돼요';
+    // 권 목록 · 검색 바로 가기
+    $('.bt-dd').click(); await W(200);
+    if ($$('.bt-book').length !== 66) return '권 목록이 66권이 아니에요';
+    const inp = $('.bt-search input'); inp.value = '고후 4:17'; inp.dispatchEvent(new Event('input')); await W(100);
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); await W(700);
+    if (!/고린도후서 4장/.test($('.bt-htitle').textContent)) return '검색으로 바로 이동이 안 돼요 ' + $('.bt-htitle').textContent;
+    // 읽기 기록 초기화 (확인 창)
+    window.__lumenibGo?.('bible', { book: 57, ch: 1 }); await W(700);
+    $('[data-act="reset"]').click(); await W(150);
+    if (!/빌레몬서 읽기 기록을 지울까요/.test($('.dim .modal')?.textContent || '')) return '초기화 확인 창이 안 떠요';
+    $('.dim [data-a="yes"]').click(); await W(200);
+    if (S.isRead(57, 1)) return '초기화가 안 돼요';
+    S.settings.bibleLoc = loc0; S.saveSettings();
+    window.__lumenibGo?.('home'); await W(300);
+    return true;
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

@@ -795,3 +795,114 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .nav-ico.ni-settings { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22setting%22%3E %3Cg id=%22Icon%22%3E %3Cpath d=%22M12.001 7.84961C14.2928 7.84979 16.1514 9.70813 16.1514 12C16.1514 14.2919 14.2928 16.1502 12.001 16.1504C9.70903 16.1504 7.85062 14.292 7.85062 12C7.85062 9.70802 9.70903 7.84961 12.001 7.84961ZM12.001 9.65039C10.7031 9.65039 9.6514 10.7021 9.6514 12C9.6514 13.2979 10.7031 14.3496 12.001 14.3496C13.2987 14.3494 14.3506 13.2978 14.3506 12C14.3506 10.7022 13.2987 9.65057 12.001 9.65039Z%22 fill-rule=%22evenodd%22 clip-rule=%22evenodd%22 fill=%22black%22/%3E %3Cpath d=%22M12.9502 1.69922C14.442 1.69922 15.6504 2.90986 15.6504 4.40039V4.53027C15.9977 4.69746 16.3315 4.88816 16.6494 5.09961L16.7578 5.03809C18.0492 4.29323 19.7 4.73676 20.4453 6.02734L21.3955 7.67285C22.1408 8.96416 21.6983 10.6158 20.4073 11.3613L20.4063 11.3623L20.2871 11.4297C20.2948 11.5681 20.3008 11.7081 20.3008 11.8496L20.293 12.1904C20.2877 12.3137 20.2785 12.4361 20.2676 12.5576L20.4073 12.6387L20.6387 12.7891C21.7486 13.5895 22.0942 15.1165 21.3955 16.3271L20.4453 17.9727C19.7464 19.1829 18.2513 19.648 17.003 19.0869L16.7569 18.9609L16.4024 18.7559C16.1598 18.9051 15.9089 19.0426 15.6504 19.167V19.5996C15.6504 21.0901 14.442 22.3008 12.9502 22.3008H11.0508C9.5598 22.3006 8.34964 21.0907 8.34964 19.5996V19.167C8.09113 19.0426 7.83941 18.9062 7.59671 18.7568L7.24515 18.9609C5.95363 19.7064 4.30115 19.2636 3.55569 17.9727L2.6055 16.3271C1.86044 15.036 2.30276 13.3853 3.5928 12.6396L3.73245 12.5576C3.72171 12.436 3.71326 12.3136 3.70804 12.1904L3.70023 11.8496C3.70023 11.7084 3.70447 11.5683 3.71194 11.4297L3.59378 11.3613C2.30298 10.6158 1.86036 8.9641 2.6055 7.67285L3.55569 6.02734C4.30115 4.73642 5.95266 4.29359 7.24417 5.03906L7.34964 5.09961C7.66783 4.88797 8.00214 4.69758 8.34964 4.53027V4.40039C8.34964 2.90933 9.5598 1.6994 11.0508 1.69922H12.9502ZM11.0508 3.5C10.5539 3.50018 10.1504 3.90345 10.1504 4.40039V5.11914C10.1504 5.48921 9.92357 5.82174 9.57913 5.95703C8.99052 6.18813 8.44434 6.50012 7.95609 6.87988C7.66715 7.1045 7.27017 7.13211 6.95316 6.94922L6.34378 6.59766C5.91361 6.34962 5.36286 6.49719 5.11429 6.92773L4.16409 8.57324C3.91612 9.00346 4.06402 9.55421 4.49417 9.80273L5.11038 10.1582C5.42448 10.3397 5.59883 10.6919 5.55276 11.0518C5.51892 11.3157 5.50102 11.5819 5.50101 11.8496C5.50101 12.2035 5.53091 12.5511 5.58792 12.8896C5.65023 13.2598 5.47628 13.6303 5.1514 13.8184L4.49515 14.1982C4.06483 14.4469 3.91626 14.9967 4.16409 15.4268L5.11429 17.0723C5.36272 17.5026 5.91274 17.6498 6.3428 17.4023L7.17776 16.9189C7.48419 16.7415 7.86676 16.7612 8.15433 16.9678C8.59022 17.281 9.06857 17.5417 9.57913 17.7422C9.92358 17.8775 10.1504 18.21 10.1504 18.5801V19.5996C10.1504 20.0966 10.5539 20.4998 11.0508 20.5H12.9502C13.4466 20.5 13.8496 20.0973 13.8496 19.5996V18.5801C13.8496 18.2101 14.0766 17.8775 14.4209 17.7422C14.9314 17.5418 15.4097 17.281 15.8457 16.9678L15.958 16.8984C16.2276 16.7591 16.5534 16.7643 16.8213 16.9189L17.6573 17.4023L17.7393 17.4443C18.1551 17.631 18.6536 17.4758 18.8867 17.0723L19.8369 15.4268C20.0696 15.0231 19.9542 14.5138 19.584 14.2471L19.5069 14.1973L18.8496 13.8174C18.5246 13.6294 18.3498 13.259 18.4121 12.8887C18.4694 12.5487 18.5 12.2016 18.5 11.8496C18.5 11.5837 18.4814 11.3178 18.4473 11.0518C18.4012 10.6916 18.5761 10.3385 18.8907 10.1572L19.5078 9.80176C19.9375 9.55303 20.0849 9.00327 19.8369 8.57324L18.8867 6.92773C18.6381 6.49724 18.0874 6.34946 17.6573 6.59766L17.6563 6.59863L17.0459 6.9502C16.729 7.13253 16.3326 7.10438 16.044 6.87988C15.5556 6.50009 15.0095 6.18802 14.4209 5.95703C14.0767 5.82167 13.8496 5.48911 13.8496 5.11914V4.40039C13.8496 3.9027 13.4466 3.5 12.9502 3.5H11.0508Z%22 fill-rule=%22evenodd%22 clip-rule=%22evenodd%22 fill=%22black%22/%3E %3C/g%3E %3C/g%3E %3C/svg%3E"); }
 /* 알약 애니메이션 없음 (11/25): 나중에 네이티브 유리알로 */
 .tab-pill { transition: none !important; }
+
+/* ===== T9 성경 탭 (11/25) · 피그마 "성경 탭 (11-25, Claude)" 라이트 시안 · 정책 14 ===== */
+.bible-tab { display: flex; flex-direction: column; }
+.bible-tab .home-nav { flex: none; margin: calc(16px - min(16px, var(--safe-top))) 24px 0; }
+.bt-wrap { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 4px 12px calc(12px + var(--safe-bottom, 0px)); }
+.bt-left, .bt-read { background: var(--bg-panel); border-radius: 20px; box-shadow: var(--shadow-panel); padding: 8px 8px 0; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0; }
+.bt-left { flex: none; width: 376px; border: 1px solid var(--border-panel); }
+.bt-read { flex: 1; min-width: 0; gap: 8px; }
+.bt-ico { display: inline-block; flex: none; background: currentColor; -webkit-mask: var(--m) center / contain no-repeat; mask: var(--m) center / contain no-repeat; }
+.bt-cl { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%229%22 height=%2218%22 viewBox=%220 0 9 18%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22chevronLeftTightSmall%22%3E %3Cpath id=%22Icon%22 d=%22M5.89769 14.3527C6.1613 14.6161 6.5892 14.6162 6.85276 14.3527C7.11618 14.0891 7.11621 13.6611 6.85276 13.3976L2.45459 9.00087L6.85276 4.6027L6.89891 4.55143C7.11492 4.28645 7.09948 3.89546 6.85276 3.64835C6.60568 3.40127 6.21408 3.38536 5.94896 3.60148L5.89769 3.64835L1.02271 8.52333C0.896346 8.64984 0.825014 8.82132 0.824959 9.00014C0.82496 9.17911 0.896184 9.3511 1.02271 9.47767L5.89769 14.3527Z%22 fill=%22%23111111%22/%3E %3C/g%3E %3C/svg%3E"); width: 9px; height: 18px; }
+.bt-cr { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%229%22 height=%2218%22 viewBox=%220 0 9 18%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22chevronRightTightSmall%22%3E %3Cpath id=%22Icon%22 d=%22M2.14776 14.3524C2.41135 14.616 2.83923 14.616 3.10281 14.3524L7.97769 9.47745C8.10403 9.3509 8.17544 9.17874 8.17544 8.99991C8.17533 8.8212 8.10397 8.64956 7.97769 8.52311L3.10281 3.64811L3.05154 3.60124C2.78653 3.38506 2.3949 3.40126 2.14776 3.64811C1.90089 3.89526 1.88545 4.28616 2.10161 4.55119L2.14776 4.60246L6.54584 9.00064L2.14776 13.3974C1.88416 13.661 1.88417 14.0888 2.14776 14.3524Z%22 fill=%22%23111111%22/%3E %3C/g%3E %3C/svg%3E"); width: 9px; height: 18px; }
+.bt-checks { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2218%22 height=%2218%22 viewBox=%220 0 18 18%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22check%22%3E %3Cpath id=%22Icon%22 d=%22M13.5538 4.30527C13.8685 3.92063 14.4355 3.86386 14.8201 4.17856C15.2046 4.49333 15.2614 5.0603 14.9468 5.44491L8.19685 13.6949C8.03589 13.8916 7.79884 14.011 7.54499 14.0237C7.29119 14.0363 7.04358 13.9411 6.86384 13.7615L3.11383 10.0115C2.76236 9.66007 2.76236 9.09006 3.11383 8.73859C3.46531 8.3872 4.03534 8.38715 4.38678 8.73859L7.43293 11.7847L13.5538 4.30527Z%22 fill=%22%23111111%22/%3E %3C/g%3E %3C/svg%3E"); width: 18px; height: 18px; }
+.bt-close { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22close%22%3E %3Cpath id=%22Icon%22 d=%22M16.8633 5.8633C17.2148 5.51183 17.7853 5.51183 18.1367 5.8633C18.4881 6.21478 18.4882 6.78529 18.1367 7.13674L13.2735 12L18.1367 16.8633C18.4881 17.2148 18.4882 17.7853 18.1367 18.1367C17.7853 18.4882 17.2148 18.4881 16.8633 18.1367L12 13.2735L7.13674 18.1367C6.78529 18.4882 6.21478 18.4881 5.8633 18.1367C5.51183 17.7853 5.51183 17.2148 5.8633 16.8633L10.7266 12L5.8633 7.13674C5.51183 6.78526 5.51183 6.21477 5.8633 5.8633C6.21477 5.51183 6.78526 5.51183 7.13674 5.8633L12 10.7266L16.8633 5.8633Z%22 fill=%22%23111111%22/%3E %3C/g%3E %3C/svg%3E"); width: 24px; height: 24px; }
+.bt-rowchev { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2212%22 height=%2212%22 viewBox=%220 0 12 12%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22chevronRight%22%3E %3Cpath id=%22Icon%22 d=%22M3.93156 1.68157C4.09634 1.51679 4.35735 1.50658 4.5341 1.65081L4.56828 1.68157L8.56827 5.68156C8.74389 5.85731 8.74397 6.14258 8.56827 6.31828L4.56828 10.3183L4.5341 10.349C4.35739 10.4932 4.09632 10.4829 3.93156 10.3183C3.76681 10.1535 3.75665 9.89248 3.9008 9.71573L3.93156 9.68155L7.6132 5.99992L3.93156 2.31829L3.9008 2.28411C3.75659 2.10738 3.76685 1.84635 3.93156 1.68157Z%22 fill=%22%236B6B6B%22/%3E %3C/g%3E %3C/svg%3E"); width: 12px; height: 12px; }
+.bt-plus { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2220%22 height=%2220%22 viewBox=%220 0 20 20%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22plus%22%3E %3Cpath id=%22Icon%22 d=%22M10 3.83301C10.4142 3.83301 10.7503 4.16912 10.7503 4.58333V9.24967H15.4167C15.8309 9.24967 16.167 9.58579 16.167 10C16.167 10.4142 15.8309 10.7503 15.4167 10.7503H10.7503V15.4167C10.7503 15.8309 10.4142 16.167 10 16.167C9.58579 16.167 9.24967 15.8309 9.24967 15.4167V10.7503H4.58333C4.16912 10.7503 3.83301 10.4142 3.83301 10C3.83301 9.58579 4.16912 9.24967 4.58333 9.24967H9.24967V4.58333C9.24967 4.16912 9.58579 3.83301 10 3.83301Z%22 fill=%22%23111111%22/%3E %3C/g%3E %3C/svg%3E"); width: 20px; height: 20px; }
+.bt-bm { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2216%22 height=%2216%22 viewBox=%220 0 16 16%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22bookmarkFill%22%3E %3Cpath id=%22Icon%22 d=%22M11.6667 2.06641C12.0026 2.06641 12.325 2.19995 12.5625 2.4375C12.8 2.67505 12.9336 2.99739 12.9336 3.33333V12.14C12.9336 13.1309 11.8465 13.7381 11.0026 13.2188L8.03516 11.3926C8.01373 11.3794 7.98627 11.3794 7.96484 11.3926L4.9974 13.2188C4.15345 13.7381 3.06641 13.1309 3.06641 12.14V3.33333C3.06641 2.99739 3.19995 2.67505 3.4375 2.4375C3.67505 2.19995 3.99739 2.06641 4.33333 2.06641H11.6667Z%22 fill=%22%23111111%22/%3E %3C/g%3E %3C/svg%3E"); width: 16px; height: 16px; }
+.bt-down16 { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2216%22 height=%2216%22 viewBox=%220 0 16 16%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22chevronBottomThick%22%3E %3Cpath id=%22Icon%22 d=%22M7.38745 11.6129C7.72591 11.9512 8.27429 11.9513 8.61271 11.6129L13.946 6.27953C14.2844 5.94111 14.2844 5.39273 13.946 5.05427C13.6076 4.71583 13.0592 4.71585 12.7208 5.05427L8.00008 9.77498L3.27938 5.05427C2.94093 4.71583 2.39257 4.71585 2.05412 5.05427C1.71566 5.39273 1.71566 5.94108 2.05412 6.27953L7.38745 11.6129Z%22 fill=%22%23555555%22/%3E %3C/g%3E %3C/svg%3E"); width: 16px; height: 16px; }
+.bt-up16 { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2216%22 height=%2216%22 viewBox=%220 0 16 16%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22chevronTopThick%22%3E %3Cpath id=%22Icon%22 d=%22M7.38745 4.38713C7.72591 4.04879 8.27429 4.04872 8.61271 4.38713L13.946 9.72047C14.2844 10.0589 14.2844 10.6073 13.946 10.9457C13.6076 11.2842 13.0592 11.2842 12.7208 10.9457L8.00008 6.22503L3.27938 10.9457C2.94093 11.2842 2.39257 11.2842 2.05412 10.9457C1.71566 10.6073 1.71566 10.0589 2.05412 9.72047L7.38745 4.38713Z%22 fill=%22%23555555%22/%3E %3C/g%3E %3C/svg%3E"); width: 16px; height: 16px; }
+
+/* 왼쪽: 장 고르기 */
+.bt-lhead { flex: none; height: 40px; display: flex; align-items: center; }
+.bt-sum { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 0; font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+.bt-sum.b { padding: 12px 4px 8px; }
+.bt-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; color: var(--text-primary); }
+.bt-sum.b .bt-legend { color: var(--text-tertiary); }
+.bt-legend .sw { width: 14px; height: 14px; border-radius: 3px; background: var(--bg-panel-inset); }
+.bt-legend .bar { width: 12px; height: 3px; border-radius: 2px; background: var(--icon-primary); }
+.bt-lscroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.bt-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 12px 0; }
+.bt-chip { height: 44px; border-radius: 10px; font-size: 16px; line-height: 24px; color: var(--text-primary); }
+.bt-chip.read { background: var(--bg-panel-inset); }
+.bt-chip.cur { font-weight: 600; }
+.bt-reset { display: block; margin: 4px auto 16px; padding: 8px 12px; font-size: 13px; line-height: 18px; color: var(--text-tertiary); }
+
+/* 왼쪽: 권 고르기 */
+.bt-bhead { flex: none; display: flex; flex-direction: column; gap: 10px; }
+.nl-search.bt-search { width: 100%; }
+.bt-recent { display: flex; align-items: center; gap: 6px; padding: 0 12px 10px; font-size: 13px; line-height: 18px; }
+.bt-recent > span { font-weight: 600; color: var(--text-tertiary); }
+.bt-rchip { padding: 5px 10px; border: 1px solid var(--border-default); border-radius: 999px; font-size: 13px; line-height: 18px; color: var(--text-primary); }
+.bt-bbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.bt-tabs { flex: none; display: flex; gap: 8px; height: 44px; border-bottom: 1px solid var(--border-panel); }
+.bt-tabs button { flex: 1; font-size: 16px; line-height: 24px; color: var(--text-primary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.bt-tabs button.on { font-weight: 600; border-bottom-color: var(--icon-primary); }
+.bt-glabel { padding: 12px 4px 8px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-primary); }
+.bt-bgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.bt-book { position: relative; height: 48px; border-radius: 12px; background: var(--bg-panel-inset); font-size: 15px; line-height: 22px; color: var(--text-primary); padding: 0 4px; }
+.bt-book.cur { box-shadow: inset 0 0 0 1.5px var(--icon-primary); }
+.bt-book .gt { position: absolute; left: 16px; right: 16px; top: 40px; height: 2px; border-radius: 2px; background: var(--chart-track); overflow: hidden; }
+.bt-book .gt i { display: block; height: 100%; background: var(--marker-today); border-radius: 2px; }
+
+/* 오른쪽 머리줄 */
+.bt-head { flex: none; height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 16px; }
+.bt-htitle { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; min-width: 0; }
+.bt-htitle b { font-size: 22px; line-height: 30px; font-weight: 600; }
+.bt-htitle span { font-size: 15px; line-height: 22px; color: var(--text-secondary); }
+.bt-hacts { display: flex; align-items: center; }
+.bt-hacts button { height: 40px; padding: 0 12px; border-radius: 12px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); }
+.bt-hacts button.aa { padding: 0 8px; font-size: 16px; line-height: 24px; }
+.bt-hacts button.x { padding: 8px; border-radius: 999px; display: grid; place-items: center; }
+.bt-hacts button:active { background: var(--bg-hover); }
+
+/* 본문 (가운데 640) */
+.bt-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.bt-col { width: 640px; max-width: 100%; margin: 0 auto; }
+.bt-notes { padding-bottom: 12px; }
+.bt-notes > div, .bt-nbar { background: var(--bg-panel-inset); }
+.bt-notes { border-radius: 14px; }
+.bt-nbar { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 14px 20px; border-radius: 14px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); }
+.bt-notes.open .bt-nbar { border-radius: 14px 14px 0 0; }
+.bt-nbar > span { display: inline-flex; align-items: center; gap: 8px; }
+.bt-badge { font-style: normal; padding: 1px 6px; border-radius: 999px; background: var(--action-primary); color: var(--text-on-primary); font-size: 11px; line-height: 14px; font-weight: 600; }
+.bt-nlist { padding-bottom: 8px; border-radius: 0 0 14px 14px; }
+.bt-nrow { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 20px; text-align: left; color: var(--text-primary); }
+.bt-nrow .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 18px; white-space: nowrap; }
+.bt-nrow .l1, .bt-nrow .l2 { display: flex; gap: 6px; overflow: hidden; }
+.bt-nrow b { font-weight: 600; }
+.bt-nrow i, .bt-nrow em { font-style: normal; color: var(--text-tertiary); }
+.bt-nrow .l2 > span { overflow: hidden; text-overflow: ellipsis; }
+.bt-v { cursor: default; }
+.bt-v .vt { font-family: var(--bv-font, var(--font-serif)); font-size: var(--bv-size, 16px); line-height: var(--bv-lh, 1.7); letter-spacing: var(--bv-ls, -0.02em); color: var(--text-body); }
+.bt-v .bt-bm { position: absolute; left: -18px; top: 9px; color: var(--icon-primary); }
+
+/* 장 끝 */
+.bt-end { padding-top: 24px; }
+.bt-div { height: 1px; background: var(--border-panel); }
+.bt-nav { position: relative; display: flex; align-items: center; justify-content: space-between; padding: 24px 0 60px; min-height: 40px; }
+.bt-mid { position: absolute; left: 50%; top: 24px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+.bt-btn { height: 40px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 999px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.bt-btn.primary { background: var(--action-primary); color: var(--text-on-primary); padding: 0 16px; }
+.bt-btn.secondary { background: var(--bg-panel-inset); padding: 0 16px; }
+.bt-btn.outline-s { height: auto; padding: 9px 16px; border: 1px solid var(--border-default); border-radius: 12px; font-size: 13px; line-height: 18px; gap: 4px; }
+.bt-done { height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); opacity: .4; white-space: nowrap; }
+.bt-booklink { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; line-height: 18px; color: var(--text-tertiary); padding: 4px 8px; }
+
+/* Aa 바텀시트 (피그마 Bottom Sheet · Stepper) */
+.dim.bs-dim { place-items: end center; padding-bottom: calc(22px + var(--safe-bottom, 0px)); }
+.bsheet { width: 600px; max-width: calc(100vw - 32px); background: var(--bg-panel); border-radius: 28px; padding-bottom: 32px; display: flex; flex-direction: column; align-items: center; animation: bs-up .2s ease; }
+@keyframes bs-up { from { transform: translateY(24px); opacity: 0; } }
+.bs-handle { width: 120px; height: 44px; display: grid; place-items: center; }
+.bs-handle i { width: 40px; height: 5px; border-radius: 3px; background: var(--chart-track); }
+.bs-body { width: 100%; box-sizing: border-box; padding: 4px 32px 0; }
+.bs-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; font-size: 17px; line-height: 26px; color: var(--text-primary); }
+.bs-div { height: 1px; background: var(--border-panel); margin: 12px 0; }
+.bs-seg button { display: flex; align-items: center; justify-content: center; padding: 0; }
+.bs-seg button.serif { font-family: var(--font-serif); }
+.stepper { width: 220px; height: 48px; box-sizing: border-box; padding: 0 2px; display: flex; align-items: center; justify-content: space-between; background: var(--bg-input); border-radius: 12px; }
+.stepper button { width: 44px; height: 44px; display: grid; place-items: center; color: var(--icon-primary); }
+.stepper button:disabled { opacity: .4; }
+.stepper .minus { width: 14px; height: 2px; border-radius: 1px; background: currentColor; }
+.stepper b { font-size: 17px; line-height: 26px; font-weight: 600; }

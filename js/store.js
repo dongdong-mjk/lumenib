@@ -236,3 +236,37 @@ export function readingSeed(chapterCounts) {
   chapterCounts.forEach((n, i) => { for (let c = 0; c < n; c++) out.push(c < prefix[i] ? 1 : 0); });
   return out;
 }
+
+// ---------- 성경 읽기 기록 (11/25: 성경 탭 "다 읽었어요"로 직접 표시) ----------
+// "권:장" → 1. 예시 노트처럼, 예시 읽기 기록도 SHOW_EXAMPLES일 때만 처음에 깔아요
+const KEY_READ = 'lumenib.v1.read';
+let readMap = read(KEY_READ, null);
+export function initReading(books) {
+  if (readMap) return;
+  readMap = {};
+  if (SHOW_EXAMPLES) {
+    const arr = readingSeed(books.map((b) => b.verses.length));
+    let i = 0;
+    books.forEach((b) => b.verses.forEach((_, c) => { if (arr[i++]) readMap[`${b.id}:${c + 1}`] = 1; }));
+  }
+  write(KEY_READ, readMap);
+}
+export const isRead = (book, ch) => !!readMap?.[`${book}:${ch}`];
+export function setRead(book, ch, on) {
+  if (!readMap) readMap = {};
+  if (on) readMap[`${book}:${ch}`] = 1; else delete readMap[`${book}:${ch}`];
+  write(KEY_READ, readMap);
+}
+export function resetBookReading(book) {
+  for (const k of Object.keys(readMap || {})) if (k.startsWith(book + ':')) delete readMap[k];
+  write(KEY_READ, readMap);
+}
+export const readCount = (book, chapters) => { let n = 0; for (let c = 1; c <= chapters; c++) if (isRead(book, c)) n++; return n; };
+export const readingArray = (books) => { const out = []; books.forEach((b) => b.verses.forEach((_, c) => out.push(isRead(b.id, c + 1) ? 1 : 0))); return out; };
+
+// ---------- 북마크 (성경 탭에서 구절 범위 하나 = 북마크 하나) ----------
+const KEY_BM = 'lumenib.v1.bookmarks';
+export const bookmarks = () => read(KEY_BM, []);
+export const findBookmark = (p) => bookmarks().find((b) => b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to);
+export function addBookmark(p) { write(KEY_BM, [{ book: p.book, ch: p.ch, from: p.from, to: p.to, t: Date.now() }, ...bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))]); }
+export function removeBookmark(p) { write(KEY_BM, bookmarks().filter((b) => !(b.book === p.book && b.ch === p.ch && b.from === p.from && b.to === p.to))); }
