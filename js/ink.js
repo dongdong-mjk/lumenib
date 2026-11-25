@@ -513,6 +513,9 @@ export class Paper {
         }
         this._hidden = null;
         d.layers?.forEach((l) => l.remove());
+        // 놓은 자리로 겹침(어느 인용이 어느 인용을 덮는지)을 다시 재고 그려요. 끌기 시작할 때 잰 옛 겹침으로 그려서,
+        // 아래 인용의 글씨·형광펜이 위 인용 위로 비쳐 보일 때가 있었어요 (11/25 영상)
+        from._coverCache = null; to._coverCache = null;
         this.drawPage(from); if (to !== from) this.drawPage(to);
       }
       if (to !== from && !d.before[to.i]) d.before[to.i] = this.note.pages[to.i].strokes.slice();
