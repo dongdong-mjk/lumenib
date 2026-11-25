@@ -87,9 +87,11 @@ export const setOwner = (uid) => { owner = uid || null; };
 export const hooks = { changed: () => {} }; // cloud.js 가 채워요
 
 // 예시 노트도 노트 목록에서 지울 수 있어요 (지운 예시는 설정에 번호만 기억, 11/25)
-const seedShown = (n) => !(settings.hiddenSeeds || []).includes(n.id);
+// 예시 노트는 앱에서 뺐어요 (11/25 민정님: 테스트로 만든 노트 없애기). 다시 보이게 하려면 true
+const SHOW_EXAMPLES = false;
+const seedShown = (n) => SHOW_EXAMPLES && !(settings.hiddenSeeds || []).includes(n.id);
 export const allNotes = () => [...userNotes.filter(visible), ...SEED.filter(seedShown)].sort((a, b) => (b.date + (b.updatedAt || '')).localeCompare(a.date + (a.updatedAt || '')));
-export const getNote = (id) => userNotes.find((n) => n.id === id && (owner ? n.owner === owner : !n.owner)) || SEED.find((n) => n.id === id);
+export const getNote = (id) => userNotes.find((n) => n.id === id && (owner ? n.owner === owner : !n.owner)) || (SHOW_EXAMPLES ? SEED.find((n) => n.id === id) : undefined);
 
 export function newNote({ date, title, preacher, passages, paper }) {
   const n = {

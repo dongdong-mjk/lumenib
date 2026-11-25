@@ -740,7 +740,12 @@ export async function run() {
   });
 
   await check('노트 목록: 날짜별·본문별·정렬·검색·선택 삭제와 되돌리기·노트 없음 (T8)', async () => {
+    // 점검용 노트 (예시 노트는 앱에서 뺐어요): 시편 2개, 로마서 1개
+    S.newNote({ date: '2026-11-15', title: '점검 시편 1', preacher: '점검', passages: [{ book: 19, ch: 118, from: 1, to: 4 }] });
+    S.newNote({ date: '2025-03-02', title: '점검 시편 2', passages: [{ book: 19, ch: 118, from: 5, to: 9 }] });
+    S.newNote({ date: '2026-10-25', title: '점검 로마서', passages: [{ book: 45, ch: 8, from: 35, to: 37 }] });
     window.__lumenibGo?.('notes'); await wait(500);
+    $('[data-view="date"]')?.click(); await wait(150); // 마지막 보기를 기억하니 날짜별로 맞춰요
     const total = S.allNotes().length;
     if ($$('.nl-card').length !== total) return '카드 수가 노트 수와 달라요 ' + [$$('.nl-card').length, total];
     if ($('.nl-count')?.textContent !== String(total)) return '제목 옆 개수가 달라요';
