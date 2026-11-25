@@ -902,6 +902,29 @@ export async function run() {
     return left === 0 || '해제가 안 돼요';
   });
 
+  await check('노트 탭 노트 쓰기(펜) 버튼: 설정 왼쪽 · 누르면 본문 고르기(뒤로 = 노트) · 노트 쓰고 나오면 노트 목록', async () => {
+    const W = wait;
+    window.__lumenibGo?.('notes'); await W(600);
+    const pen = $('.home-nav [data-act="write-note"]'), gear = $('.home-nav [data-act="settings"]');
+    if (!pen) return '펜 버튼이 없어요';
+    const pr = pen.getBoundingClientRect(), gr = gear.getBoundingClientRect();
+    if (Math.round(gr.left - pr.right) !== 4 || Math.round(pr.width) !== 40) return `펜 버튼 자리·크기가 시안과 달라요 (간격 ${gr.left - pr.right}, 폭 ${pr.width})`;
+    pen.click(); await W(800);
+    if ($('.pill-back')?.textContent.trim() !== '노트') return '본문 고르기 뒤로 버튼 이름이 "노트"가 아니에요';
+    $('[data-act="home"]').click(); await W(700);
+    if (!$('.nl-wrap')) return '본문 고르기에서 뒤로 가면 노트 목록으로 안 가요';
+    $('.home-nav [data-act="write-note"]').click(); await W(800);
+    // 본문이 있어야 완료로 바로 나가요 (본문 없으면 본문을 물어봐요)
+    $$('button').find((x) => x.textContent.trim() === '창세기')?.click(); await W(400);
+    $$('button').find((x) => x.textContent.trim() === '1장')?.click(); await W(600);
+    $('.verse[data-n="1"]')?.click(); await W(300);
+    $('[data-act="start"]')?.click(); await W(1500);
+    $('[data-act="back"]')?.click(); await W(900);
+    if (!$('.nl-wrap')) return '노트를 쓰고 나오면 노트 목록으로 안 가요';
+    if ($('.home-nav [data-act="home"]') && $('.home [data-act="write-note"]') && window.__lumenibGo) { window.__lumenibGo('home'); await W(400); }
+    return !$('.home [data-act="write-note"]') || '홈에도 펜 버튼이 보여요';
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

@@ -180,7 +180,7 @@ function Home({ highlight } = {}) {
 // 홈 "최근 노트 · 전체보기"와 위 탭 "노트"가 같은 화면이에요
 // =========================================================
 // 위 탭 바 (홈·노트 화면 공통). 고른 탭 뒤의 알약은 하나만 있고, 탭을 옮기면 유리알처럼 미끄러져 가요 (11/25)
-function tabBar(active) {
+function tabBar(active, { write = false } = {}) {
   // 아이콘은 피그마 Icon 페이지의 outline(fill=false) / fill(fill=true) 세트 그대로. 고른 탭만 fill (11/25)
   const ico = (name, on) => `<i class="nav-ico ni-${name}${on ? '-fill' : ''}" aria-hidden="true"></i>`;
   const t = (key, name, label, attrs) => `<button class="home-tab${active === key ? ' on' : ''}" ${attrs}>${ico(name, active === key)}${label}</button>`;
@@ -191,8 +191,20 @@ function tabBar(active) {
       ${t('notes', 'note', '노트', 'data-act="notes"')}
       ${t('bookmark', 'bookmark', '북마크', 'data-oos')}
     </div>
+    ${write ? '<button class="icon-btn gear nav-write" data-act="write-note" aria-label="노트 쓰기"><i class="nav-ico gear-ico ni-pen" aria-hidden="true"></i><span class="nav-tip" role="tooltip">노트 쓰기</span></button>' : ''}
     <button class="icon-btn gear" data-act="settings" aria-label="설정"><i class="nav-ico gear-ico ni-settings" aria-hidden="true"></i></button>
   </nav>`;
+}
+function bindWriteBtn(btn, onTap) {
+  if (!btn) return;
+  let t = 0, held = false;
+  const hide = () => { clearTimeout(t); btn.classList.remove('tip'); };
+  btn.addEventListener('pointerdown', () => { held = false; clearTimeout(t); t = setTimeout(() => { held = true; btn.classList.add('tip'); }, 450); });
+  btn.addEventListener('pointerup', () => { clearTimeout(t); if (held) setTimeout(hide, 900); });
+  btn.addEventListener('pointercancel', hide);
+  btn.addEventListener('pointerleave', () => { if (!held) clearTimeout(t); });
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+  btn.addEventListener('click', () => { if (held) { held = false; return; } onTap(); });
 }
 function slideTabPill() {
   // 유리알 미끄러짐 애니메이션은 뺐어요 (11/25 민정님: 노트 화면 버튼을 누를 때마다 알약이 움직였음 · 나중에 네이티브 진짜 유리알로)
@@ -283,7 +295,7 @@ function NotesScreen() {
     const sorts = SORTS[st.view], cur = sorts.find((x) => x[0] === st.sort[st.view]) || sorts[0];
     const n = st.sel.size;
     app.innerHTML = `<div class="home notes"><div class="nl-wrap">
-      ${tabBar('notes')}
+      ${tabBar('notes', { write: !st.selecting })}
       <div class="nl-head">
         ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>
         <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.q ? '' : 'hidden'}>${icon.x}</button></label>`}
@@ -313,6 +325,7 @@ function NotesScreen() {
     app.querySelector('[data-act="home"]').addEventListener('click', () => go('home'));
     app.querySelector('.home-nav [data-act="bible"]')?.addEventListener('click', () => go('bible'));
     app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
+    bindWriteBtn(app.querySelector('[data-act="write-note"]'), () => { track('notes_write_note'); go('pick', { back: 'notes' }); });
     app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
     // 검색바: 본문 고르기 화면(성경 패널) 검색바와 같은 상태 — 포커스(테두리 진하게) · 입력 중(값 + 지우기 ×) · 입력 완료
     // 입력할 때는 목록만 다시 그려서 키보드·커서가 그대로예요
@@ -923,9 +936,11 @@ function openLogin() {
 // =========================================================
 function Pick(arg = {}) {
   // 성경 탭 "노트 쓰기": 고른 구절을 본문으로 정해서 열어요 (정책 14)
+  // 돌아갈 곳: 성경 탭 "노트 쓰기"면 성경, 노트 탭 펜 버튼이면 노트 목록, 그 밖엔 홈 (11/26)
+  const backTo = arg.back || (arg.passage ? 'bible' : 'home');
   const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: arg.passage ? [arg.passage] : [], paper: PAPERS.some((p) => p[0] === S.settings.lastPaper) ? S.settings.lastPaper : 'lined' }; // 마지막에 고른 종이로 시작
   app.innerHTML = `<div class="screen">
-    <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${bIco('cl')}${arg.passage ? '성경' : '홈'}</button></div>
+    <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${bIco('cl')}${({ home: '홈', bible: '성경', notes: '노트' })[backTo]}</button></div>
       <div class="title">오늘 설교 기록하기</div><div class="right"></div></header>
     <div class="workspace">
       <section class="panel bible-panel"></section>
@@ -946,7 +961,7 @@ function Pick(arg = {}) {
     }),
     onChange: () => { lastLocation = { book: bp.book, ch: bp.ch }; renderRight(); },
   });
-  app.querySelector('[data-act="home"]').addEventListener('click', () => go(arg.passage ? 'bible' : 'home')); // 성경 탭 "노트 쓰기"로 왔으면 읽던 성경으로
+  app.querySelector('[data-act="home"]').addEventListener('click', () => go(backTo)); // 온 곳으로 (성경 탭이면 읽던 성경)
 
   const current = () => [...st.passages, ...(bp.selection ? [bp.selection] : [])];
 
@@ -1024,7 +1039,7 @@ function Pick(arg = {}) {
     const withTexts = await Promise.all(passages.map(withText));
     const note = S.newNote({ ...st.info, passages: withTexts, paper: st.paper });
     const loc = passages[0] ? { book: passages[0].book, ch: passages[0].ch, verse: passages[0].from } : lastLocation || { book: bp.book, ch: bp.ch };
-    go('note', { noteId: note.id, start: loc, from: 'pick', back: arg.passage ? 'bible' : undefined });
+    go('note', { noteId: note.id, start: loc, from: 'pick', back: backTo === 'home' ? undefined : backTo });
   }
   renderRight();
 }
