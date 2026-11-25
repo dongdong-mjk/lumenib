@@ -344,7 +344,8 @@ export class Paper {
     list.forEach((c, i) => {
       const b = this.citeBox(c);
       if (!b) return;
-      const above = list.slice(i + 1).map((q) => this.citeBox(q)).filter((q) => q && hit(q, b));
+      // 끄는 중인 인용은 빼요: 그 인용이 지금 가리는 자리는 따라다니는 구멍(citeHole)이 맡아요 (원래 자리에 가림이 남던 것, 11/25)
+      const above = list.slice(i + 1).filter((q) => q !== this._coverSkip).map((q) => this.citeBox(q)).filter((q) => q && hit(q, b));
       if (above.length) out.set(citeId(c), above);
     });
     return out;
@@ -433,7 +434,9 @@ export class Paper {
       });
       const pr = page.el.getBoundingClientRect();
       // 되돌리기용으로 노트 전체를 저장하면 누르는 순간이 느려서, 이 인용 자리와 그 장 획 목록만 기억해요
-      d = { cov0: this.citeCoverBoxes(page).size, id: e.pointerId, lastY: e.clientY, lastX: e.clientX, x0: e.clientX, cx: citeX(c), cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
+      const cov0 = this.citeCoverBoxes(page).size;
+      if (cov0) { this._coverSkip = c; page._coverCache = null; if (!carry.length || this.nativeCarry) this.drawPage(page); } // 끄는 인용이 원래 자리에서 가리던 아래 글씨를 바로 보이게
+      d = { cov0, id: e.pointerId, lastY: e.clientY, lastX: e.clientX, x0: e.clientX, cx: citeX(c), cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', up, true);
       window.addEventListener('pointercancel', up, true);
@@ -503,6 +506,7 @@ export class Paper {
     const up = (e) => {
       if (!d || (e && e.pointerId !== d.id)) return;
       cancelAnimationFrame(d.raf);
+      if (this._coverSkip) { this._coverSkip = null; for (const pg of this.pages) if (pg) pg._coverCache = null; }
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);

@@ -654,7 +654,19 @@ export async function run() {
     const after = pg.ink.style.clipPath;
     undo(); await settle();
     if (!during || !during.includes('evenodd')) return '끄는 동안 아래 글씨가 비쳐요';
-    return !after || '놓은 뒤에도 구멍이 남아요';
+    if (after) return '놓은 뒤에도 구멍이 남아요';
+    // 겹친 인용: 끄는 인용은 원래 자리 가림에서 빠지고(따라다니는 구멍이 대신), 놓으면 다시 재요 (11/25)
+    const order = [...pg.inner.querySelectorAll('.cite-block')].map((el) => P.note.citations.find((q) => q.page === 0 && P.citeBox(q) && Math.abs(P.citeBox(q)[1] - parseFloat(el.style.top)) < 1));
+    if (order.length >= 2 && order[0] && order.at(-1)) {
+      const a1 = order[0], b1 = order.at(-1), y0 = b1.y, x0 = b1.x; // b1 = 맨 위 인용
+      b1.y = a1.y; b1.x = a1.x;
+      const count = () => { pg._coverCache = null; return [...P.citeCoverBoxes(pg).values()].flat().length; };
+      const full = count();
+      P._coverSkip = b1; const skip = count(); P._coverSkip = null;
+      b1.y = y0; b1.x = x0; P.updateCiteCover(pg); P.drawPage(pg);
+      if (full && skip >= full) return '끄는 인용이 원래 자리에서 아래 글씨를 계속 가려요 ' + [full, skip];
+    }
+    return true;
   });
 
   await check('올가미로 인용·글씨를 다음 장으로 옮기기 · 되돌리기', async () => {
