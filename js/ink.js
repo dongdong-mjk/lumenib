@@ -436,7 +436,7 @@ export class Paper {
       // 되돌리기용으로 노트 전체를 저장하면 누르는 순간이 느려서, 이 인용 자리와 그 장 획 목록만 기억해요
       const cov0 = this.citeCoverBoxes(page).size;
       if (cov0) { this._coverSkip = c; page._coverCache = null; if (!carry.length || this.nativeCarry) this.drawPage(page); } // 끄는 인용이 원래 자리에서 가리던 아래 글씨를 바로 보이게
-      d = { cov0, id: e.pointerId, lastY: e.clientY, lastX: e.clientX, x0: e.clientX, cx: citeX(c), cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, before: { [page.i]: preStrokes }, moved: false, carry };
+      d = { cov0, id: e.pointerId, lastY: e.clientY, lastX: e.clientX, x0: e.clientX, cx: citeX(c), cy: c.y, grab: (e.clientY - pr.top) / this.scale - c.y, cur: page, page0: page.i, page0Ref: page, before: { [page.i]: preStrokes }, moved: false, carry };
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', up, true);
       window.addEventListener('pointercancel', up, true);
@@ -446,7 +446,9 @@ export class Paper {
         // 같이 갈 글씨는 새 획(복사본)으로 바뀌었어요. 앱 판에도 복사본을 먼저 알리고 그 번호로 옮겨요
         // (원래 획 번호로 옮기면 앱이 못 찾아, 끄는 동안 위 인용 글씨가 안 보였어요, 11/25)
         this.nativeSync(page);
-        window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarry', i: page.i, ids: carry.map((x) => nativeId(x.s)) });
+        // 인용 상자·손잡이 자리(종이 스크롤 안쪽 좌표)도 알려요: 앱이 그 층을 찾아 글씨와 같은 순간에 같이 옮겨요
+        const sr = this.scrollEl.getBoundingClientRect(), rr = (x) => { const b = x.getBoundingClientRect(); return [b.left - sr.left + this.scrollEl.scrollLeft, b.top - sr.top + this.scrollEl.scrollTop, b.width, b.height]; };
+        window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarry', i: page.i, ids: carry.map((x) => nativeId(x.s)), rects: [rr(el), rr(u)] });
       } else if (carry.length) {
         // 끄는 동안엔 같이 갈 글씨를 따로 그린 판을 통째로 옮기기만 해요 (매번 페이지 전체를 다시 그리면 렉이 걸렸어요)
         this._hidden = new Set(carry.map((x) => x.s));
@@ -495,7 +497,7 @@ export class Paper {
       const ny = Math.max(10, Math.min(PAGE_H - h - 10, (d.lastY - top) / this.scale - d.grab));
       if (tp !== d.cur) {
         // 블록·손잡이·같이 가는 글씨 판을 새 페이지로 옮겨 달아요
-        tp.inner.appendChild(el); tp.ui.appendChild(u); d.rebase = true;
+        tp.inner.appendChild(el); tp.ui.appendChild(u); d.rebase = true; d.rebased = true;
         if (d.layers) { tp.base.after(d.layers[0]); tp.ink.after(d.layers[1]); }
         d.cur = tp; c.page = tp.i; d.moved = true;
       }
@@ -510,7 +512,7 @@ export class Paper {
       // 옮기는 인용 자리에는 아래 글씨가 비치지 않게 (올가미로 옮길 때처럼, 11/23)
       this.citeHole(d, tp, [citeX(c), c.y, citeX(c) + citeW(c), c.y + h]);
       if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
-      if (d.ncarry) { const r = this.nativeRect(tp), k = this.scale; window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarryMove', t: [r[0] + citeX(c) * k - (d.org[0] + d.cx * k), r[1] + c.y * k - (d.org[1] + d.cy * k)] }); }
+      if (d.ncarry) { const r = this.nativeRect(tp), k = this.scale; window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarryMove', t: [r[0] + citeX(c) * k - (d.org[0] + d.cx * k), r[1] + c.y * k - (d.org[1] + d.cy * k)], p: tp === d.page0Ref && !d.rebased ? [citeX(c) - d.bx, c.y - d.by] : null }); }
     };
     const onMove = (e) => {
       if (!d || e.pointerId !== d.id) return;
@@ -527,7 +529,7 @@ export class Paper {
       placeFull(); // 놓은 자리에 실제로 놓아요
       el.classList.remove('moving'); u.classList.remove('moving');
       this.scrollEl.classList.remove('cite-moving');
-      this.citeHole(d, null);
+      const dHole = d; // 구멍은 새 겹침으로 다시 그린 뒤에 없애요 (먼저 없애면 아래 인용 글씨가 잠깐 비쳤어요, 11/25)
       const from = this.pages[d.page0], to = d.cur;
       if (d.carry.length) {
         const delta = c.y - d.cy;
@@ -561,6 +563,7 @@ export class Paper {
       // 겹침이 있거나 있었던 장만 묶음 글씨 가림을 다시 그려요 (글씨 많은 장에서 놓을 때 버벅이던 것)
       if (!carried && (cov0 || this.citeCoverBoxes(to).size)) this.drawPage(to);
       if (!carried && to !== from && (cov0 || this.citeCoverBoxes(from).size)) this.drawPage(from);
+      this.citeHole(dHole, null);
       if (moved) { this._push(entry); this.onChange({}); this.onHistory(); }
       this.onLayout?.(); // 버튼 자리가 바뀌었으니 앱에 다시 알려요
     };

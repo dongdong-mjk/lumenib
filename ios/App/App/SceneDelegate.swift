@@ -257,6 +257,31 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         landNoteInk()
         CATransaction.commit()
     }
+    // 끄는 인용 상자·손잡이의 웹킷 층 (자리로 찾아요)
+    private struct WeakLayer { weak var layer: CALayer? }
+    private var carryRects: [CGRect] = []
+    private var carryLayers: [WeakLayer] = []
+    private var carryTries = 0
+    private func findCarryLayers() {
+        guard let sv = noteInk.superview as? UIScrollView ?? landScroll ?? inkLayerHost else { return }
+        var found: [WeakLayer] = []
+        for target in carryRects {
+            // 그림자 때문에 층이 상자보다 조금 클 수 있어요: 상자를 품는 것 중 가장 작은 층
+            var best: CALayer?, bestArea = CGFloat.infinity
+            func walk(_ l: CALayer) {
+                if l === noteInk.layer || l === pinchHost.layer { return }
+                let r = l.convert(l.bounds, to: sv.layer)
+                if r.insetBy(dx: -2, dy: -2).contains(target), r.width < target.width + 90, r.height < target.height + 90, l !== sv.layer {
+                    let a = r.width * r.height
+                    if a < bestArea { bestArea = a; best = l }
+                }
+                l.sublayers?.forEach(walk)
+            }
+            sv.layer.sublayers?.forEach(walk)
+            if let b = best { found.append(WeakLayer(layer: b)) }
+        }
+        if found.count == carryRects.count { carryLayers = found }
+    }
     private func noteCanvasMessage(_ b: [String: Any]) {
         let action = b["action"] as? String ?? ""
         if landing && action != "notePinch" && action != "noteClear" {
@@ -324,10 +349,19 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         case "noteCarry":
             let ids = (b["ids"] as? [Any] ?? []).compactMap { ($0 as? NSNumber)?.intValue }
             if let i = (b["i"] as? NSNumber)?.intValue { noteInk.carryBegin(page: i, ids: ids) }
+            carryRects = (b["rects"] as? [Any] ?? []).compactMap { rect($0) }
+            carryLayers = []; carryTries = 0
         case "noteCarryMove":
+            CATransaction.begin(); CATransaction.setDisableActions(true)
             noteInk.carryMove((b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue } ?? [])
+            // 인용 상자·손잡이 층도 같은 순간에 같은 만큼 옮겨요. 웹이 나중에 같은 값을 다시 넣어요 (웹만 기다리면 글씨보다 한두 화면 늦었어요, 11/25)
+            if let pd = (b["p"] as? [Any])?.compactMap({ ($0 as? NSNumber)?.doubleValue }), pd.count == 2 {
+                if carryLayers.count < carryRects.count, carryTries < 12 { carryTries += 1; findCarryLayers() } // 웹킷이 층을 만든 뒤에 찾혀요
+                for l in carryLayers { l.layer?.transform = CATransform3DMakeTranslation(CGFloat(pd[0]), CGFloat(pd[1]), 0) }
+            } else { carryRects = []; carryLayers = [] }
+            CATransaction.commit()
         case "noteCarryEnd":
-            noteInk.carryEnd()
+            noteInk.carryEnd(); carryRects = []; carryLayers = []
         case "notePinch":
             let t = (b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
             if ((b["sv"] as? NSNumber)?.intValue ?? 0) == 1 {
