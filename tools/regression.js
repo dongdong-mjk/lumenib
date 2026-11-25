@@ -733,6 +733,12 @@ export async function run() {
     return (!pe2.style.transform || pe2.style.transform === 'none') && pixels(ink()) > 0 || '종이 변형이 남음 ' + pe2.style.transform;
   });
 
+  await check('홈 최근 노트: 설교 날짜가 예전이어도 방금 쓴 내 노트가 보임', async () => {
+    const n = S.newNote({ date: '2020-01-05', title: '점검 옛 날짜 노트', passages: [] });
+    window.__lumenibGo?.('home'); await wait(800);
+    return !!$(`.recent-card[data-note="${n.id}"]`) || '홈 최근 노트에 안 보여요';
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

@@ -82,6 +82,7 @@ function go(screen, arg) {
   if (screen === 'home' && C.currentUser() && Date.now() - C.syncStatus().lastSync > 30000) C.sync();
   trackScreen(screen === 'note' && arg?.noteId ? 'note_view' : screen);
   ({ home: Home, pick: Pick, note: NoteScreen })[screen](arg);
+  window.__lumenibGo = go; // 회귀 점검(tools/regression.js)에서 화면을 바로 옮길 때 씀
 }
 
 // =========================================================
@@ -89,7 +90,10 @@ function go(screen, arg) {
 // =========================================================
 function Home({ highlight } = {}) {
   const notes = S.allNotes();
-  const recent = notes.slice(0, 4);
+  // 최근 노트: 내가 쓴 노트를 마지막으로 고친 순서대로 먼저, 남는 칸만 예시 노트로 (11/25)
+  // 설교 날짜순으로만 고르면 날짜가 최근인 예시 노트에 밀려 방금 쓴 노트가 안 보였어요
+  const mine = notes.filter((n) => !n.seed).sort((a, b) => (Number(b.updatedAt) || b.createdAt || 0) - (Number(a.updatedAt) || a.createdAt || 0));
+  const recent = [...mine, ...notes.filter((n) => n.seed)].slice(0, 4);
   const thisYear = String(new Date().getFullYear());
   const mixedYears = recent.some((n) => !n.date.startsWith(thisYear));
   const total = reading.length, read = reading.reduce((a, b) => a + b, 0);
