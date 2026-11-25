@@ -756,3 +756,18 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .toast.act .t-div { width: 1px; height: 16px; background: currentColor; opacity: .25; }
 .toast.act button { font: inherit; font-weight: 600; color: inherit; padding: 0; }
 @media (max-width: 760px) { .nl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .nl-search { width: 220px; } }
+
+/* 위 탭 바 알약 (11/25): 알약은 하나, 탭을 옮기면 미끄러져 가요. 움직이는 동안만 유리알(반투명 + 뒤 흐림 + 윗면 빛) */
+.home-tabs { position: relative; }
+.home-tab { position: relative; z-index: 1; }
+.home-tab.on { background: transparent; }
+.tab-pill { position: absolute; left: 0; top: 0; height: 36px; border-radius: 999px; background: var(--bg-tab-active); pointer-events: none; z-index: 0;
+  transition: transform .42s cubic-bezier(.3, 1.35, .45, 1), width .42s cubic-bezier(.3, 1.35, .45, 1), background-color .25s, box-shadow .25s; transform-origin: center; }
+.tab-pill.still { transition: none; }
+.tab-pill.glass { background: color-mix(in srgb, var(--bg-tab-active) 55%, transparent); -webkit-backdrop-filter: blur(10px) saturate(180%); backdrop-filter: blur(10px) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .85), inset 0 0 0 1px rgba(255, 255, 255, .5), 0 4px 14px rgba(0, 0, 0, .10); }
+:root:not([data-theme="light"]) .tab-pill.glass { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .10), 0 4px 14px rgba(0, 0, 0, .35); }
+.tab-pill.stretch { scale: 1.08 .94; }
+.tab-pill { transition-property: transform, width, background-color, box-shadow, scale; }
+.nl-ico.nl-notefill { --m: url(../icons/notes/note-fill.svg); width: 18px; height: 18px; }
+@media (prefers-reduced-motion: reduce) { .tab-pill { transition: none; } }

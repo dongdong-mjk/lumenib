@@ -109,15 +109,7 @@ function Home({ highlight } = {}) {
   const chev = (n) => icon.chevRight.replace('width="24" height="24"', `width="${n}" height="${n}"`);
 
   app.innerHTML = `<div class="home"><div class="home-inner">
-    <nav class="home-nav">
-      <div class="home-tabs">
-        <button class="home-tab on">${icon.home}홈</button>
-        <button class="home-tab" data-oos>${icon.book}성경</button>
-        <button class="home-tab" data-act="notes">${icon.note}노트</button>
-        <button class="home-tab" data-oos>${icon.bookmark}북마크</button>
-      </div>
-      <button class="icon-btn gear" data-act="settings" aria-label="설정">${icon.settings}</button>
-    </nav>
+    ${tabBar('home')}
     <h1>${fmtHomeTitle()}</h1>
     <div class="home-row1">
       <div class="rc-wrap"><button class="record-card" data-act="record">
@@ -159,6 +151,7 @@ function Home({ highlight } = {}) {
     </section>
   </div></div>`;
   fitHome();
+  slideTabPill();
   setTimeout(fitHome, 300); // 앱에서는 상태 표시줄 높이(safe-area)가 조금 늦게 잡혀서 한 번 더
   window.addEventListener('resize', fitHome);
   const offResize = () => window.removeEventListener('resize', fitHome);
@@ -167,6 +160,7 @@ function Home({ highlight } = {}) {
   app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
   app.querySelector('[data-act="record"]').addEventListener('click', () => go('pick'));
   app.querySelectorAll('[data-act="notes"]').forEach((b) => b.addEventListener('click', () => go('notes')));
+  app.querySelector('.home-nav [data-act="home"]')?.addEventListener('click', () => {});
   app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
   app.querySelectorAll('[data-note]').forEach((b) => b.addEventListener('click', () => go('note', { noteId: b.dataset.note, from: 'home' })));
   if (highlight) {
@@ -181,6 +175,40 @@ function Home({ highlight } = {}) {
 // T8 노트 목록 (11/25) · 피그마 "노트 목록 (11-25, Claude)" 라이트 시안 · 정책 13
 // 홈 "최근 노트 · 전체보기"와 위 탭 "노트"가 같은 화면이에요
 // =========================================================
+// 위 탭 바 (홈·노트 화면 공통). 고른 탭 뒤의 알약은 하나만 있고, 탭을 옮기면 유리알처럼 미끄러져 가요 (11/25)
+let tabPillFrom = null; // 직전 화면에서 알약이 있던 자리 (탭 바 기준 left·width)
+function tabBar(active) {
+  const t = (key, ico, label, attrs) => `<button class="home-tab${active === key ? ' on' : ''}" ${attrs}>${ico}${label}</button>`;
+  return `<nav class="home-nav">
+    <div class="home-tabs"><span class="tab-pill" aria-hidden="true"></span>
+      ${t('home', active === 'home' ? icon.home : icon.homeLine, '홈', 'data-act="home"')}
+      ${t('bible', icon.book, '성경', 'data-oos')}
+      ${t('notes', active === 'notes' ? '<i class="nl-ico nl-notefill" aria-hidden="true"></i>' : icon.note, '노트', 'data-act="notes"')}
+      ${t('bookmark', icon.bookmark, '북마크', 'data-oos')}
+    </div>
+    <button class="icon-btn gear" data-act="settings" aria-label="설정">${icon.settings}</button>
+  </nav>`;
+}
+function slideTabPill() {
+  const bar = app.querySelector('.home-tabs'), pill = bar?.querySelector('.tab-pill'), on = bar?.querySelector('.home-tab.on');
+  if (!pill || !on) return;
+  const to = { left: on.offsetLeft, width: on.offsetWidth };
+  const from = tabPillFrom;
+  tabPillFrom = to;
+  const place = (r) => { pill.style.transform = `translateX(${r.left}px)`; pill.style.width = r.width + 'px'; };
+  if (!from || (from.left === to.left && from.width === to.width) || matchMedia('(prefers-reduced-motion: reduce)').matches) { place(to); return; }
+  // 직전 자리에서 출발해 새 탭으로 미끄러져요. 움직이는 동안만 유리알(반투명 + 뒤 흐림)로, 살짝 늘어났다 돌아와요
+  pill.classList.add('glass', 'still');
+  place(from);
+  void pill.offsetWidth;
+  pill.classList.remove('still');
+  requestAnimationFrame(() => {
+    place(to);
+    pill.classList.add('stretch');
+    setTimeout(() => pill.classList.remove('stretch'), 180);
+    setTimeout(() => pill.classList.remove('glass'), 420);
+  });
+}
 const NOTE_ICON = (name) => `<i class="nl-ico nl-${name}" aria-hidden="true"></i>`;
 const SORTS = {
   date: [['new', '최신순'], ['old', '오래된순']],
@@ -254,15 +282,7 @@ function NotesScreen() {
     const n = st.sel.size;
     const emptyMsg = all.length ? `'${esc(st.q.trim())}'에 맞는 노트가 없어요` : '설교를 기록하면 여기에 최근 노트가 보여요';
     app.innerHTML = `<div class="home notes"><div class="nl-wrap">
-      <nav class="home-nav">
-        <div class="home-tabs">
-          <button class="home-tab" data-act="home">${icon.homeLine}홈</button>
-          <button class="home-tab" data-oos>${icon.book}성경</button>
-          <button class="home-tab on">${icon.note}노트</button>
-          <button class="home-tab" data-oos>${icon.bookmark}북마크</button>
-        </div>
-        <button class="icon-btn gear" data-act="settings" aria-label="설정">${icon.settings}</button>
-      </nav>
+      ${tabBar('notes')}
       <div class="nl-head">
         ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>
         <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"></label>`}
@@ -287,6 +307,7 @@ function NotesScreen() {
         <div class="nl-grid">${g.notes.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`}</div>
     </div></div>`;
     bind();
+    slideTabPill();
   }
 
   function bind() {
