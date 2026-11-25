@@ -1,6 +1,6 @@
 // lumenib 1차 테스트 앱: 화면 흐름
 // T1 홈 → T2·T3 본문 고르기 → T4 노트 쓰기 (T5 인용 · T6 이 장 노트 · T7 예전 노트 탭) → 완료 → 홈
-import { icon, esc, toast, toastAction, firstCho, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
+import { icon, esc, toast, toastAction, copyText, firstCho, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
 import { Paper, tool, snapForNative, SIZE_RANGE, SIZE_DEFAULT, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
@@ -110,8 +110,8 @@ function Home({ highlight } = {}) {
   const R = 57.6, C = 2 * Math.PI * R;
   const chev = (n) => icon.chevRight.replace('width="24" height="24"', `width="${n}" height="${n}"`);
 
-  app.innerHTML = `<div class="home"><div class="home-inner">
-    ${tabBar('home')}
+  // 내비게이션은 줄이는 칸(home-inner) 밖에 둬요: 창이 작아 홈을 줄여도 성경·노트 화면과 같은 높이 (11/25 민정님)
+  app.innerHTML = `<div class="home">${tabBar('home')}<div class="home-inner">
     <h1>${fmtHomeTitle()}</h1>
     <div class="home-row1">
       <div class="rc-wrap"><button class="record-card" data-act="record">
@@ -399,7 +399,7 @@ function BibleScreen(arg = {}) {
   const loc0 = S.settings.bibleLoc || { book: 1, ch: 1, v: 1 }; // 처음엔 창세기 1장, 그 뒤로는 마지막 읽던 곳
   const st = {
     book: loc0.book, ch: loc0.ch, scrollTo: arg.verse || loc0.v || 1,
-    left: arg.books ? 'books' : 'chapters', sort: 'toc', query: '',
+    left: arg.books || !S.settings.bibleLoc ? 'books' : 'chapters', sort: 'toc', query: '', // 처음 들어오면 왼쪽은 권 목록 (11/26 민정님)
     sel: null, notesOpen: false,
     justRead: null, // 이 장에 머무는 동안 "방금 읽음" 상태(②)를 유지해요 { key, bookDone }
   };
@@ -514,9 +514,9 @@ function BibleScreen(arg = {}) {
       headEl.querySelector('[data-a="x"]').addEventListener('click', () => setSel(null));
       headEl.querySelector('[data-a="copy"]').addEventListener('click', async () => {
         const text = verses.filter((v) => v.n >= p.from && v.n <= p.to).map((v) => v.t).join(' ');
-        try { await navigator.clipboard.writeText(`${text}\n(${ref(p)})`); } catch {}
-        track('bible_copy'); setSel(null);
-        const r = ref(p, true); rtoast(`${r}${objJosa(r)} 복사했어요`);
+        const ok = await copyText(`${text}\n(${ref(p)})`);
+        track(ok ? 'bible_copy' : 'bible_copy_fail'); setSel(null);
+        const r = ref(p, true); rtoast(ok ? `${r}${objJosa(r)} 복사했어요` : '복사하지 못했어요. 다시 눌러 주세요');
       });
       headEl.querySelector('[data-a="bm"]').addEventListener('click', () => {
         if (marked) { S.removeBookmark(p); track('bible_bookmark_off'); setSel(null); rtoast('북마크를 해제했어요'); return; }
@@ -593,7 +593,7 @@ function BibleScreen(arg = {}) {
     const key = `${st.book}:${st.ch}`, read = S.isRead(st.book, st.ch);
     const jr = st.justRead?.key === key && read ? st.justRead : null;
     const prev = prevOf(), next = nextOf();
-    const nextCls = jr ? 'secondary' : 'text'; // 방금 읽은 뒤엔 회색 버튼(검정이면 토스트와 겹쳐 보여서, 11/25 민정님)
+    const nextCls = 'text'; // 읽은 뒤에도 다음 버튼은 그대로 (11/26 민정님 시안 수정)
     let mid;
     if (!read) mid = '<button class="bt-btn primary" data-a="read">다 읽었어요</button>';
     else if (jr?.bookDone) mid = `<div class="bt-done">${bIco('checks')}${esc(bookOf(st.book).name)}${objJosa(bookOf(st.book).name)} 다 읽었어요</div><button class="bt-booklink" data-a="tobooks">66권 중 ${fullBooks()}권 다 읽음 ${bIco('rowchev')}</button>`;
@@ -689,14 +689,17 @@ function fitHome() {
   // 위쪽 상태 표시줄 자리는 CSS(.home padding-top = safe-area)가 잡아요. iPad 앱에서 32로 피그마 상태 표시줄(32)과 같아서
   // 내비게이션을 바로 그 아래에 붙여요 (iPad 화면을 찍어서 피그마 위치와 맞춤, 11/21). 상태 표시줄이 없으면(사파리) 16.
   const pt = parseFloat(getComputedStyle(home).paddingTop) || 0;
-  const nat = { ...GAP_NAT, S: pt ? 0 : GAP_NAT.S, F: Math.max(GAP_NAT.F, sb + 12) };
-  const min = { ...GAP_MIN, S: pt ? 0 : GAP_MIN.S, F: Math.max(GAP_MIN.F, sb + 8) };
+  // 맨 위 여백(S)은 이제 내비게이션이 가져가요 (줄이지 않는 칸)
+  const nat = { ...GAP_NAT, S: 0, F: Math.max(GAP_NAT.F, sb + 12) };
+  const min = { ...GAP_MIN, S: 0, F: Math.max(GAP_MIN.F, sb + 8) };
+  const nav = home.querySelector(':scope > .home-nav');
+  const navH = nav ? nav.offsetHeight + (parseFloat(getComputedStyle(nav).marginTop) || 0) : 0;
   const fixed = [...inner.children].reduce((a, el) => a + el.offsetHeight, 0);
   const W = home.clientWidth;
   // 너비가 시안보다 좁으면(아이패드 미니 등) 먼저 전체를 그 폭에 맞게 줄여요
   const portrait = matchMedia('(orientation: portrait)').matches;
   const zW = portrait ? 1 : Math.min(1, W / HOME_MIN_W);
-  const H = (home.clientHeight - pt) / zW;
+  const H = (home.clientHeight - pt - navH) / zW;
   const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
   let g = {}, z = 1;
   if (H >= fixed + sum(nat)) {
@@ -934,7 +937,7 @@ function Pick(arg = {}) {
     }),
     onChange: () => { lastLocation = { book: bp.book, ch: bp.ch }; renderRight(); },
   });
-  app.querySelector('[data-act="home"]').addEventListener('click', () => go('home'));
+  app.querySelector('[data-act="home"]').addEventListener('click', () => go(arg.passage ? 'bible' : 'home')); // 성경 탭 "노트 쓰기"로 왔으면 읽던 성경으로
 
   const current = () => [...st.passages, ...(bp.selection ? [bp.selection] : [])];
 
@@ -1012,7 +1015,7 @@ function Pick(arg = {}) {
     const withTexts = await Promise.all(passages.map(withText));
     const note = S.newNote({ ...st.info, passages: withTexts, paper: st.paper });
     const loc = passages[0] ? { book: passages[0].book, ch: passages[0].ch, verse: passages[0].from } : lastLocation || { book: bp.book, ch: bp.ch };
-    go('note', { noteId: note.id, start: loc, from: 'pick' });
+    go('note', { noteId: note.id, start: loc, from: 'pick', back: arg.passage ? 'bible' : undefined });
   }
   renderRight();
 }
@@ -1050,7 +1053,9 @@ function bindInfo(root, info, onEdit, onToggle) {
 // =========================================================
 // T4 노트 쓰기 (+ T5 인용 · T6 이 장 노트 · T7 예전 노트 탭)
 // =========================================================
-async function NoteScreen({ noteId, start, openOld, from }) {
+async function NoteScreen({ noteId, start, openOld, from, back }) {
+  // 나갈 곳: 노트 목록·성경 탭에서 열었거나, 성경 탭 "노트 쓰기"로 새로 썼으면 그 화면으로 (11/26 민정님)
+  const exitTo = back || (from === 'notes' || from === 'bible' ? from : null);
   const main = S.getNote(noteId);
   const mainReadonly = !!main.seed;
   const ns = {
@@ -1814,7 +1819,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   // 왼쪽 위 뒤로 (피그마 Top Bar 화면=노트 쓰기, 11/21): 오른쪽 위 완료와 같은 방식으로 나가요 (저장 · 본문 확인)
   app.querySelector('[data-act="back"]').addEventListener('click', () => { track('note_back'); app.querySelector('[data-act="done"]').click(); });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
-    if (mainReadonly) return go(from === 'notes' || from === 'bible' ? from : 'home');
+    if (mainReadonly) return go(exitTo || 'home');
     if (!main.passages.length) return askPassage();
     finish();
   });
@@ -1825,7 +1830,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     S.touch(main);
     // 홈으로 먼저 넘어가고 저장은 바로 다음에 (노트가 클수록 나가는 순간이 늦던 것, 11/23). 앱을 닫을 땐 그때 바로 저장돼요
     // 노트 목록에서 열었으면 목록으로 돌아가요 (정책 13: 완료 → 노트 목록)
-    if (from === 'notes' || from === 'bible') go(from); else go('home', { highlight: main.id }); // 성경 탭에서 열었으면 읽던 곳으로
+    if (exitTo) go(exitTo); else go('home', { highlight: main.id }); // 성경 탭에서 열었으면 읽던 곳으로
     setTimeout(() => S.saveNotes(true), 0);
   }
 

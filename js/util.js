@@ -86,3 +86,32 @@ export const firstCho = (str) => {
   const c = chosung(str[0]);
   return { 'ㄲ': 'ㄱ', 'ㄸ': 'ㄷ', 'ㅃ': 'ㅂ', 'ㅆ': 'ㅅ', 'ㅉ': 'ㅈ' }[c] || c;
 };
+
+// 클립보드에 글 넣기 (11/26: 아이패드에서 "복사했어요"만 뜨고 실제로는 안 들어가던 것)
+// 누른 그 순간(같은 탭 안)에 숨은 글상자로 복사해요. 아이패드 앱·사파리에서 이 방식이 가장 확실해요. 안 되면 클립보드 API로 한 번 더.
+export function copyText(text) {
+  let ok = false;
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.contentEditable = 'true';
+  ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;pointer-events:none';
+  document.body.appendChild(ta);
+  const sel = window.getSelection();
+  const keep = sel.rangeCount ? sel.getRangeAt(0) : null;
+  try {
+    const r = document.createRange(); r.selectNodeContents(ta);
+    sel.removeAllRanges(); sel.addRange(r);
+    ta.setSelectionRange(0, text.length);
+    // 복사 순간에 넣을 글을 직접 정해요 (선택이 잘 안 잡혀도 들어가요)
+    const onCopy = (e) => { e.clipboardData?.setData('text/plain', text); e.preventDefault(); };
+    document.addEventListener('copy', onCopy, { once: true, capture: true });
+    ok = document.execCommand('copy');
+    document.removeEventListener('copy', onCopy, { capture: true });
+  } catch { ok = false; }
+  ta.remove();
+  sel.removeAllRanges(); if (keep) sel.addRange(keep);
+  if (ok) return Promise.resolve(true);
+  if (!navigator.clipboard?.writeText) return Promise.resolve(false);
+  return navigator.clipboard.writeText(text).then(() => true, () => false);
+}

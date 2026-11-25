@@ -837,6 +837,47 @@ export async function run() {
     return (ok1 && ok2) || '합치기가 달라요 ' + [ok1, ok2];
   });
 
+  await check('성경 탭 11/26: 처음엔 왼쪽 권 목록 · 복사가 실제로 들어감 · 노트 쓰기에서 뒤로 가면 성경 · 다음 버튼 그대로 · 내비 높이 같음', async () => {
+    const W = wait, loc0 = S.settings.bibleLoc;
+    S.settings.bibleLoc = undefined; S.saveSettings();
+    window.__lumenibGo?.('bible'); await W(700);
+    if (!$('.bt-book') || !/창세기 1장/.test($('.bt-htitle')?.textContent)) return '처음 들어왔을 때 왼쪽 권 목록 + 창세기 1장이 아니에요';
+    // 복사: 복사 순간에 넣는 글이 고른 구절이어야 해요
+    window.__lumenibGo?.('bible', { book: 43, ch: 3 }); await W(700);
+    // 점검에서 누르는 건 진짜 손가락이 아니라 브라우저가 복사를 안 해 줘요. 복사 명령을 브라우저처럼 흉내 내서, 넣는 글을 봐요
+    let got = null; const ex = document.execCommand;
+    document.execCommand = function (c, ...a) {
+      if (c !== 'copy') return ex.call(document, c, ...a);
+      const dt = new DataTransfer(); document.dispatchEvent(new ClipboardEvent('copy', { clipboardData: dt, bubbles: true, cancelable: true }));
+      got = dt.getData('text/plain'); return true;
+    };
+    $('.bt-v[data-n="16"]').click(); await W(80); $('[data-a="copy"]').click(); await W(150);
+    document.execCommand = ex;
+    if (!got || !/독생자/.test(got) || !/요한복음 3:16/.test(got)) return '복사한 글이 클립보드에 안 들어가요 ' + got;
+    // 다 읽은 뒤에도 다음 버튼은 글자 버튼
+    S.setRead(43, 3, false); window.__lumenibGo?.('bible', { book: 43, ch: 3 }); await W(700);
+    $('[data-a="read"]').click(); await W(200);
+    const nx = $$('.bt-nav > button').find((b) => /4장/.test(b.textContent));
+    const nextOk = nx && nx.classList.contains('text');
+    S.setRead(43, 3, false);
+    if (!nextOk) return '다 읽은 뒤 다음 버튼 모양이 바뀌어요';
+    // 노트 쓰기 → 본문 고르기에서 뒤로 → 성경, 노트까지 가서 뒤로 → 성경
+    window.__lumenibGo?.('bible', { book: 43, ch: 3 }); await W(700);
+    $('.bt-v[data-n="16"]').click(); await W(80); $('[data-a="write"]').click(); await W(700);
+    $('[data-act="home"]').click(); await W(700);
+    if (!$('.bible-tab')) return '본문 고르기에서 뒤로 가면 성경으로 안 가요';
+    $('.bt-v[data-n="16"]').click(); await W(80); $('[data-a="write"]').click(); await W(700);
+    $('[data-act="start"]').click(); await W(1500);
+    $('[data-act="back"]').click(); await W(900);
+    if (!$('.bible-tab')) return '노트 쓰기에서 뒤로 가면 성경으로 안 가요';
+    // 내비게이션 높이: 홈 · 성경 · 노트 같은 자리 같은 크기
+    const navs = [];
+    for (const sc of ['home', 'bible', 'notes']) { window.__lumenibGo?.(sc); await W(500); const r = $('.home-nav').getBoundingClientRect(); navs.push(`${Math.round(r.top)}/${Math.round(r.height)}`); }
+    S.settings.bibleLoc = loc0; S.saveSettings();
+    window.__lumenibGo?.('home'); await W(300);
+    return new Set(navs).size === 1 || '내비게이션 높이가 화면마다 달라요 ' + navs;
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();
