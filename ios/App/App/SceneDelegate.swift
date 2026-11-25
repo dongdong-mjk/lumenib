@@ -53,6 +53,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibNative")
         // 글씨 판 통로: 이게 있으면 웹은 다 쓴 글씨를 직접 그리지 않고 앱에 맡겨요 (11/24)
         webView?.configuration.userContentController.add(self, name: "lumenibCanvas")
+        // 인용 끌 때 같이 가는 글씨를 앱이 옮길 수 있다는 표시 (웹은 이 통로가 있으면 noteCarry를 보내요, 11/25)
+        webView?.configuration.userContentController.add(self, name: "lumenibCarry")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
@@ -310,6 +312,13 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             if noteInkOn { liftForDrag() }
             let n = (b["box"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
             noteInk.hole(page: i, box: n?.count == 4 ? CGRect(x: n![0], y: n![1], width: n![2] - n![0], height: n![3] - n![1]) : nil)
+        case "noteCarry":
+            let ids = (b["ids"] as? [Any] ?? []).compactMap { ($0 as? NSNumber)?.intValue }
+            if let i = (b["i"] as? NSNumber)?.intValue { noteInk.carryBegin(page: i, ids: ids) }
+        case "noteCarryMove":
+            noteInk.carryMove((b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue } ?? [])
+        case "noteCarryEnd":
+            noteInk.carryEnd()
         case "notePinch":
             let t = (b["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue }
             if let t = t {

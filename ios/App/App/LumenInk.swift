@@ -1451,6 +1451,7 @@ final class NoteInkView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         pageLayer.values.forEach { $0.removeFromSuperlayer() }
         CATransaction.commit()
+        carryBox?.removeFromSuperlayer(); carryBox = nil; carried = []; carryFrom = -1
         data = [:]; layers = [:]; pageLayer = [:]; hlLayer = [:]; penLayer = [:]; pageIds = [:]; layerScale = [:]; boxes = [:]; erased = []; stale = []
         pinchReset?.cancel(); pinchReset = nil
         layer.sublayerTransform = CATransform3DIdentity
@@ -1489,14 +1490,14 @@ final class NoteInkView: UIView {
             layers[id] = l; layerScale[id] = s
         }
         let keep = Set(ids)
-        for old in pageIds[i] ?? [] where !keep.contains(old) { layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil; boxes[old] = nil; erased.remove(old); clipOf[old] = nil; clipScale[old] = nil }
+        for old in pageIds[i] ?? [] where !keep.contains(old) { carried.remove(old); layers[old]?.removeFromSuperlayer(); layers[old] = nil; data[old] = nil; layerScale[old] = nil; boxes[old] = nil; erased.remove(old); clipOf[old] = nil; clipScale[old] = nil }
         pageIds[i] = ids
         guard let hl = hlLayer[i], let pen = penLayer[i] else { CATransaction.commit(); return }
         // 순서대로 줄 세운 뒤 다르면 한 번에 바꿔 끼워요 (지우개처럼 자주 바뀔 때 글씨가 많아도 가볍게, 11/24)
         var hlList: [CALayer] = [], penList: [CALayer] = []
         hlList.reserveCapacity(ids.count); penList.reserveCapacity(ids.count)
         for id in ids {
-            guard let d = data[id] else { continue }
+            guard let d = data[id], !carried.contains(id) else { continue } // 옮기는 중인 글씨는 옮기는 층에 그대로
             let l: CAShapeLayer
             if let ex = layers[id], layerScale[id] == scale { l = ex } else {
                 layers[id]?.removeFromSuperlayer()
@@ -1572,6 +1573,52 @@ final class NoteInkView: UIView {
             self.stale.remove(i)
             self.scheduleRebuild()
         }
+    }
+
+    // MARK: 인용 끌기 (11/25): 인용과 같이 가는 글씨 층을 장 판에서 꺼내 통째로 옮겨요.
+    // 웹이 따로 그린 판과 바꿔치기하면 반투명 형광펜이 겹치는 순간 진해졌다 연해졌어요
+    private let carryRoot: CALayer = { let l = CALayer(); l.anchorPoint = .zero; l.zPosition = 5; return l }()
+    private var carryBox: CALayer?
+    private var carried: Set<Int> = []
+    private var carryFrom = -1
+    func carryBegin(page i: Int, ids: [Int]) {
+        carryEnd()
+        guard let pl = pageLayer[i] else { return }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if carryRoot.superlayer !== layer { layer.addSublayer(carryRoot) }
+        carryRoot.frame = bounds
+        let box = CALayer(); box.anchorPoint = .zero; box.frame = pl.frame
+        let h = CALayer(), p = CALayer(); h.frame = box.bounds; p.frame = box.bounds
+        box.addSublayer(h); box.addSublayer(p)
+        carryRoot.addSublayer(box)
+        let want = Set(ids)
+        for id in pageIds[i] ?? [] where want.contains(id) {
+            guard let l = layers[id], let d = data[id] else { continue }
+            l.removeFromSuperlayer()
+            (d.tool == "hl" ? h : p).addSublayer(l)
+            carried.insert(id)
+        }
+        carryBox = box; carryFrom = i
+        CATransaction.commit()
+    }
+    func carryMove(_ t: [Double]) {
+        guard let box = carryBox, t.count == 2 else { return }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        box.transform = CATransform3DMakeTranslation(CGFloat(t[0]), CGFloat(t[1]), 0)
+        CATransaction.commit()
+    }
+    func carryEnd() {
+        guard let box = carryBox else { carried = []; return }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        let back = carried.filter { layers[$0] != nil } // 웹이 새 획으로 바꾸지 않은 것(드묾)은 원래 장으로 돌려놔요
+        carried = []
+        box.removeFromSuperlayer(); carryBox = nil
+        if !back.isEmpty, let ids = pageIds[carryFrom], let r = pageLayer[carryFrom]?.frame {
+            for id in back { layers[id]?.removeFromSuperlayer() }
+            apply(page: carryFrom, ids: ids, add: [:], rect: r, scale: scale)
+        }
+        carryFrom = -1
+        CATransaction.commit()
     }
 
     /// 모든 장을 합친 자리 (판 좌표 = 종이 스크롤 안쪽 좌표)

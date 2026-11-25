@@ -60,6 +60,8 @@ export class Paper {
     this.readonly = !!opts.readonly;
     // 아이패드 앱: 글씨는 앱이 처음부터 끝까지 그려요 (쓸 때와 뗄 때 똑같게, 11/24). 웹은 저장·지우개·올가미 계산만
     this.nativeCanvas = !this.readonly && !!window.webkit?.messageHandlers?.lumenibCanvas; // 이 통로는 글씨 판을 가진 새 앱에만 있어요
+    // 인용을 끌 때 같이 가는 글씨를 앱이 직접 옮기는 새 앱(11/25~). 옛 빌드는 웹이 따로 그린 판으로 옮겨요
+    this.nativeCarry = this.nativeCanvas && !!window.webkit?.messageHandlers?.lumenibCarry;
     this.onChange = opts.onChange || (() => {});
     this.onHistory = opts.onHistory || (() => {});
     this.onLayout = opts.onLayout;
@@ -432,7 +434,11 @@ export class Paper {
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', up, true);
       window.addEventListener('pointercancel', up, true);
-      if (carry.length) {
+      if (carry.length && this.nativeCarry) {
+        // 아이패드 앱: 앱이 그 글씨 층을 그대로 옮겨요. 웹 판과 앱 판을 바꿔치기하지 않아 형광펜이 진해졌다 연해지지 않아요 (11/25)
+        d.ncarry = true; d.org = this.nativeRect(page);
+        window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarry', i: page.i, ids: [...inside].map(nativeId) });
+      } else if (carry.length) {
         // 끄는 동안엔 같이 갈 글씨를 따로 그린 판을 통째로 옮기기만 해요 (매번 페이지 전체를 다시 그리면 렉이 걸렸어요)
         this._hidden = new Set(carry.map((x) => x.s));
         this.drawPage(page);
@@ -484,6 +490,7 @@ export class Paper {
       // 옮기는 인용 자리에는 아래 글씨가 비치지 않게 (올가미로 옮길 때처럼, 11/23)
       this.citeHole(d, tp, [citeX(c), c.y, citeX(c) + citeW(c), c.y + h]);
       if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
+      if (d.ncarry) { const r = this.nativeRect(tp), k = this.scale; window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarryMove', t: [r[0] + citeX(c) * k - (d.org[0] + d.cx * k), r[1] + c.y * k - (d.org[1] + d.cy * k)] }); }
     };
     const onMove = (e) => {
       if (!d || e.pointerId !== d.id) return;
@@ -517,6 +524,7 @@ export class Paper {
         // 아래 인용의 글씨·형광펜이 위 인용 위로 비쳐 보일 때가 있었어요 (11/25 영상)
         from._coverCache = null; to._coverCache = null;
         this.drawPage(from); if (to !== from) this.drawPage(to);
+        if (d.ncarry) window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarryEnd' }); // 새 자리 글씨가 판에 들어온 같은 순간에 옮기던 층을 치워요
       }
       if (to !== from && !d.before[to.i]) d.before[to.i] = this.note.pages[to.i].strokes.slice();
       const carried = d.carry.length > 0, cov0 = d.cov0;
