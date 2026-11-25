@@ -110,6 +110,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         pinchHost.backgroundColor = .clear
         if pinchHost.superview !== web { web.addSubview(pinchHost) }
         web.bringSubviewToFront(pinchHost)
+        pinchHost.isHidden = false // 글씨 판을 옮기는 같은 순간에 보이게 (한 번 글씨가 다 사라져 보이던 것)
         if pinchContent.superview !== pinchHost { pinchHost.addSubview(pinchContent) }
         pinchContent.layer.transform = CATransform3DIdentity
         pinchContent.frame = pinchHost.bounds
@@ -126,10 +127,14 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         // snapshotView는 고정된 사진이 아니라 웹 화면을 실시간으로 비추는 거울이었어요. 웹이 따로 확대한 것까지 비쳐 인용구가 덜 따라왔어요 (11/25).
         // 지금 화면을 진짜 그림(비트맵)으로 한 번 그려 써요
         if snapshot, !vis.isNull, vis.width > 1, vis.height > 1 {
+            // 글씨 판을 뺀 지금 모습을 화면에 먼저 반영한 뒤(afterScreenUpdates: true) 그려요.
+            // false면 직전 화면(글씨 판이 아직 종이 안에 있던)을 찍어, 사진 속 글씨 + 띄운 글씨 판이 겹쳐 형광펜이 진해졌어요 (11/25 영상)
+            CATransaction.commit(); CATransaction.flush()
+            CATransaction.begin(); CATransaction.setDisableActions(true)
             let fmt = UIGraphicsImageRendererFormat.preferred()
             fmt.opaque = false
             let img = UIGraphicsImageRenderer(size: vis.size, format: fmt).image { _ in
-                sv.drawHierarchy(in: CGRect(x: sv.bounds.minX - vis.minX, y: sv.bounds.minY - vis.minY, width: sv.bounds.width, height: sv.bounds.height), afterScreenUpdates: false)
+                sv.drawHierarchy(in: CGRect(x: sv.bounds.minX - vis.minX, y: sv.bounds.minY - vis.minY, width: sv.bounds.width, height: sv.bounds.height), afterScreenUpdates: true)
             }
             let iv = UIImageView(image: img)
             iv.frame = vis.offsetBy(dx: -pinchOff.x, dy: -pinchOff.y) // 사진 자리 (pinchHost 좌표)
