@@ -413,6 +413,8 @@ function BibleScreen(arg = {}) {
   const st = {
     book: loc0.book, ch: loc0.ch, scrollTo: arg.verse || loc0.v || 1,
     left: arg.books || !S.settings.bibleLoc ? 'books' : 'chapters', sort: 'toc', query: '', // 처음 들어오면 왼쪽은 권 목록 (11/26 민정님)
+    // 처음 들어왔을 땐 권 목록에 표시(테두리)를 안 해요. 권에 들어갔다 나오면 그 권에 표시 (11/26 민정님)
+    bookMarked: !!S.settings.bibleLoc,
     sel: null, notesOpen: false,
     justRead: null, // 이 장에 머무는 동안 "방금 읽음" 상태(②)를 유지해요 { key, bookDone }
   };
@@ -470,7 +472,7 @@ function BibleScreen(arg = {}) {
       if (q) { body.innerHTML = `<div class="bt-lscroll">${BiblePanel.prototype.searchHTML.call(null, q)}</div>`; bindBooks(); return; }
       const grid = (list) => `<div class="bt-bgrid">${list.map((b) => {
         const n = b.verses.length, r = S.readCount(b.id, n);
-        return `<button class="bt-book${b.id === st.book ? ' cur' : ''}" data-book="${b.id}"><span>${esc(b.name)}</span><i class="gt"><i style="width:${(r / n) * 100}%"></i></i></button>`;
+        return `<button class="bt-book${st.bookMarked && b.id === st.book ? ' cur' : ''}" data-book="${b.id}"><span>${esc(b.name)}</span><i class="gt"><i style="width:${(r / n) * 100}%"></i></i></button>`;
       }).join('')}</div>`;
       let groups;
       if (st.sort === 'toc') groups = [['구약', books.filter((b) => b.testament === 'old')], ['신약', books.filter((b) => b.testament === 'new')]];
@@ -671,7 +673,7 @@ function BibleScreen(arg = {}) {
   }
   function openChapter(book, ch, verse = 1) {
     if (book !== st.book || ch !== st.ch) { st.justRead = null; st.notesOpen = false; }
-    st.book = book; st.ch = ch; st.sel = null; st.scrollTo = verse;
+    st.book = book; st.ch = ch; st.sel = null; st.scrollTo = verse; st.bookMarked = true;
     saveLoc(verse);
     renderLeft(); renderHead(); renderText();
   }

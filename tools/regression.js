@@ -844,6 +844,7 @@ export async function run() {
     S.settings.bibleLoc = undefined; S.saveSettings();
     window.__lumenibGo?.('bible'); await W(700);
     if (!$('.bt-book') || !/창세기 1장/.test($('.bt-htitle')?.textContent)) return '처음 들어왔을 때 왼쪽 권 목록 + 창세기 1장이 아니에요';
+    if ($('.bt-book.cur')) return '처음 들어왔는데 권 목록에 표시가 있어요';
     // 복사: 복사 순간에 넣는 글이 고른 구절이어야 해요
     window.__lumenibGo?.('bible', { book: 43, ch: 3 }); await W(700);
     // 점검에서 누르는 건 진짜 손가락이 아니라 브라우저가 복사를 안 해 줘요. 복사 명령을 브라우저처럼 흉내 내서, 넣는 글을 봐요
