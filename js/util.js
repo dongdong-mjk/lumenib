@@ -54,8 +54,22 @@ let toastTimer;
 export function toast(msg, ms = 2200) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.classList.remove('leave');
+  el.classList.remove('leave', 'act');
   el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// 동작이 있는 토스트 (피그마 Toast action=true: 메시지 | 되돌리기). 3초 뒤 사라져요
+export function toastAction(msg, label, onAct, ms = 3000) {
+  const el = document.getElementById('toast');
+  el.innerHTML = `<span></span><i class="t-div"></i><button type="button"></button>`;
+  el.querySelector('span').textContent = msg;
+  const b = el.querySelector('button');
+  b.textContent = label;
+  b.addEventListener('click', () => { clearTimeout(toastTimer); el.classList.remove('show'); onAct?.(); }, { once: true });
+  el.classList.remove('leave');
+  el.classList.add('show', 'act');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }

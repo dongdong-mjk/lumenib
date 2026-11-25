@@ -739,6 +739,36 @@ export async function run() {
     return !!$(`.recent-card[data-note="${n.id}"]`) || '홈 최근 노트에 안 보여요';
   });
 
+  await check('노트 목록: 날짜별·본문별·정렬·검색·선택 삭제와 되돌리기·노트 없음 (T8)', async () => {
+    window.__lumenibGo?.('notes'); await wait(500);
+    const total = S.allNotes().length;
+    if ($$('.nl-card').length !== total) return '카드 수가 노트 수와 달라요 ' + [$$('.nl-card').length, total];
+    if ($('.nl-count')?.textContent !== String(total)) return '제목 옆 개수가 달라요';
+    if (!/^\d{4}년 \d{1,2}월\d+$/.test($('.nl-gh')?.textContent || '')) return '날짜별 묶음 제목이 달라요 ' + $('.nl-gh')?.textContent;
+    $('[data-view="passage"]').click(); await wait(200);
+    if (!$$('.nl-gh').some((h) => /장|편/.test(h.textContent))) return '본문별 묶음이 안 보여요';
+    $('[data-act="sort"]').click(); await wait(150);
+    if ($$('.nl-mi').length !== 3) return '본문별 정렬 메뉴가 3개가 아니에요';
+    $$('.nl-mi')[2].click(); await wait(150);
+    const heads = $$('.nl-gh').filter((h) => !h.textContent.startsWith('본문 없음'));
+    const counts = heads.map((h) => +h.querySelector('span').textContent);
+    if (counts.some((c, i) => i && c > counts[i - 1])) return '노트 많은 순이 아니에요 ' + counts;
+    $('[data-view="date"]').click(); await wait(150);
+    const inp = $('.nl-search input'); inp.value = 'zzzz없는말'; inp.dispatchEvent(new Event('input')); await wait(150);
+    if (!$('.nl-empty')) return '검색 결과 없음 문구가 안 보여요';
+    const inp2 = $('.nl-search input'); inp2.value = ''; inp2.dispatchEvent(new Event('input')); await wait(150);
+    $('[data-act="select"]').click(); await wait(150);
+    $$('.nl-card')[0].click(); await wait(100);
+    if ($('.nl-title').textContent !== '1개 선택됨') return '선택 모드 제목이 달라요';
+    if (!$('.nl-seg.off')) return '선택 중 날짜별/본문별이 흐리지 않아요';
+    $('[data-act="del"]').click(); await wait(200);
+    if (S.allNotes().length !== total - 1) return '삭제가 안 됐어요';
+    const undoBtn = $('#toast button'); if (!undoBtn) return '되돌리기 토스트가 없어요';
+    undoBtn.click(); await wait(200);
+    if (S.allNotes().length !== total) return '되돌리기가 안 됐어요';
+    return $$('.nl-card').length === total || '되돌린 뒤 카드 수가 달라요';
+  });
+
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로
   S.allNotes().filter((n) => !before.has(n.id)).forEach((n) => S.deleteNote(n.id));
   S.settings.lastPaper = lastPaper; S.saveSettings();

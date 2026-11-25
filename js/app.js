@@ -1,6 +1,6 @@
 // lumenib 1차 테스트 앱: 화면 흐름
 // T1 홈 → T2·T3 본문 고르기 → T4 노트 쓰기 (T5 인용 · T6 이 장 노트 · T7 예전 노트 탭) → 완료 → 홈
-import { icon, esc, toast, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
+import { icon, esc, toast, toastAction, todayISO, fmtFull, fmtShort, fmtMD, fmtHomeTitle } from './util.js';
 import * as B from './bible.js';
 import * as S from './store.js';
 import { Paper, tool, snapForNative, SIZE_RANGE, SIZE_DEFAULT, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
@@ -81,7 +81,7 @@ function go(screen, arg) {
   curScreen = screen;
   if (screen === 'home' && C.currentUser() && Date.now() - C.syncStatus().lastSync > 30000) C.sync();
   trackScreen(screen === 'note' && arg?.noteId ? 'note_view' : screen);
-  ({ home: Home, pick: Pick, note: NoteScreen })[screen](arg);
+  ({ home: Home, pick: Pick, note: NoteScreen, notes: NotesScreen })[screen](arg);
   window.__lumenibGo = go; // 회귀 점검(tools/regression.js)에서 화면을 바로 옮길 때 씀
 }
 
@@ -113,7 +113,7 @@ function Home({ highlight } = {}) {
       <div class="home-tabs">
         <button class="home-tab on">${icon.home}홈</button>
         <button class="home-tab" data-oos>${icon.book}성경</button>
-        <button class="home-tab" data-oos>${icon.note}노트</button>
+        <button class="home-tab" data-act="notes">${icon.note}노트</button>
         <button class="home-tab" data-oos>${icon.bookmark}북마크</button>
       </div>
       <button class="icon-btn gear" data-act="settings" aria-label="설정">${icon.settings}</button>
@@ -147,7 +147,8 @@ function Home({ highlight } = {}) {
       </div>
     </section>
     <section class="home-sec recent-sec">
-      <div class="sec-head tall"><h3>최근 노트</h3><button class="more-link" data-oos>전체보기 ${chev(12)}</button></div>
+      <div class="sec-head tall"><h3>최근 노트</h3><button class="more-link" data-act="notes">전체보기 ${chev(12)}</button></div>
+      ${recent.length ? '' : '<div class="recent-empty">설교를 기록하면 여기에 최근 노트가 보여요</div>'}
       <div class="recent-grid">${recent.map((n) => {
         const same = otherNotesFor(n.passages, n.id).length;
         return `<button class="recent-card ${n.id === highlight ? 'new' : ''}" data-note="${n.id}">
@@ -165,6 +166,7 @@ function Home({ highlight } = {}) {
   B.getVerses(1, 8, 1, 1).then(([v]) => { const el = app.querySelector('.gen81'); if (el) el.textContent = v.t; });
   app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
   app.querySelector('[data-act="record"]').addEventListener('click', () => go('pick'));
+  app.querySelectorAll('[data-act="notes"]').forEach((b) => b.addEventListener('click', () => go('notes')));
   app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
   app.querySelectorAll('[data-note]').forEach((b) => b.addEventListener('click', () => go('note', { noteId: b.dataset.note, from: 'home' })));
   if (highlight) {
@@ -172,6 +174,170 @@ function Home({ highlight } = {}) {
     const t = setTimeout(() => app.querySelector('.recent-card.new')?.classList.remove('new'), 4000);
     cleanup = () => { clearTimeout(t); offResize(); };
   } else cleanup = offResize;
+}
+
+
+// =========================================================
+// T8 노트 목록 (11/25) · 피그마 "노트 목록 (11-25, Claude)" 라이트 시안 · 정책 13
+// 홈 "최근 노트 · 전체보기"와 위 탭 "노트"가 같은 화면이에요
+// =========================================================
+const NOTE_ICON = (name) => `<i class="nl-ico nl-${name}" aria-hidden="true"></i>`;
+const SORTS = {
+  date: [['new', '최신순'], ['old', '오래된순']],
+  passage: [['bible', '성경 순서'], ['abc', '가나다순'], ['many', '노트 많은 순']],
+};
+function NotesScreen() {
+  const st = {
+    view: S.settings.notesView === 'passage' ? 'passage' : 'date',
+    sort: { date: 'new', passage: 'bible', ...(S.settings.notesSort || {}) },
+    q: '', selecting: false, sel: new Set(), menu: false,
+  };
+  const remember = () => { S.settings.notesView = st.view; S.settings.notesSort = st.sort; S.saveSettings(); };
+  const chapName = (p) => `${B.book(p.book).name} ${p.ch}${p.book === 19 ? '편' : '장'}`;
+  const matches = (n) => {
+    const q = st.q.trim().toLowerCase();
+    if (!q) return true;
+    const hay = [n.title, n.preacher, refList(n, true), refList(n, false)].join(' ').toLowerCase();
+    return q.split(/\s+/).every((w) => hay.includes(w));
+  };
+  const byDate = (a, b) => (a.date + (a.updatedAt || '')).localeCompare(b.date + (b.updatedAt || ''));
+
+  function groups(notes) {
+    if (st.view === 'date') {
+      const list = notes.slice().sort(byDate);
+      if (st.sort.date === 'new') list.reverse();
+      const out = [];
+      for (const n of list) {
+        const [y, m] = n.date.split('-');
+        const key = `${y}-${m}`;
+        let g = out.at(-1);
+        if (!g || g.key !== key) out.push(g = { key, label: `${y}년 ${Number(m)}월`, notes: [] });
+        g.notes.push(n);
+      }
+      return out;
+    }
+    // 본문별: 첫 본문의 장으로 묶어요. 본문 없는 노트는 맨 아래 "본문 없음"
+    const map = new Map(), none = [];
+    for (const n of notes) {
+      const p = n.passages[0];
+      if (!p) { none.push(n); continue; }
+      const key = p.book * 1000 + p.ch;
+      if (!map.has(key)) map.set(key, { key, book: p.book, ch: p.ch, label: chapName(p), notes: [] });
+      map.get(key).notes.push(n);
+    }
+    const out = [...map.values()];
+    for (const g of out) g.notes.sort((a, b) => (a.passages[0].from || 0) - (b.passages[0].from || 0) || byDate(b, a));
+    const bible = (a, b) => a.key - b.key;
+    if (st.sort.passage === 'abc') out.sort((a, b) => a.label.localeCompare(b.label, 'ko') || bible(a, b));
+    else if (st.sort.passage === 'many') out.sort((a, b) => b.notes.length - a.notes.length || bible(a, b));
+    else out.sort(bible);
+    if (none.length) out.push({ key: 'none', label: '본문 없음', notes: none.sort(byDate).reverse() });
+    return out;
+  }
+
+  function card(n) {
+    const same = st.view === 'date' ? otherNotesFor(n.passages, n.id).length : 0;
+    const on = st.sel.has(n.id);
+    const ref = n.passages.length ? esc(refList(n)) : '본문 없음';
+    return `<button class="nl-card${on ? ' on' : ''}" data-id="${n.id}">
+      <span class="nl-top"><span class="nl-ref">${ref}</span><span class="nl-ttl">${esc(n.title || '제목 없음')}</span></span>
+      <span class="nl-meta"><span class="nl-dp"><span>${st.view === 'date' ? fmtMD(n.date) : fmtShort(n.date)}</span>${n.preacher ? `<i class="nl-dot"></i><span>${esc(n.preacher)}</span>` : ''}</span>${same ? `<span class="nl-same">같은 본문 ${same}</span>` : ''}</span>
+      ${st.selecting ? `<span class="nl-check">${NOTE_ICON(on ? 'cb-on' : 'cb-off')}</span>` : ''}
+    </button>`;
+  }
+
+  function render() {
+    const all = S.allNotes();
+    const shown = all.filter(matches);
+    const gs = groups(shown);
+    const sorts = SORTS[st.view], cur = sorts.find((x) => x[0] === st.sort[st.view]) || sorts[0];
+    const n = st.sel.size;
+    const emptyMsg = all.length ? `'${esc(st.q.trim())}'에 맞는 노트가 없어요` : '설교를 기록하면 여기에 최근 노트가 보여요';
+    app.innerHTML = `<div class="home notes"><div class="nl-wrap">
+      <nav class="home-nav">
+        <div class="home-tabs">
+          <button class="home-tab" data-act="home">${icon.homeLine}홈</button>
+          <button class="home-tab" data-oos>${icon.book}성경</button>
+          <button class="home-tab on">${icon.note}노트</button>
+          <button class="home-tab" data-oos>${icon.bookmark}북마크</button>
+        </div>
+        <button class="icon-btn gear" data-act="settings" aria-label="설정">${icon.settings}</button>
+      </nav>
+      <div class="nl-head">
+        ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>
+        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"></label>`}
+      </div>
+      <div class="nl-controls">
+        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist">
+          <button class="${st.view === 'date' ? 'on' : ''}" data-view="date">날짜별</button>
+          <button class="${st.view === 'passage' ? 'on' : ''}" data-view="passage">본문별</button>
+        </div>
+        ${st.selecting ? `<div class="nl-right sel">
+          <button class="nl-btn text" data-act="all">전체 선택</button>
+          <button class="nl-btn outline" data-act="cancel">취소</button>
+          <button class="nl-btn primary" data-act="del" ${n ? '' : 'disabled'}>삭제</button>
+        </div>` : `<div class="nl-right">
+          <div class="nl-sort"><button class="nl-dd" data-act="sort">${cur[1]}${NOTE_ICON(st.menu ? 'up' : 'down')}</button>
+          ${st.menu ? `<div class="nl-menu">${sorts.map(([k, l]) => `<button class="nl-mi${k === cur[0] ? ' on' : ''}" data-sort="${k}">${l}${k === cur[0] ? NOTE_ICON('tick') : ''}</button>`).join('')}</div>` : ''}</div>
+          <button class="nl-btn outline" data-act="select" ${all.length ? '' : 'disabled'}>선택</button>
+        </div>`}
+      </div>
+      <div class="nl-list">${gs.length ? gs.map((g) => `<section class="nl-group">
+        <h3 class="nl-gh">${esc(g.label)}<span>${g.notes.length}</span></h3>
+        <div class="nl-grid">${g.notes.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`}</div>
+    </div></div>`;
+    bind();
+  }
+
+  function bind() {
+    app.querySelector('[data-act="home"]').addEventListener('click', () => go('home'));
+    app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
+    app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
+    const input = app.querySelector('.nl-search input');
+    if (input) {
+      input.addEventListener('input', () => {
+        st.q = input.value;
+        const pos = input.selectionStart;
+        render();
+        const i2 = app.querySelector('.nl-search input'); i2.focus(); try { i2.setSelectionRange(pos, pos); } catch {}
+      });
+    }
+    app.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
+      if (st.selecting || st.view === b.dataset.view) return;
+      st.view = b.dataset.view; st.menu = false; remember(); track('notes_view_' + st.view); render();
+    }));
+    app.querySelector('[data-act="sort"]')?.addEventListener('click', (e) => { e.stopPropagation(); st.menu = !st.menu; render(); });
+    app.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation(); st.sort[st.view] = b.dataset.sort; st.menu = false; remember(); track('notes_sort_' + b.dataset.sort); render();
+    }));
+    app.querySelector('[data-act="select"]')?.addEventListener('click', () => { st.selecting = true; st.menu = false; st.sel.clear(); render(); });
+    app.querySelector('[data-act="cancel"]')?.addEventListener('click', () => { st.selecting = false; st.sel.clear(); render(); });
+    app.querySelector('[data-act="all"]')?.addEventListener('click', () => {
+      const ids = S.allNotes().filter(matches).map((x) => x.id);
+      const allOn = ids.every((id) => st.sel.has(id));
+      st.sel = new Set(allOn ? [] : ids); render();
+    });
+    app.querySelector('[data-act="del"]')?.addEventListener('click', () => {
+      const ids = [...st.sel];
+      if (!ids.length) return;
+      const snap = S.trashNotes(ids);
+      track('notes_delete');
+      st.selecting = false; st.sel.clear(); render();
+      toastAction(`노트 ${ids.length}개를 삭제했어요`, '되돌리기', () => { S.restoreNotes(snap); track('notes_delete_undo'); if (curScreen === 'notes') render(); });
+    });
+    app.querySelectorAll('.nl-card').forEach((c) => c.addEventListener('click', () => {
+      const id = c.dataset.id;
+      if (st.selecting) { if (st.sel.has(id)) st.sel.delete(id); else st.sel.add(id); render(); return; }
+      go('note', { noteId: id, from: 'notes' });
+    }));
+  }
+
+  // 메뉴 밖을 누르면 정렬 메뉴를 닫아요
+  const outside = (e) => { if (st.menu && !e.target.closest('.nl-sort')) { st.menu = false; render(); } };
+  document.addEventListener('pointerdown', outside, true);
+  const off = C.on((w) => { if ((w === 'notes' || w === 'user') && curScreen === 'notes' && !st.selecting) render(); });
+  cleanup = () => { document.removeEventListener('pointerdown', outside, true); off?.(); };
+  render();
 }
 
 // 홈은 스크롤 없이 한 화면에 맞춰요.
@@ -567,7 +733,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   app.innerHTML = `<div class="screen">
     <header class="topbar">
       <div class="left"><button class="icon-btn" data-act="back" aria-label="뒤로">${icon.back}</button><button class="icon-btn" data-act="side" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
-      <div class="mid"><div class="tb-slot"></div><div class="title">${mainReadonly ? esc(main.title) : from === 'home' ? '노트' : '오늘 설교 기록하기'}</div></div>
+      <div class="mid"><div class="tb-slot"></div><div class="title">${mainReadonly ? esc(main.title) : from === 'home' || from === 'notes' ? '노트' : '오늘 설교 기록하기'}</div></div>
       <div class="right">${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
     </header>
     <div class="workspace">
@@ -1318,7 +1484,7 @@ async function NoteScreen({ noteId, start, openOld, from }) {
   // 왼쪽 위 뒤로 (피그마 Top Bar 화면=노트 쓰기, 11/21): 오른쪽 위 완료와 같은 방식으로 나가요 (저장 · 본문 확인)
   app.querySelector('[data-act="back"]').addEventListener('click', () => { track('note_back'); app.querySelector('[data-act="done"]').click(); });
   app.querySelector('[data-act="done"]').addEventListener('click', () => {
-    if (mainReadonly) return go('home');
+    if (mainReadonly) return go(from === 'notes' ? 'notes' : 'home');
     if (!main.passages.length) return askPassage();
     finish();
   });
@@ -1328,7 +1494,8 @@ async function NoteScreen({ noteId, start, openOld, from }) {
     main.done = true;
     S.touch(main);
     // 홈으로 먼저 넘어가고 저장은 바로 다음에 (노트가 클수록 나가는 순간이 늦던 것, 11/23). 앱을 닫을 땐 그때 바로 저장돼요
-    go('home', { highlight: main.id });
+    // 노트 목록에서 열었으면 목록으로 돌아가요 (정책 13: 완료 → 노트 목록)
+    if (from === 'notes') go('notes'); else go('home', { highlight: main.id });
     setTimeout(() => S.saveNotes(true), 0);
   }
 

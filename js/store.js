@@ -86,7 +86,9 @@ const visible = (n) => !n.deleted && (owner ? n.owner === owner : !n.owner);
 export const setOwner = (uid) => { owner = uid || null; };
 export const hooks = { changed: () => {} }; // cloud.js 가 채워요
 
-export const allNotes = () => [...userNotes.filter(visible), ...SEED].sort((a, b) => (b.date + (b.updatedAt || '')).localeCompare(a.date + (a.updatedAt || '')));
+// 예시 노트도 노트 목록에서 지울 수 있어요 (지운 예시는 설정에 번호만 기억, 11/25)
+const seedShown = (n) => !(settings.hiddenSeeds || []).includes(n.id);
+export const allNotes = () => [...userNotes.filter(visible), ...SEED.filter(seedShown)].sort((a, b) => (b.date + (b.updatedAt || '')).localeCompare(a.date + (a.updatedAt || '')));
 export const getNote = (id) => userNotes.find((n) => n.id === id && (owner ? n.owner === owner : !n.owner)) || SEED.find((n) => n.id === id);
 
 export function newNote({ date, title, preacher, passages, paper }) {
@@ -138,6 +140,38 @@ export function deleteNote(id) {
     Object.assign(n, { deleted: true, pages: [{ strokes: [] }], citations: [], updatedAt: String(Date.now()), _dirty: 1 });
     hooks.changed(n);
   } else userNotes = userNotes.filter((x) => x !== n);
+  saveNotes(true);
+}
+
+// 노트 목록에서 여러 개를 지우고, 되돌리기로 살려요 (11/25). 지우기 전 모습을 돌려줘요
+export function trashNotes(ids) {
+  const snap = [];
+  for (const id of ids) {
+    if (SEED.some((x) => x.id === id)) {
+      settings.hiddenSeeds = [...new Set([...(settings.hiddenSeeds || []), id])];
+      snap.push({ seed: id });
+      continue;
+    }
+    const n = userNotes.find((x) => x.id === id && visible(x));
+    if (!n) continue;
+    snap.push({ note: JSON.parse(JSON.stringify(n)) });
+    deleteNote(id);
+  }
+  saveSettings();
+  return snap;
+}
+export function restoreNotes(snap) {
+  for (const it of snap || []) {
+    if (it.seed) { settings.hiddenSeeds = (settings.hiddenSeeds || []).filter((x) => x !== it.seed); continue; }
+    const copy = it.note;
+    delete copy.deleted;
+    copy.updatedAt = String(Date.now());
+    if (copy.owner) copy._dirty = 1;
+    const i = userNotes.findIndex((x) => x.id === copy.id && x.owner === copy.owner);
+    if (i >= 0) userNotes[i] = copy; else userNotes.push(copy);
+    hooks.changed(copy);
+  }
+  saveSettings();
   saveNotes(true);
 }
 
