@@ -579,7 +579,7 @@ function BookmarksScreen() {
       const k = c.dataset.k;
       if (st.selecting) { if (st.sel.has(k)) st.sel.delete(k); else st.sel.add(k); render(); return; }
       const b = all().find((x) => keyOf(x) === k);
-      if (b) { track('bm_open'); go('bible', { book: b.book, ch: b.ch, verse: b.from }); } // 그 장을 열고 북마크한 절까지 (선택은 안 해요)
+      if (b) { track('bm_open'); go('bible', { book: b.book, ch: b.ch, verse: b.from, flash: { from: b.from, to: b.to } }); } // 그 장을 열고 북마크한 절까지 (선택은 안 해요), 잠깐 표시
     }));
   }
 
@@ -631,6 +631,7 @@ function BibleScreen(arg = {}) {
     justRead: null, // 이 장에 머무는 동안 "방금 읽음" 상태(②)를 유지해요 { key, bookDone }
   };
   if (arg.book) { st.book = arg.book; st.ch = arg.ch || 1; st.scrollTo = arg.verse || 1; st.left = 'chapters'; st.bookMarked = true; } // 북마크 카드 등에서 바로 그 장으로
+  st.flash = arg.flash || null; // 북마크로 왔으면 그 구절을 잠깐 표시했다 사라지게 {from, to}
   let verses = [];
 
   app.innerHTML = `<div class="home bible-tab">${tabBar('bible')}
@@ -788,9 +789,15 @@ function BibleScreen(arg = {}) {
     colEl.querySelectorAll('.bt-v').forEach((x) => x.addEventListener('click', () => tapVerse(+x.dataset.n)));
     renderEnd();
     if (st.scrollTo) {
+      // 스크롤 칸 기준 위치로 재요 (offsetTop은 머리줄 높이까지 더해져 구절이 위로 가려졌어요, 11/26)
       const t = colEl.querySelector(`.bt-v[data-n="${st.scrollTo}"]`);
-      scrollEl.scrollTop = t && st.scrollTo > 1 ? Math.max(0, t.offsetTop - 24) : 0;
+      scrollEl.scrollTop = t && st.scrollTo > 1 ? Math.max(0, scrollEl.scrollTop + t.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top - 24) : 0;
       st.scrollTo = null;
+    }
+    if (st.flash) {
+      const f = st.flash; st.flash = null;
+      colEl.querySelectorAll('.bt-v').forEach((x) => { const n = +x.dataset.n; if (n >= f.from && n <= f.to) { x.classList.add('flash'); x.classList.toggle('first', n === f.from); x.classList.toggle('last', n === f.to); } });
+      setTimeout(() => colEl.querySelectorAll('.bt-v.flash').forEach((x) => x.classList.remove('flash', 'first', 'last')), 1800);
     }
   }
   function tapVerse(n) {

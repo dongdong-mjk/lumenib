@@ -985,6 +985,9 @@ export async function run() {
       $$('.bm-card').find((x) => /요 3:16/.test(x.textContent)).click(); await W(900);
       if (!/요한복음 3장/.test($('.bt-htitle')?.textContent || '')) return '카드를 누르면 성경 그 장으로 안 가요';
       if ($('.bt-v.sel')) return '카드로 열었는데 구절이 선택돼 있어요';
+      const v = $('.bt-v[data-n="16"]'), sc = $('.bt-scroll');
+      if (v.getBoundingClientRect().top < sc.getBoundingClientRect().top) return '북마크한 절이 위쪽 머리줄에 가려져요';
+      if (!v.classList.contains('flash')) return '북마크한 절이 잠깐 표시되지 않아요';
       return true;
     } finally { restore(); window.__lumenibGo?.('home'); await W(300); }
   });

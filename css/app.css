@@ -936,3 +936,9 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .bm-card .nl-check { position: static; flex: none; }
 .bm-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 81px; font-family: var(--font-serif); font-size: 16px; line-height: 27px; letter-spacing: -0.02em; color: var(--text-secondary); }
 .bsheet { touch-action: none; } /* 아래로 밀어 닫기: 브라우저 스크롤이 끼어들지 않게 */
+
+/* 북마크로 왔을 때 그 구절을 잠깐 표시했다 사라짐 (11/26) */
+.bt-v.flash { animation: bt-flash 1.8s ease-out forwards; }
+.bt-v.flash.first { border-top-right-radius: 10px; }
+.bt-v.flash.last { border-bottom-right-radius: 10px; }
+@keyframes bt-flash { 0%, 45% { background: var(--bg-panel-inset); box-shadow: inset 3px 0 0 var(--marker-today); } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
