@@ -266,7 +266,8 @@ function NotesScreen() {
   }
 
   function card(n) {
-    const same = st.view === 'date' ? otherNotesFor(n.passages, n.id).length : 0;
+    // 같은 본문 개수: 그리는 동안 노트 목록을 한 번만 받아 써요 (카드마다 전체 노트를 다시 정렬하던 것, 11/25)
+    const same = st.view === 'date' && n.passages.length ? curAll.filter((m) => m.id !== n.id && m.passages.some((p) => n.passages.some((q) => B.overlaps(p, q)))).length : 0;
     const on = st.sel.has(n.id);
     const ref = n.passages.length ? esc(refList(n)) : '본문 없음';
     return `<button class="nl-card${on ? ' on' : ''}" data-id="${n.id}">
@@ -276,8 +277,9 @@ function NotesScreen() {
     </button>`;
   }
 
+  let curAll = [];
   function listHTML() {
-    const all = S.allNotes();
+    const all = curAll = S.allNotes();
     const gs = groups(all.filter(matches));
     const emptyMsg = all.length ? `'${esc(st.q.trim())}'에 맞는 노트가 없어요` : '설교를 기록하면 여기에 최근 노트가 보여요';
     return gs.length ? gs.map((g) => `<section class="nl-group">
