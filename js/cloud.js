@@ -43,6 +43,18 @@ const setStatus = (s) => { status = s; emit('status'); };
 const redirectURL = () => location.origin + location.pathname;
 
 // ---------- 시작 ----------
+// 홈을 그리기 전에, 지난번 로그인한 계정의 노트를 바로 보여요 (11/25: 로그인 확인·동의 조회가 서버를 거쳐 끝날 때까지
+// 내 노트가 숨겨져 홈 최근 노트가 늦게 떴어요). 서버 확인이 끝나면 그 결과로 다시 맞춰요
+export function restoreOwnerFast() {
+  if (!enabled) return;
+  try {
+    const raw = JSON.parse(localStorage.getItem('lumenib.auth') || 'null');
+    const uid = raw?.user?.id || raw?.currentSession?.user?.id;
+    if (uid) S.setOwner(uid);
+  } catch {}
+}
+const CONSENT_OK = (uid) => 'lumenib.consentOk.' + uid;
+
 export async function init() {
   if (!enabled) return;
   // 로그인에서 돌아온 주소의 오류 표시 (?error_description=…)
@@ -63,6 +75,7 @@ export async function init() {
     }, 0);
   });
   if (data.session?.user) await afterLogin(data.session.user);
+  else { S.setOwner(null); emit('user'); } // 미리 보여 준 계정이 실제로는 로그아웃돼 있었으면 되돌려요
 
   S.hooks.changed = () => schedulePush();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushNow(); });
@@ -78,14 +91,17 @@ async function afterLogin(u) {
     let agreed = false;
     const pending = localStorage.getItem(PENDING_CONSENT);
     if (pending === CONSENT.VERSION) agreed = true;
+    else if (localStorage.getItem(CONSENT_OK(u.id)) === CONSENT.VERSION) agreed = true; // 이 기기에서 이미 확인한 동의는 서버에 다시 묻지 않아요
     else {
       const { data } = await sb.from('consents').select('version').eq('user_id', u.id).maybeSingle();
       agreed = data?.version === CONSENT.VERSION;
       if (!agreed) agreed = await ui.askConsent({ afterLogin: true, localCount: S.unownedCount() });
     }
     if (!agreed) { await sb.auth.signOut({ scope: 'local' }); ui.toast('보관에 동의하지 않아 로그아웃했어요'); return; }
-    const { error } = await sb.from('consents').upsert({ user_id: u.id, version: CONSENT.VERSION, agreed_at: new Date().toISOString() });
-    if (!error) localStorage.removeItem(PENDING_CONSENT);
+    if (localStorage.getItem(CONSENT_OK(u.id)) !== CONSENT.VERSION) {
+      const { error } = await sb.from('consents').upsert({ user_id: u.id, version: CONSENT.VERSION, agreed_at: new Date().toISOString() });
+      if (!error) { localStorage.removeItem(PENDING_CONSENT); localStorage.setItem(CONSENT_OK(u.id), CONSENT.VERSION); }
+    }
 
     // 2) 이 기기에서 로그인 전에 쓴 노트를 내 계정으로
     user = u;

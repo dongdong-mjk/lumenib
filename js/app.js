@@ -264,6 +264,8 @@ function NotesScreen() {
   }
 
   let curAll = [];
+  // 지금 보이는(검색으로 걸러진) 노트를 다 골랐는지 — 다 골랐으면 버튼이 "선택 해제"
+  const allPicked = () => { const ids = S.allNotes().filter(matches).map((x) => x.id); return ids.length > 0 && ids.every((id) => st.sel.has(id)); };
   function listHTML() {
     const all = curAll = S.allNotes();
     const gs = groups(all.filter(matches));
@@ -288,7 +290,7 @@ function NotesScreen() {
           <button class="${st.view === 'passage' ? 'on' : ''}" data-view="passage">본문별</button>
         </div>
         ${st.selecting ? `<div class="nl-right sel">
-          <button class="nl-btn text" data-act="all">전체 선택</button>
+          <button class="nl-btn text" data-act="all">${allPicked() ? '선택 해제' : '전체 선택'}</button>
           <button class="nl-btn outline" data-act="cancel">취소</button>
           <button class="nl-btn primary" data-act="del" ${n ? '' : 'disabled'}>삭제</button>
         </div>` : `<div class="nl-right">
@@ -1580,6 +1582,7 @@ async function main() {
   C.ui.toast = toast;
   C.ui.askConsent = askConsentAfterLogin;
   C.on((what) => { if ((what === 'notes' || what === 'user') && curScreen === 'home' && !overlay.querySelector('.dim')) go('home'); });
+  C.restoreOwnerFast(); // 지난번 로그인한 계정 노트를 홈에 바로 (서버 확인은 뒤에서)
   go('home');
   C.init().catch((e) => console.warn('[cloud] init', e)); // 로그인돼 있으면 서버 노트를 받아 와요 (홈은 먼저 보여 줘요)
   if (window.__trackMsg) setTimeout(() => toast(window.__trackMsg), 600);
