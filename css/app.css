@@ -793,3 +793,5 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .nav-ico.ni-bookmark { --m: url(../icons/nav/bookmark.svg); }
 .nav-ico.ni-bookmark-fill { --m: url(../icons/nav/bookmark-fill.svg); }
 .nav-ico.ni-settings { --m: url(../icons/nav/settings.svg); }
+/* 알약 애니메이션 없음 (11/25): 나중에 네이티브 유리알로 */
+.tab-pill { transition: none !important; }

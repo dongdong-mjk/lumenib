@@ -176,7 +176,6 @@ function Home({ highlight } = {}) {
 // 홈 "최근 노트 · 전체보기"와 위 탭 "노트"가 같은 화면이에요
 // =========================================================
 // 위 탭 바 (홈·노트 화면 공통). 고른 탭 뒤의 알약은 하나만 있고, 탭을 옮기면 유리알처럼 미끄러져 가요 (11/25)
-let tabPillFrom = null; // 직전 화면에서 알약이 있던 자리 (탭 바 기준 left·width)
 function tabBar(active) {
   // 아이콘은 피그마 Icon 페이지의 outline(fill=false) / fill(fill=true) 세트 그대로. 고른 탭만 fill (11/25)
   const ico = (name, on) => `<i class="nav-ico ni-${name}${on ? '-fill' : ''}" aria-hidden="true"></i>`;
@@ -192,24 +191,11 @@ function tabBar(active) {
   </nav>`;
 }
 function slideTabPill() {
+  // 유리알 미끄러짐 애니메이션은 뺐어요 (11/25 민정님: 노트 화면 버튼을 누를 때마다 알약이 움직였음 · 나중에 네이티브 진짜 유리알로)
   const bar = app.querySelector('.home-tabs'), pill = bar?.querySelector('.tab-pill'), on = bar?.querySelector('.home-tab.on');
   if (!pill || !on) return;
-  const to = { left: on.offsetLeft, width: on.offsetWidth };
-  const from = tabPillFrom;
-  tabPillFrom = to;
-  const place = (r) => { pill.style.transform = `translateX(${r.left}px)`; pill.style.width = r.width + 'px'; };
-  if (!from || (from.left === to.left && from.width === to.width) || matchMedia('(prefers-reduced-motion: reduce)').matches) { place(to); return; }
-  // 직전 자리에서 출발해 새 탭으로 미끄러져요. 움직이는 동안만 유리알(반투명 + 뒤 흐림)로, 살짝 늘어났다 돌아와요
-  pill.classList.add('glass', 'still');
-  place(from);
-  void pill.offsetWidth;
-  pill.classList.remove('still');
-  requestAnimationFrame(() => {
-    place(to);
-    pill.classList.add('stretch');
-    setTimeout(() => pill.classList.remove('stretch'), 180);
-    setTimeout(() => pill.classList.remove('glass'), 420);
-  });
+  pill.style.transform = `translateX(${on.offsetLeft}px)`;
+  pill.style.width = on.offsetWidth + 'px';
 }
 const NOTE_ICON = (name) => `<i class="nl-ico nl-${name}" aria-hidden="true"></i>`;
 const SORTS = {
