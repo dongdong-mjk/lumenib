@@ -864,7 +864,7 @@ function OnboardingScreen(arg = {}) {
         <div class="ob-logins">
           ${google ? '<button class="btn btn-l ob-lg google" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>' : ''}
           ${L.kakao ? '<button class="btn btn-l ob-lg kakao" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>' : ''}
-          ${L.apple ? '<button class="btn btn-l ob-lg apple" data-p="apple" disabled>Apple로 계속하기</button>' : ''}
+          ${L.apple && C.hasNativeApple() ? '<button class="btn btn-l ob-lg apple" data-p="apple" disabled><span aria-hidden="true">\uF8FF</span>Apple로 계속하기</button>' : ''}
         </div>
         <button class="ob-later" data-a="later">나중에 할게요</button></div></div>`;
     }
@@ -881,7 +881,7 @@ function OnboardingScreen(arg = {}) {
       track('login_' + b.dataset.p + '_onboarding');
       S.settings.onboarded = true; S.saveSettings();
       b.disabled = true;
-      try { await C.signInWith(b.dataset.p); } catch (e) { console.warn(e); b.disabled = false; toast('로그인 창을 열지 못했어요', 2600); }
+      try { if ((await C.signInWith(b.dataset.p)) === false) b.disabled = false; } catch (e) { console.warn(e); b.disabled = false; toast('로그인 창을 열지 못했어요', 2600); }
     }));
   }
   // 옆으로 밀어서 넘기기
@@ -1320,6 +1320,7 @@ function openLogin() {
     <div class="login-btns">
       ${google ? `<button class="btn btn-l btn-outline" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>` : ''}
       ${L.kakao ? `<button class="btn btn-l btn-outline" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>` : ''}
+      ${L.apple && C.hasNativeApple() ? `<button class="btn btn-l ob-lg apple" data-p="apple" disabled><span aria-hidden="true">\uF8FF</span>Apple로 계속하기</button>` : ''}
       ${email ? `<button class="btn btn-l btn-outline" data-a="email" disabled>${linkMode ? '이메일로 로그인 링크 받기' : '이메일로 코드 받기'}</button>
       <div class="email-box" hidden>
         <div class="field"><label>이메일</label><input type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" data-f="email"></div>
@@ -1338,7 +1339,7 @@ function openLogin() {
     d.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', async () => {
       track('login_' + b.dataset.p);
       b.disabled = true;
-      try { await C.signInWith(b.dataset.p); } // 로그인 화면으로 넘어가요
+      try { if ((await C.signInWith(b.dataset.p)) === false) b.disabled = false; } // 로그인 화면으로 넘어가요 (Apple 창을 닫으면 false)
       catch (e) { console.warn(e); b.disabled = false; toast('로그인 창을 열지 못했어요', 2600); }
     }));
     const box = d.querySelector('.email-box');

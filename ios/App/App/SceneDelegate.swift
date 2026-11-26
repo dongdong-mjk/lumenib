@@ -1,6 +1,8 @@
 import UIKit
 import WebKit
 import Capacitor
+import AuthenticationServices
+import CryptoKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -57,6 +59,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibCarry")
         // 두 손가락 확대 동안 종이 칸(웹 화면 포함)을 앱이 직접 키워요. 웹은 이 통로가 있으면 스스로 키우지 않아요 (11/25)
         webView?.configuration.userContentController.add(self, name: "lumenibPinch")
+        // Apple로 로그인: 이 통로가 있으면 웹이 Apple 버튼을 보여 주고, 누르면 iPad 기본 Apple 로그인 창을 띄워요 (11/26)
+        webView?.configuration.userContentController.add(self, name: "lumenibApple")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
@@ -686,6 +690,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
         if message.name == "lumenibCanvas" { noteCanvasMessage(body); return }
+        if action == "appleSignIn" { startAppleSignIn(); return }
+        if action == "keepAwake" { UIApplication.shared.isIdleTimerDisabled = (body["value"] as? Bool) ?? false; return } // 노트 쓰는 동안 화면 켜 두기 (설정, 11/26)
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
         if action == "slider" { showWebSlider(body); return }
@@ -822,5 +828,62 @@ final class InkWindow: UIWindow {
             } else if let t = tap, t.touch === pencil, pencil.phase == .cancelled { tap = nil }
         }
         super.sendEvent(event)
+    }
+}
+
+
+// MARK: - Apple로 로그인 (11/26)
+// 앱 안에서는 iPad 기본 Apple 로그인 창을 써요. 받은 identity token을 웹에 넘기면
+// 웹이 Supabase signInWithIdToken(provider: apple)으로 로그인해요. nonce는 원래 값은 웹에, 해시는 Apple에.
+extension PencilBridgeViewController: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    private static var appleRawNonce: String?
+
+    func startAppleSignIn() {
+        let raw = Self.randomNonce()
+        Self.appleRawNonce = raw
+        let req = ASAuthorizationAppleIDProvider().createRequest()
+        req.requestedScopes = [.fullName, .email]
+        req.nonce = SHA256.hash(data: Data(raw.utf8)).map { String(format: "%02x", $0) }.joined()
+        let c = ASAuthorizationController(authorizationRequests: [req])
+        c.delegate = self
+        c.presentationContextProvider = self
+        c.performRequests()
+    }
+
+    public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        view.window ?? UIWindow()
+    }
+
+    public func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let cred = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokData = cred.identityToken, let token = String(data: tokData, encoding: .utf8) else {
+            sendApple(["error": "no_token"]); return
+        }
+        // 이름은 처음 로그인할 때만 와요. 한국식으로 성+이름
+        let name = [cred.fullName?.familyName, cred.fullName?.givenName].compactMap { $0 }.joined()
+        let code = cred.authorizationCode.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        sendApple(["token": token, "nonce": Self.appleRawNonce ?? "", "name": name, "code": code])
+    }
+
+    public func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        let canceled = (error as? ASAuthorizationError)?.code == .canceled
+        sendApple(["error": canceled ? "cancel" : error.localizedDescription])
+    }
+
+    private func sendApple(_ d: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: d), let json = String(data: data, encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("window.lumenibApple && window.lumenibApple(\(json))", completionHandler: nil)
+    }
+
+    private static func randomNonce(_ length: Int = 32) -> String {
+        let chars = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var out = ""
+        while out.count < length {
+            var b: UInt8 = 0
+            if SecRandomCopyBytes(kSecRandomDefault, 1, &b) == errSecSuccess, Int(b) < chars.count * (256 / chars.count) {
+                out.append(chars[Int(b) % chars.count])
+            }
+        }
+        return out
     }
 }

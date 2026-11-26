@@ -120,8 +120,27 @@ export const markConsent = () => localStorage.setItem(PENDING_CONSENT, CONSENT.V
 
 export async function signInWith(provider) {
   markConsent();
+  if (provider === 'apple' && hasNativeApple()) return signInWithAppleNative();
   const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: redirectURL() } });
   if (error) throw error;
+}
+// Apple로 로그인 (11/26): 앱 안에서만. iPad 기본 Apple 창 → identity token → Supabase
+export const hasNativeApple = () => !!window.webkit?.messageHandlers?.lumenibApple;
+function signInWithAppleNative() {
+  return new Promise((resolve, reject) => {
+    window.lumenibApple = async (r) => {
+      window.lumenibApple = null;
+      if (!r || r.error) { if (r?.error === 'cancel') { resolve(false); return; } reject(new Error(r?.error || 'apple')); return; }
+      try {
+        const { error } = await sb.auth.signInWithIdToken({ provider: 'apple', token: r.token, nonce: r.nonce });
+        if (error) throw error;
+        // Apple은 이름을 처음 한 번만 알려 줘요. 받으면 계정에 남겨요
+        if (r.name) await sb.auth.updateUser({ data: { full_name: r.name } }).catch(() => {});
+        resolve(true);
+      } catch (e) { reject(e); }
+    };
+    window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'appleSignIn' });
+  });
 }
 export async function sendEmailCode(email) {
   markConsent();

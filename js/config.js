@@ -6,7 +6,7 @@ export const SUPABASE_KEY = 'sb_publishable_hveg52_968ainpoKQmLs8A_pFDYOdy7'; //
 
 // 로그인 버튼: Supabase에서 켠 것만 true
 // 구글·카카오는 콘솔 설정이 끝나면 true. 이메일은 쓰지 않기로 함(11/21 민정님: 버튼이 너무 많아서). 다 false면 로그인 줄이 숨겨져요.
-export const LOGIN = { google: true, kakao: true, email: false };
+export const LOGIN = { google: true, kakao: true, apple: true, email: false }; // apple: 앱 안에서만 보여요(iPad 기본 Apple 로그인 창, 11/26)
 // 이메일 로그인 방식: 'link' = 메일 속 링크 누르기 (기본 메일 템플릿), 'code' = 메일 속 숫자 넣기 (SMTP 연결 후 템플릿에 {{ .Token }} 넣었을 때)
 export const EMAIL_MODE = 'link';
 
