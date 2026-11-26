@@ -81,6 +81,10 @@ function sendTopBar() {
       // 오른쪽 아이콘 버튼 전부 (노트 쓰기 · 검색 · 설정): 앱이 같은 유리 버튼으로 그려요 (11/26)
       icons: nativeGlass ? glass.map((b) => {
         const text = b.dataset.glassText ?? (b.querySelector('.nav-ico, svg') && !b.dataset.glassIcon?.startsWith('cl') ? '' : b.textContent.trim());
+        if (b.dataset.glassKind === 'field') { // 검색 줄 글자 칸: 앱이 유리 캡슐 + 기본 글자 칸으로 (49~)
+          const inp = b.querySelector('input'), cs2 = getComputedStyle(document.documentElement);
+          return { act: b.dataset.glass, kind: 'field', placeholder: inp.placeholder, value: inp.value, focus: !inp.value, phColor: cs2.getPropertyValue('--text-tertiary').trim(), iconColor: cs2.getPropertyValue('--icon-secondary').trim(), rect: R(b) };
+        }
         return { act: b.dataset.glass, label: b.getAttribute('aria-label') || text, icon: b.dataset.glassIcon || (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', text, iw: +b.dataset.glassIw || undefined, ih: +b.dataset.glassIh || undefined, rect: R(b) };
       }) : [...(nav?.querySelectorAll('.gear[data-act]') || [])].map((b) => ({ act: b.dataset.act, label: b.getAttribute('aria-label') || '', icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', rect: R(b) })),
       colors: { primary: v('--text-primary'), secondary: v('--text-secondary'), icon: v('--icon-primary'), pill: v('--bg-tab-active') },
@@ -245,14 +249,15 @@ function Home({ highlight } = {}) {
 // 위 줄 = 검색창 + 취소. 비어 있으면 최근 검색(모두 지우기), 입력하면 결과. 최근 검색은 이 기기에 10개까지
 // =========================================================
 function listSearch({ recentKey, placeholder, q, setQ, results, bindResults, onCancel }) {
+  const nativeField = !!window.webkit?.messageHandlers?.lumenibSearchField; // 앱이 검색 글자 칸을 그리는 빌드 (49~)
   const recent = () => { try { return JSON.parse(localStorage.getItem(recentKey) || '[]'); } catch { return []; } };
   const saveRecent = (list) => { try { localStorage.setItem(recentKey, JSON.stringify(list.slice(0, 10))); } catch {} };
   let cur = q || '';
   const keep = () => { const t = cur.trim(); if (t) saveRecent([t, ...recent().filter((x) => x !== t)]); };
   app.innerHTML = `<div class="home notes searching"><div class="nl-wrap">
     <div class="ns-bar">
-      <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="${esc(placeholder)}" value="${esc(cur)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${cur ? '' : 'hidden'}>${icon.x}</button></label>
-      <button class="ns-cancel" data-act="search-cancel">취소</button>
+      <label class="nl-search"${nativeField ? ' data-glass="search-field" data-glass-kind="field"' : ''}>${NOTE_ICON('search')}<input type="search" placeholder="${esc(placeholder)}" value="${esc(cur)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${cur ? '' : 'hidden'}>${icon.x}</button></label>
+      <button class="ns-cancel" data-act="search-cancel"${nativeField ? ' data-glass="search-cancel" data-glass-icon="close" data-glass-text="" aria-label="닫기"' : ''}>취소</button>
     </div>
     <div class="nl-list ns-list"></div>
   </div></div>`;
@@ -276,8 +281,10 @@ function listSearch({ recentKey, placeholder, q, setQ, results, bindResults, onC
   clear.addEventListener('pointerdown', (e) => e.preventDefault());
   clear.addEventListener('click', () => { set(''); input.focus(); });
   app.querySelector('[data-act="search-cancel"]').addEventListener('click', onCancel);
+  // 앱 글자 칸에서 친 글자 (입력 중 · 검색 누름)
+  window.lumenibSearchInput = (v, submit) => { if (!document.body.contains(input)) return; set(v); if (submit) keep(); };
   fill();
-  if (!cur) input.focus();
+  if (!cur && !nativeField) input.focus();
   return fill; // 결과를 다시 그릴 때 (예: 북마크 본문을 다 불러왔을 때)
 }
 

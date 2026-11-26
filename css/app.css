@@ -1135,3 +1135,8 @@ button.st-row:active { background: var(--bg-hover); }
 .native-top .topbar .left .icon-btn { width: 44px; height: 44px; }
 .native-top .topbar [data-act="done"] { height: 44px; min-width: 58px; padding: 0 16px; }
 .native-glass [data-glass] { visibility: hidden; } /* 48~: 앱이 그 자리에 유리 버튼을 그려요 */
+
+/* iOS 검색 줄 (피그마 Top Bar · 검색 iOS, 11/26): 유리 캡슐 글자 칸(왼쪽 끝 12) + 닫기 × 유리 44 (오른쪽 끝 10), 위 44 */
+.native-top .ns-bar { height: 54px; padding: 0 0 10px; align-items: center; margin: calc(16px - min(16px, var(--safe-top))) -10px 0 -8px; gap: 12px; }
+.native-top .ns-bar > .nl-search { height: 44px; border-radius: 999px; }
+.native-top .ns-cancel[data-glass] { width: 44px; height: 44px; padding: 0; }

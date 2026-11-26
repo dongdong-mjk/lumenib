@@ -69,10 +69,15 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibTopBar")
         webView?.configuration.userContentController.add(self, name: "lumenibTopIcons") // 노트 쓰기 · 검색 버튼도 앱이 그려요 (47~)
         webView?.configuration.userContentController.add(self, name: "lumenibGlass") // 노트 쓰기 · 본문 고르기 위 버튼(뒤로 · 사이드바 · 완료 · 〈 홈)도 유리로 (48~)
+        webView?.configuration.userContentController.add(self, name: "lumenibSearchField") // 검색 줄 글자 칸도 앱이 (49~)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             topBar.onTap = { [weak self] act in self?.js("window.lumenibTopBar && window.lumenibTopBar('\(act)')") }
+            topBar.onSearch = { [weak self] text, submit in
+                guard let data = try? JSONSerialization.data(withJSONObject: [text]), let arr = String(data: data, encoding: .utf8) else { return }
+                self?.js("window.lumenibSearchInput && window.lumenibSearchInput(\(arr)[0], \(submit))")
+            }
             web.addSubview(topBar)
         }
         applyTheme(UserDefaults.standard.string(forKey: "themeMode") ?? "system") // 예전 "theme"(다크 기본) 값은 안 써요 (11/26)
@@ -951,6 +956,9 @@ extension PencilBridgeViewController: ASWebAuthenticationPresentationContextProv
 // 누르면 웹의 같은 버튼을 대신 눌러서, 화면 이동은 웹이 하던 그대로예요.
 final class NativeTopBar: UIView {
     var onTap: ((String) -> Void)?
+    var onSearch: ((String, Bool) -> Void)? // 검색창 글자 (입력 중 / 검색 누름)
+    private var searchBox: UIView?
+    private var searchField: UITextField?
     private let tabsBox = UIView()
     private let pill: UIView
     private var tabs: [(act: String, icon: String, btn: UIButton)] = []
@@ -1062,8 +1070,10 @@ final class NativeTopBar: UIView {
         var icons = (b["icons"] as? [[String: Any]]) ?? []
         if icons.isEmpty, let g = b["gear"] { icons = [["act": "settings", "icon": "settings", "rect": g, "label": "설정"]] } // 예전 웹
         var seen = Set<String>()
+        var hasField = false
         for it in icons {
             guard let act = it["act"] as? String, let r = Self.rect(it["rect"]) else { continue }
+            if (it["kind"] as? String) == "field" { hasField = true; showSearchField(it, r); continue }
             seen.insert(act)
             let btn: UIButton
             if let e = iconBtns[act] { btn = e } else {
@@ -1094,10 +1104,50 @@ final class NativeTopBar: UIView {
             btn.configuration = cfg
         }
         for (act, btn) in iconBtns where !seen.contains(act) { btn.isHidden = true }
+        if !hasField { searchField?.resignFirstResponder(); searchBox?.removeFromSuperview(); searchBox = nil; searchField = nil }
         let was = isHidden
         isHidden = false
         if box.width <= 0 { pill.isHidden = true; active = ""; return }
         select((list.first { ($0["on"] as? Bool) == true }?["act"] as? String) ?? "", animated: !was && !active.isEmpty)
+    }
+
+    // 검색 줄 (피그마 Top Bar · 검색 iOS, 11/26): 유리 캡슐 안에 iPad 기본 글자 칸. 글자는 웹에 넘겨 결과를 그려요
+    private func showSearchField(_ it: [String: Any], _ r: CGRect) {
+        let fresh = searchBox == nil
+        if fresh {
+            let box: UIView
+            if #available(iOS 26.0, *) {
+                let g = UIGlassEffect(style: .regular); g.isInteractive = false
+                let v = UIVisualEffectView(effect: g); v.cornerConfiguration = .capsule(); box = v
+            } else {
+                let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial)); v.clipsToBounds = true; box = v
+            }
+            let icon = UIImageView(image: Self.icon("search", 20)); icon.tag = 1
+            let tf = UITextField()
+            tf.font = .systemFont(ofSize: 16)
+            tf.clearButtonMode = .whileEditing
+            tf.returnKeyType = .search
+            tf.autocorrectionType = .no
+            tf.autocapitalizationType = .none
+            tf.addAction(UIAction { [weak self, weak tf] _ in self?.onSearch?(tf?.text ?? "", false) }, for: .editingChanged)
+            tf.addAction(UIAction { [weak self, weak tf] _ in tf?.resignFirstResponder(); self?.onSearch?(tf?.text ?? "", true) }, for: .editingDidEndOnExit)
+            let content = (box as? UIVisualEffectView)?.contentView ?? box
+            content.addSubview(icon); content.addSubview(tf)
+            addSubview(box)
+            searchBox = box; searchField = tf
+        }
+        guard let box = searchBox, let tf = searchField else { return }
+        box.frame = r
+        if #unavailable(iOS 26.0) { box.layer.cornerRadius = r.height / 2 }
+        let content = (box as? UIVisualEffectView)?.contentView ?? box
+        if let icon = content.viewWithTag(1) as? UIImageView { icon.frame = CGRect(x: 12, y: (r.height - 20) / 2, width: 20, height: 20); icon.tintColor = Self.cssColor(it["iconColor"] as? String) ?? secondary }
+        tf.frame = CGRect(x: 40, y: 0, width: r.width - 40 - 10, height: r.height)
+        tf.textColor = primary
+        let ph = it["placeholder"] as? String ?? ""
+        tf.attributedPlaceholder = NSAttributedString(string: ph, attributes: [.foregroundColor: Self.cssColor(it["phColor"] as? String) ?? UIColor.tertiaryLabel])
+        let v = it["value"] as? String ?? ""
+        if tf.text != v && tf.markedTextRange == nil { tf.text = v }
+        if fresh && (it["focus"] as? Bool) == true { DispatchQueue.main.async { tf.becomeFirstResponder() } }
     }
 
     private func select(_ act: String, animated: Bool) {
