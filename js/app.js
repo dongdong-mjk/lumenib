@@ -68,7 +68,9 @@ function sendTopBar() {
   const R = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map((x) => Math.round(x * 2) / 2); };
   let m = { show: false };
   // 바텀시트·확인 창이 떠 있으면 앱 탭 바도 숨겨요 (어두운 막 위에 버튼이 뜨지 않게)
-  if (nav && tabs && !overlay.firstElementChild && R(tabs)[2] > 0) {
+  const splash = document.getElementById('splash');
+  const splashOn = splash && !splash.classList.contains('hide');
+  if (nav && tabs && !splashOn && !overlay.firstElementChild && R(tabs)[2] > 0) {
     const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
     m = {
       show: true, box: R(tabs), gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
@@ -85,6 +87,9 @@ window.lumenibTopBar = (act) => { app.querySelector(`.home-nav [data-act="${act}
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
   new MutationObserver(syncTopBar).observe(overlay, { childList: true });
+  // 스플래시가 사라질 때(흐려지는 0.35초 동안 같이) 앱 탭 바를 보여요 (46 피드백: 스플래시 위에 탭 바가 떠 있었음)
+  const sp = document.getElementById('splash');
+  if (sp) new MutationObserver(() => setTimeout(syncTopBar, 120)).observe(sp, { attributes: true, attributeFilter: ['class'] });
   addEventListener('resize', syncTopBar);
   document.addEventListener('scroll', syncTopBar, { capture: true, passive: true });
 }
@@ -226,6 +231,47 @@ function Home({ highlight } = {}) {
 // =========================================================
 // T8 노트 목록 (11/25) · 피그마 "노트 목록 (11-25, Claude)" 라이트 시안 · 정책 13
 // 홈 "최근 노트 · 전체보기"와 위 탭 "노트"가 같은 화면이에요
+// =========================================================
+// 목록 검색 화면 (노트 · 북마크 공통, 피그마 T8.노트 검색 / T10.북마크 검색, 11/26)
+// 위 줄 = 검색창 + 취소. 비어 있으면 최근 검색(모두 지우기), 입력하면 결과. 최근 검색은 이 기기에 10개까지
+// =========================================================
+function listSearch({ recentKey, placeholder, q, setQ, results, bindResults, onCancel }) {
+  const recent = () => { try { return JSON.parse(localStorage.getItem(recentKey) || '[]'); } catch { return []; } };
+  const saveRecent = (list) => { try { localStorage.setItem(recentKey, JSON.stringify(list.slice(0, 10))); } catch {} };
+  let cur = q || '';
+  const keep = () => { const t = cur.trim(); if (t) saveRecent([t, ...recent().filter((x) => x !== t)]); };
+  app.innerHTML = `<div class="home notes searching"><div class="nl-wrap">
+    <div class="ns-bar">
+      <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="${esc(placeholder)}" value="${esc(cur)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${cur ? '' : 'hidden'}>${icon.x}</button></label>
+      <button class="ns-cancel" data-act="search-cancel">취소</button>
+    </div>
+    <div class="nl-list ns-list"></div>
+  </div></div>`;
+  const input = app.querySelector('.ns-bar input'), clear = app.querySelector('.ns-bar .bp-search-clear'), box = app.querySelector('.ns-list');
+  const fill = () => {
+    const t = cur.trim();
+    if (!t) {
+      const r = recent();
+      box.innerHTML = r.length ? `<section class="ns-recent"><div class="ns-rhead"><h3>최근 검색</h3><button class="ns-clearall" data-act="recent-clear">모두 지우기</button></div>
+        ${r.map((x) => `<button class="ns-ritem" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</section>` : '';
+      box.querySelector('[data-act="recent-clear"]')?.addEventListener('click', () => { saveRecent([]); fill(); });
+      box.querySelectorAll('.ns-ritem').forEach((b) => b.addEventListener('click', () => { set(b.dataset.q); keep(); }));
+      return;
+    }
+    box.innerHTML = results(t);
+    bindResults(box, keep);
+  };
+  const set = (v) => { cur = v; setQ(v); input.value = v; clear.hidden = !v; fill(); };
+  input.addEventListener('input', () => set(input.value));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { keep(); input.blur(); } });
+  clear.addEventListener('pointerdown', (e) => e.preventDefault());
+  clear.addEventListener('click', () => { set(''); input.focus(); });
+  app.querySelector('[data-act="search-cancel"]').addEventListener('click', onCancel);
+  fill();
+  if (!cur) input.focus();
+  return fill; // 결과를 다시 그릴 때 (예: 북마크 본문을 다 불러왔을 때)
+}
+
 // =========================================================
 // 위 탭 바 (홈·노트 화면 공통). 고른 탭 뒤의 알약은 하나만 있고, 탭을 옮기면 유리알처럼 미끄러져 가요 (11/25)
 function tabBar(active, { write = false, search = false } = {}) {
@@ -373,49 +419,20 @@ function NotesScreen() {
         <h3 class="nl-gh">${esc(g.label)}<span>${g.notes.length}</span></h3>
         <div class="nl-grid">${g.notes.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`;
   }
-  // ---------- 검색 (피그마 T8.노트 검색 · 처음 / 결과, 11/26) ----------
-  const RECENT_KEY = 'lumenib.recentSearch.notes';
-  const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; } };
-  const saveRecent = (list) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 10))); } catch {} };
-  const pushRecent = () => { const q = st.q.trim(); if (q) saveRecent([q, ...recent().filter((x) => x !== q)]); };
-  function searchBodyHTML() {
-    const q = st.q.trim();
-    if (!q) {
-      const r = recent();
-      return r.length ? `<section class="ns-recent"><div class="ns-rhead"><h3>최근 검색</h3><button class="ns-clearall" data-act="recent-clear">모두 지우기</button></div>
-        ${r.map((x) => `<button class="ns-ritem" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</section>` : '';
-    }
-    curAll = S.allNotes();
-    const hits = curAll.filter(matches).sort(byDate).reverse();
-    return hits.length ? `<section class="nl-group"><h3 class="nl-gh">노트<span>${hits.length}</span></h3><div class="nl-grid">${hits.map(card).join('')}</div></section>`
-      : `<p class="nl-empty">'${esc(q)}'에 맞는 노트가 없어요</p>`;
-  }
+  // ---------- 검색 (피그마 T8.노트 검색 · 처음 / 결과, 11/26): 공통 listSearch ----------
   function renderSearch() {
-    app.innerHTML = `<div class="home notes searching"><div class="nl-wrap">
-      <div class="ns-bar">
-        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문으로 찾기" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.q ? '' : 'hidden'}>${icon.x}</button></label>
-        <button class="ns-cancel" data-act="search-cancel">취소</button>
-      </div>
-      <div class="nl-list ns-list">${searchBodyHTML()}</div>
-    </div></div>`;
-    const input = app.querySelector('.ns-bar input'), clear = app.querySelector('.ns-bar .bp-search-clear');
-    const fill = () => { app.querySelector('.ns-list').innerHTML = searchBodyHTML(); bindSearchBody(); };
-    input.addEventListener('input', () => { st.q = input.value; clear.hidden = !input.value; fill(); });
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { pushRecent(); input.blur(); } });
-    clear.addEventListener('pointerdown', (e) => e.preventDefault());
-    clear.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); });
-    app.querySelector('[data-act="search-cancel"]').addEventListener('click', () => { st.searching = false; st.q = ''; render(); });
-    bindSearchBody();
-    if (!st.q) input.focus();
-  }
-  function bindSearchBody() {
-    app.querySelector('[data-act="recent-clear"]')?.addEventListener('click', () => { saveRecent([]); app.querySelector('.ns-list').innerHTML = searchBodyHTML(); });
-    app.querySelectorAll('.ns-ritem').forEach((b) => b.addEventListener('click', () => {
-      st.q = b.dataset.q; const input = app.querySelector('.ns-bar input'); input.value = st.q;
-      app.querySelector('.ns-bar .bp-search-clear').hidden = false; pushRecent();
-      app.querySelector('.ns-list').innerHTML = searchBodyHTML(); bindSearchBody();
-    }));
-    app.querySelectorAll('.ns-list .nl-card').forEach((c) => c.addEventListener('click', () => { pushRecent(); track('notes_search_open'); go('note', { noteId: c.dataset.id, from: 'notes' }); }));
+    st.refreshSearch = listSearch({
+      recentKey: 'lumenib.recentSearch.notes', placeholder: '제목, 설교자, 본문으로 찾기', q: st.q,
+      setQ: (q) => { st.q = q; },
+      results: (q) => {
+        curAll = S.allNotes();
+        const hits = curAll.filter(matches).sort(byDate).reverse();
+        return hits.length ? `<section class="nl-group"><h3 class="nl-gh">노트<span>${hits.length}</span></h3><div class="nl-grid">${hits.map(card).join('')}</div></section>`
+          : `<p class="nl-empty">'${esc(q)}'에 맞는 노트가 없어요</p>`;
+      },
+      bindResults: (box, keep) => box.querySelectorAll('.nl-card').forEach((c) => c.addEventListener('click', () => { keep(); track('notes_search_open'); go('note', { noteId: c.dataset.id, from: 'notes' }); })),
+      onCancel: () => { st.searching = false; st.q = ''; render(); },
+    });
   }
 
   function render() {
@@ -527,7 +544,7 @@ function BookmarksScreen() {
   const st = {
     view: S.settings.bmView === 'passage' ? 'passage' : 'date',
     sort: { date: 'new', passage: 'bible', ...(S.settings.bmSort || {}) },
-    q: '', selecting: false, sel: new Set(), menu: false,
+    q: '', selecting: false, sel: new Set(), menu: false, searching: false,
   };
   const remember = () => { S.settings.bmView = st.view; S.settings.bmSort = st.sort; S.saveSettings(); };
   const keyOf = (b) => bmTextKey(b) + ':' + (b.t || 0);
@@ -588,15 +605,32 @@ function BookmarksScreen() {
         <h3 class="nl-gh">${esc(g.label)}<span>${g.items.length}</span></h3>
         <div class="bm-grid">${g.items.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`;
   }
+  // 검색 (피그마 T10.북마크 검색 · 결과, 11/26): 노트와 같은 화면
+  function renderSearch() {
+    st.refreshSearch = listSearch({
+      recentKey: 'lumenib.recentSearch.bookmarks', placeholder: '구절, 본문으로 찾기', q: st.q,
+      setQ: (q) => { st.q = q; },
+      results: (q) => {
+        const hits = all().filter(matches).sort((a, b) => (b.t || 0) - (a.t || 0));
+        return hits.length ? `<section class="nl-group"><h3 class="nl-gh">북마크<span>${hits.length}</span></h3><div class="bm-grid">${hits.map(card).join('')}</div></section>`
+          : `<p class="nl-empty">'${esc(q)}'에 맞는 북마크가 없어요</p>`;
+      },
+      bindResults: (box, keep) => box.querySelectorAll('.bm-card').forEach((c) => c.addEventListener('click', () => {
+        const b = all().find((x) => keyOf(x) === c.dataset.k);
+        if (b) { keep(); track('bm_search_open'); go('bible', { book: b.book, ch: b.ch, verse: b.from, flash: { from: b.from, to: b.to } }); }
+      })),
+      onCancel: () => { st.searching = false; st.q = ''; render(); },
+    });
+  }
   function render() {
+    if (st.searching) { renderSearch(); return; }
     const list = all();
     const sorts = BM_SORTS[st.view], cur = sorts.find((x) => x[0] === st.sort[st.view]) || sorts[0];
     const n = st.sel.size;
     app.innerHTML = `<div class="home notes bookmarks"><div class="nl-wrap">
-      ${tabBar('bookmark')}
+      ${tabBar('bookmark', { search: !st.selecting })}
       <div class="nl-head">
-        ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">북마크<span class="nl-count">${list.length}</span></h1>
-        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="구절, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.q ? '' : 'hidden'}>${icon.x}</button></label>`}
+        ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">북마크<span class="nl-count">${list.length}</span></h1>`}
       </div>
       <div class="nl-controls">
         <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist">
@@ -626,7 +660,10 @@ function BookmarksScreen() {
       const vs = await B.getVerses(b.book, b.ch, b.from, b.to).catch(() => []);
       bmText.set(bmTextKey(b), vs.map((v) => v.t).join(' '));
     }));
-    if (curScreen === 'bookmarks') { const l = app.querySelector('.nl-list'); if (l) { l.innerHTML = listHTML(); bindCards(); } }
+    if (curScreen === 'bookmarks') {
+      if (st.searching) { st.refreshSearch?.(); return; }
+      const l = app.querySelector('.nl-list'); if (l) { l.innerHTML = listHTML(); bindCards(); }
+    }
   }
 
   function bind() {
@@ -634,17 +671,7 @@ function BookmarksScreen() {
     app.querySelector('.home-nav [data-act="bible"]').addEventListener('click', () => go('bible'));
     app.querySelector('.home-nav [data-act="notes"]').addEventListener('click', () => go('notes'));
     app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
-    const input = app.querySelector('.nl-search input');
-    if (input) {
-      const clear = app.querySelector('.nl-search .bp-search-clear');
-      input.addEventListener('input', () => {
-        st.q = input.value; clear.hidden = !input.value;
-        app.querySelector('.nl-list').innerHTML = listHTML(); bindCards();
-      });
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
-      clear.addEventListener('pointerdown', (e) => e.preventDefault());
-      clear.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); });
-    }
+    app.querySelector('.home-nav [data-act="search"]')?.addEventListener('click', () => { track('bm_search'); st.searching = true; st.q = ''; st.menu = false; render(); });
     app.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       if (st.selecting || st.view === b.dataset.view) return;
       st.view = b.dataset.view; st.menu = false; remember(); track('bm_view_' + st.view); render();
@@ -680,7 +707,7 @@ function BookmarksScreen() {
 
   const outside = (e) => { if (st.menu && !e.target.closest('.nl-sort')) { st.menu = false; render(); } };
   document.addEventListener('pointerdown', outside, true);
-  const off = C.on((w) => { if ((w === 'bible' || w === 'user') && curScreen === 'bookmarks' && !st.selecting) { render(); loadTexts(); } });
+  const off = C.on((w) => { if ((w === 'bible' || w === 'user') && curScreen === 'bookmarks' && !st.selecting && !st.searching) { render(); loadTexts(); } });
   cleanup = () => { document.removeEventListener('pointerdown', outside, true); off?.(); };
   render();
   loadTexts();

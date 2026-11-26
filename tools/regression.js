@@ -995,9 +995,16 @@ export async function run() {
       if (heads.join(',') !== '시편,요한복음') return '본문별 묶음이 달라요 ' + heads;
       $('[data-view="date"]').click(); await W(300);
       // 검색: 본문 글자로
-      const inp = $('.nl-search input'); inp.value = '독생자'; inp.dispatchEvent(new Event('input')); await W(200);
-      if ($$('.bm-card').length !== 1) return '본문 검색이 안 돼요 ' + $$('.bm-card').length;
-      inp.value = ''; inp.dispatchEvent(new Event('input')); await W(200);
+      // 검색 (11/26 피그마 T10): 위 검색 아이콘(설정 왼쪽) → 검색 화면 → 결과 "북마크 N" → 취소
+      if ($('.nl-head .nl-search')) return '북마크 머리에 예전 검색창이 남아 있어요';
+      const sb = $('.home-nav [data-act="search"]'); if (!sb) return '북마크 탭에 검색 아이콘이 없어요';
+      if (Math.round($('.home-nav [data-act="settings"]').getBoundingClientRect().left - sb.getBoundingClientRect().right) !== 4) return '검색 아이콘이 설정 바로 왼쪽이 아니에요';
+      sb.click(); await W(200);
+      const inp = $('.ns-bar input'); inp.value = '독생자'; inp.dispatchEvent(new Event('input')); await W(200);
+      if ($$('.ns-list .bm-card').length !== 1) return '본문 검색이 안 돼요 ' + $$('.bm-card').length;
+      if (!/^북마크1$/.test($('.ns-list .nl-gh')?.textContent || '')) return '검색 결과 머리가 "북마크 N"이 아니에요';
+      $('[data-act="search-cancel"]').click(); await W(200);
+      if (!$('.nl-head')) return '취소하면 북마크 목록으로 안 돌아가요';
       // 선택 삭제 → 되돌리기
       $('[data-act="select"]').click(); await W(200);
       if ($('.bm-card .bm-date')) return '선택 모드에서 날짜가 안 숨겨져요';

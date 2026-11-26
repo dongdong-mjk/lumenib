@@ -1118,3 +1118,6 @@ button.st-row:active { background: var(--bg-hover); }
 .ns-rhead h3 { margin: 0; padding: 0 8px; font-size: 17px; line-height: 26px; font-weight: 600; color: var(--text-primary); }
 .ns-clearall { height: 36px; padding: 0 8px; border-radius: 999px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-primary); }
 .ns-ritem { height: 48px; padding: 11px 0; text-align: left; font-size: 17px; line-height: 26px; color: var(--text-secondary); }
+
+/* 북마크 탭 검색 아이콘 = 설정 왼쪽 (노트 쓰기 버튼이 없어요) */
+.bookmarks .home-nav .gear.nav-search { right: 44px; }
