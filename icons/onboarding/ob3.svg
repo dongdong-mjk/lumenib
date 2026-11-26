@@ -1,0 +1,55 @@
+<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="0.5" y="0.5" width="639" height="359" rx="19.5" fill="white"/>
+<rect x="0.5" y="0.5" width="639" height="359" rx="19.5" stroke="#E8E8E8"/>
+<rect x="16.5" y="16.5" width="199" height="327" rx="11.5" fill="white"/>
+<rect x="16.5" y="16.5" width="199" height="327" rx="11.5" stroke="#E8E8E8"/>
+<text fill="#111111" style="white-space: pre" xml:space="preserve" font-family="Wanted Sans" font-size="13" font-weight="600" letter-spacing="-0.025em"><tspan x="32" y="43.6211">&#xace0;&#xb9b0;&#xb3c4;&#xc804;&#xc11c; 13&#xc7a5;</tspan></text>
+<rect x="36" y="66" width="160" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="36" y="80" width="160" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="36" y="94" width="96" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="28" y="112" width="176" height="66" rx="8" fill="#F5F5F5"/>
+<rect x="28" y="112" width="3" height="66" rx="1.5" fill="#111111"/>
+<rect x="40" y="122" width="150" height="2" rx="1" fill="#555555"/>
+<rect x="40" y="136" width="150" height="2" rx="1" fill="#555555"/>
+<rect x="40" y="150" width="150" height="2" rx="1" fill="#555555"/>
+<rect x="40" y="164" width="90" height="2" rx="1" fill="#555555"/>
+<rect x="36" y="198" width="160" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="36" y="212" width="160" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="36" y="226" width="160" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="36" y="240" width="160" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="36" y="254" width="160" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="36" y="268" width="96" height="2" rx="1" fill="#E8E8E8"/>
+<rect x="232.5" y="16.5" width="391" height="327" rx="11.5" fill="white"/>
+<rect x="232.5" y="16.5" width="391" height="327" rx="11.5" stroke="#E8E8E8"/>
+<rect x="248" y="32" width="360" height="74" rx="8" fill="#F5F5F5"/>
+<rect x="260" y="62" width="150" height="10" rx="2" fill="#FFDB59" fill-opacity="0.6"/>
+<text fill="#111111" style="white-space: pre" xml:space="preserve" font-family="Wanted Sans" font-size="12" font-weight="600" letter-spacing="-0.025em"><tspan x="260" y="52.2656">&#xb85c;&#xb9c8;&#xc11c; 8:28-30</tspan></text>
+<rect x="260" y="64" width="320" height="2" rx="1" fill="#555555"/>
+<rect x="260" y="76" width="320" height="2" rx="1" fill="#555555"/>
+<rect x="260" y="88" width="192" height="2" rx="1" fill="#555555"/>
+<rect x="256.75" y="186.75" width="342.5" height="94.5" rx="7.25" stroke="#D4D4D4" stroke-width="1.5" stroke-dasharray="5 4"/>
+<rect x="268" y="198" width="3" height="72" rx="1.5" fill="#E8E8E8"/>
+<text fill="#555555" style="white-space: pre" xml:space="preserve" font-family="Wanted Sans" font-size="12" font-weight="600" letter-spacing="-0.025em"><tspan x="280" y="210.266">&#xc778;&#xc6a9; &#xb7; &#xace0;&#xc804; 13:4-7</tspan></text>
+<rect x="280" y="222" width="300" height="2" rx="1" fill="#555555"/>
+<rect x="280" y="235" width="300" height="2" rx="1" fill="#555555"/>
+<rect x="280" y="248" width="180" height="2" rx="1" fill="#555555"/>
+<path d="M200 132.548C200.65 132.386 201.302 132.231 201.957 132.085M314.758 175.996C314.322 175.484 313.882 174.976 313.439 174.471M314.758 175.996C315.211 176.527 315.661 177.063 316.107 177.603M314.758 175.996L314.068 175.134M314.758 175.996L316.068 177.634M320 182.548C319.58 181.988 319.156 181.432 318.728 180.88M320 182.548L318.689 180.91M320.375 181.042L320 182.548L318.5 182.798M312 172.548L312.689 173.41M308 184.548L309.5 184.298M323 170.5L322.625 172.006M205.906 131.301C207.225 131.071 208.553 130.873 209.889 130.705M213.894 130.294C215.228 130.187 216.568 130.109 217.915 130.061M221.941 130.002C223.278 130.011 224.62 130.047 225.966 130.111M229.982 130.383C231.314 130.499 232.649 130.642 233.985 130.811M237.969 131.391C239.289 131.609 240.609 131.851 241.929 132.118M245.861 132.987C247.161 133.298 248.461 133.634 249.759 133.993M253.622 135.131C254.898 135.531 256.172 135.953 257.444 136.398M261.222 137.789C262.47 138.272 263.714 138.776 264.954 139.301M268.636 140.931C269.851 141.491 271.061 142.073 272.266 142.674M275.84 144.529C277.019 145.163 278.191 145.817 279.356 146.491M282.812 148.559C283.95 149.263 285.081 149.987 286.204 150.729M289.53 152.999C290.624 153.77 291.71 154.559 292.787 155.366M295.972 157.829C297.02 158.663 298.057 159.515 299.084 160.384M302.118 163.029C303.115 163.924 304.1 164.835 305.074 165.763M307.948 168.583C308.89 169.535 309.82 170.503 310.737 171.486M312.5 183.798L315.5 183.298M321.125 178.03L321.875 175.018" stroke-width="2" stroke-linecap="round" stroke="#6B6B6B"/>
+<g filter="url(#ob3shadow)">
+<rect x="185.186" y="186" width="176" height="60" rx="10" transform="rotate(4 185.186 186)" fill="white"/>
+<rect x="185.649" y="186.534" width="175" height="59" rx="9.5" transform="rotate(4 185.649 186.534)" stroke="#E8E8E8"/>
+<text transform="translate(196.459 196.812) rotate(4)" fill="#111111" style="white-space: pre" xml:space="preserve" font-family="Wanted Sans" font-size="12" font-weight="600" letter-spacing="-0.025em"><tspan x="0" y="12.2656">&#xace0;&#xc804; 13:4-7</tspan></text>
+<rect x="194.924" y="218.759" width="150" height="4" rx="2" transform="rotate(4 194.924 218.759)" fill="#555555"/>
+<rect x="194.227" y="228.734" width="90" height="4" rx="2" transform="rotate(4 194.227 228.734)" fill="#555555"/>
+</g>
+<defs>
+<filter id="ob3shadow" x="161" y="174" width="219.756" height="112.131" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="8"/>
+<feGaussianBlur stdDeviation="10"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.16 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+</filter>
+</defs>
+</svg>

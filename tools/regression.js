@@ -813,9 +813,9 @@ export async function run() {
     // 읽기 기록 지우기는 설정에서만 (11/26): 장 패널엔 초기화 버튼이 없어요
     window.__lumenibGo?.('bible', { book: 57, ch: 1 }); await W(700);
     if ($('.bt-left [data-act="reset"]') || /초기화/.test($('.bt-left').textContent)) return '장 패널에 읽기 기록 초기화가 남아 있어요';
-    $('.home-nav [data-act="settings"]').click(); await W(300);
-    if (!$('.dim [data-act="reset-reading"]')) return '설정에 성경 읽기 기록 초기화가 없어요';
-    $('.dim [data-act="close"]').click(); await W(200);
+    window.__lumenibGo?.('settings', { page: 'reading' }); await W(300);
+    if (!$('[data-act="reset-all"]') || !$('[data-act="go-books"]')) return '설정 > 읽기 기록에 지우기가 없어요';
+    window.__lumenibGo?.('bible', { book: 57, ch: 1 }); await W(500);
     S.resetBookReading(57);
     S.settings.bibleLoc = loc0; S.saveSettings();
     window.__lumenibGo?.('home'); await W(300);
@@ -1036,6 +1036,99 @@ export async function run() {
       S.bookmarks().forEach((b) => S.removeBookmark(b)); S.restoreBookmarks(bm0);
       S.settings.bibleLoc = loc0; S.saveSettings(); window.__lumenibGo?.('home'); await W(300);
     }
+  });
+
+  await check('설정(v3): 톱니로 열림 · 메뉴 4개 페이지 · 권별 지우기 · 화면 모드 시스템/라이트/다크 · 두 번 탭 기본 iPad 설정 · 도형 끄기 · 약관 페이지', async () => {
+    const W = wait;
+    const th0 = S.settings.theme, tap0 = S.settings.pencilTap, sh0 = S.settings.autoShape;
+    try {
+      window.__lumenibGo?.('home'); await W(300);
+      $('.home-nav [data-act="settings"]').click(); await W(400);
+      if ($('.st-head h2')?.textContent !== '계정 · 보관') return '톱니를 누르면 설정 계정 · 보관이 아니에요';
+      if (!$('[data-act="track"]')) return '앱 사용 기록 스위치가 없어요';
+      for (const [k, t] of [['reading', '읽기 기록'], ['display', '화면과 입력'], ['help', '도움말 · 앱 정보']]) {
+        $(`.st-mi[data-go="${k}"]`).click(); await W(200);
+        if ($('.st-head h2').textContent !== t || !$(`.st-mi[data-go="${k}"]`).classList.contains('on')) return `${t} 메뉴가 안 열려요`;
+      }
+      // 화면 모드
+      $('[data-go="display"]').click(); await W(200);
+      if (S.settings.theme !== 'system' && th0 === undefined) return '화면 모드 기본이 시스템이 아니에요';
+      $('[data-theme="light"]').click(); await W(150);
+      if (document.documentElement.dataset.theme !== 'light') return '라이트를 골라도 안 바뀌어요';
+      $('[data-theme="dark"]').click(); await W(150);
+      if (document.documentElement.dataset.theme !== 'dark') return '다크를 골라도 안 바뀌어요';
+      $('[data-theme="system"]').click(); await W(150);
+      const sys = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      if (document.documentElement.dataset.theme !== sys) return '시스템 설정을 따르지 않아요';
+      // Apple Pencil 두 번 탭
+      if (!/iPad 설정 따르기/.test($('[data-act="go-pencil"]').textContent) && !tap0) return '두 번 탭 기본이 iPad 설정이 아니에요';
+      $('[data-act="go-pencil"]').click(); await W(200);
+      $('[data-tap="switchEraser"]').click(); await W(150);
+      if (S.settings.pencilTap !== 'switchEraser') return '두 번 탭 고르기가 저장 안 돼요';
+      $('.st-back').click(); await W(150);
+      if (!/지우개로 바꾸기/.test($('[data-act="go-pencil"]').textContent)) return '고른 두 번 탭이 화면과 입력에 안 보여요';
+      // 도형 끄기
+      $('[data-act="shape"]').click(); await W(150);
+      if (S.settings.autoShape !== false) return '도형 스위치가 저장 안 돼요';
+      // 약관
+      $('[data-go="help"]').click(); await W(150);
+      for (const k of ['terms', 'privacy', 'bible', 'licenses']) {
+        $(`[data-act="go-${k}"]`).click(); await W(150);
+        if (!$('.st-legal')?.textContent.trim()) return k + ' 페이지가 비어 있어요';
+        $('.st-back').click(); await W(150);
+      }
+      return true;
+    } finally {
+      S.settings.theme = th0 || 'system'; S.settings.pencilTap = tap0 || 'system'; S.settings.autoShape = sh0 !== false; S.saveSettings();
+      document.documentElement.dataset.theme = (S.settings.theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : S.settings.theme);
+      window.__lumenibGo?.('home'); await W(300);
+    }
+  });
+
+  await check('설정 > 읽기 기록 > 권별로 지우기: 읽은 권만 보이고, 골라서 지우면 그 권만 지워짐', async () => {
+    const W = wait;
+    const snap = [55, 56].map((b) => [b, [1, 2, 3, 4].map((c) => S.isRead(b, c))]);
+    try {
+      S.setRead(55, 1, true); S.setRead(56, 1, true);
+      window.__lumenibGo?.('settings', { page: 'reading' }); await W(200);
+      $('[data-act="go-books"]').click(); await W(200);
+      const names = $$('.st-book .st-rtt').map((x) => x.textContent);
+      if (!names.includes('디모데후서') || !names.includes('디도서')) return '읽은 권이 목록에 없어요 ' + names;
+      $('.st-book[data-book="55"]').click(); await W(150);
+      if (!/1권 읽기 기록 지우기/.test($('[data-act="reset-books"]').textContent)) return '버튼 문구가 달라요';
+      $('[data-act="reset-books"]').click(); await W(200);
+      $('.dim [data-a="yes"]').click(); await W(200);
+      if (S.isRead(55, 1) || !S.isRead(56, 1)) return '고른 권만 지워지지 않아요';
+      return true;
+    } finally {
+      snap.forEach(([b, arr]) => arr.forEach((on, i) => S.setRead(b, i + 1, on)));
+      window.__lumenibGo?.('home'); await W(300);
+    }
+  });
+
+  await check('온보딩: 5장(환영 · 필기 · 인용 끌어오기 · 예전 노트 · 보관) · 건너뛰기 · 동의해야 로그인 버튼', async () => {
+    const W = wait;
+    const ob0 = S.settings.onboarded;
+    try {
+      window.__lumenibGo?.('onboarding'); await W(300);
+      if (!/말씀의 빛을 필기로 남기다/.test($('.ob h1').textContent)) return '환영 화면이 아니에요';
+      const titles = [];
+      for (let k = 0; k < 3; k++) { $('[data-a="next"]').click(); await W(600); titles.push($('.ob h1').textContent); if (!$('.ob-art svg')) return '그림이 안 나와요 ' + titles.at(-1); }
+      if (titles[1] !== '설교에 나온 다른 구절도 끌어와요') return '인용구 끌어오기 장이 없어요 ' + titles;
+      const loginOk = !!$('[data-a="next"]') && $('[data-a="next"]').textContent === '다음';
+      if (loginOk) {
+        $('[data-a="next"]').click(); await W(300);
+        if (!/보관할까요/.test($('.ob h1').textContent)) return '보관 장이 아니에요';
+        if ($$('[data-p]').some((b) => !b.disabled)) return '동의 전에 로그인 버튼이 눌려요';
+        $('[data-a="agree"]').click(); await W(100);
+        if ($$('[data-p]').some((b) => b.disabled)) return '동의해도 로그인 버튼이 안 켜져요';
+        $('[data-a="later"]').click(); await W(400);
+      } else { $('[data-a="next"]').click(); await W(400); }
+      if (!$('.home-inner') || !S.settings.onboarded) return '끝내면 홈으로 안 가요';
+      window.__lumenibGo?.('onboarding'); await W(300); $('[data-a="next"]').click(); await W(300);
+      $('[data-a="skip"]').click(); await W(300);
+      return !!$('.home-inner') || '건너뛰기가 안 돼요';
+    } finally { S.settings.onboarded = ob0; S.saveSettings(); window.__lumenibGo?.('home'); await W(300); }
   });
 
   // 정리: 점검용으로 만든 노트를 지우고 처음 화면으로

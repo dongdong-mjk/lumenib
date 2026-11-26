@@ -1,0 +1,15 @@
+<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="0.5" y="0.5" width="639" height="359" rx="19.5" fill="white"/>
+<rect x="0.5" y="0.5" width="639" height="359" rx="19.5" stroke="#E8E8E8"/>
+<rect x="24" y="20" width="101" height="32" rx="10" fill="#F5F5F5"/>
+<text fill="#555555" style="white-space: pre" xml:space="preserve" font-family="Wanted Sans" font-size="12" font-weight="600" letter-spacing="-0.025em"><tspan x="38.5" y="40.1">26.11.23 · &#xc624;&#xb298;</tspan></text>
+<rect x="129" y="20" width="126" height="32" rx="10" fill="#111111"/>
+<text fill="white" style="white-space: pre" xml:space="preserve" font-family="Wanted Sans" font-size="12" font-weight="600" letter-spacing="-0.025em"><tspan x="143.5" y="40.1">24.05.12 · &#xc608;&#xc804; &#xb178;&#xd2b8;</tspan></text>
+<rect x="24.5" y="62.5" width="591" height="277" rx="11.5" fill="white"/>
+<rect x="24.5" y="62.5" width="591" height="277" rx="11.5" stroke="#E8E8E8"/>
+<rect x="40" y="78" width="560" height="60" rx="8" fill="#F5F5F5"/>
+<text fill="#111111" style="white-space: pre" xml:space="preserve" font-family="Wanted Sans" font-size="12" font-weight="600" letter-spacing="-0.025em"><tspan x="52" y="98.1">&#xb85c;&#xb9c8;&#xc11c; 8:28</tspan></text>
+<rect x="52" y="108" width="500" height="2" rx="1" fill="#555555"/>
+<rect x="52" y="120" width="300" height="2" rx="1" fill="#555555"/>
+<path d="M54 220.182C74.5785 199.914 95.157 199.914 107.504 218.156C128.358 248.964 161.85 177.044 185.702 218.156C193.934 230.316 218.628 228.29 235.091 210.048M268.017 222.209C284.479 205.995 309.174 205.995 317.405 220.182C337.89 250.447 391.618 180.094 403.835 222.209M444.992 218.156C489.664 187.357 520.62 253.284 552 212.075" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="#555555"/>
+</svg>

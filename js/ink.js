@@ -1082,7 +1082,7 @@ export class Paper {
   }
 
   trySnap(page, k) {
-    if (k.snapped || k.kind !== 'draw') return;
+    if (k.snapped || k.kind !== 'draw' || settings.autoShape === false) return; // 설정 > 화면과 입력 (11/26)
     const pts = snapShape(k.s.pts);
     if (!pts) return;
     k.snapped = true;

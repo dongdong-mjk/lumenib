@@ -171,7 +171,13 @@ export function displayName() {
 }
 export function providerName() {
   const p = user?.app_metadata?.provider;
-  return { google: '구글', kakao: '카카오', email: '이메일' }[p] || '';
+  return { google: 'Google', kakao: '카카오', apple: 'Apple', email: '이메일' }[p] || '';
+}
+// 로그인한 계정의 프로필 사진 (카카오: avatar_url / picture, 구글: picture). 없으면 '' (11/26)
+export function avatarUrl() {
+  const m = user?.user_metadata || {};
+  const u = m.avatar_url || m.picture || m.profile_image || m.profile_image_url || '';
+  return typeof u === 'string' ? u.replace(/^http:\/\//, 'https://') : '';
 }
 
 // ---------- 동기화 ----------

@@ -5,7 +5,8 @@ import * as B from './bible.js';
 import * as S from './store.js';
 import { Paper, tool, snapForNative, SIZE_RANGE, SIZE_DEFAULT, PEN_STYLES, PEN_OPT_DEFAULT, PEN_OPT_FOR, penSamplePath, PEN_COLORS, HL_COLORS, PEN_SIZES, HL_SIZES, ERASER_SIZES, PEN_PALETTE, HL_PALETTE } from './ink.js';
 import { BiblePanel } from './biblepanel.js';
-import { screen as trackScreen, track, isTracking } from './analytics.js';
+import { screen as trackScreen, track, isTracking, trackingPref, setTrackingPref } from './analytics.js';
+import * as L from './legal.js';
 import * as C from './cloud.js';
 
 const app = document.getElementById('app');
@@ -18,12 +19,17 @@ const PAPERS = [['lined', '줄 종이'], ['blank', '빈 종이'], ['grid', '모�
 const OUT_OF_SCOPE = '1차 테스트에서는 아직 열 수 없어요';
 
 // ---------- 공통 ----------
+// 화면 모드: 'system'(기본, iPad 설정을 따라요) · 'light' · 'dark' (11/26 민정님)
+const darkMQ = matchMedia('(prefers-color-scheme: dark)');
+const themeNow = () => (S.settings.theme === 'system' ? (darkMQ.matches ? 'dark' : 'light') : S.settings.theme);
 function applyTheme() {
-  document.documentElement.dataset.theme = S.settings.theme;
-  document.querySelector('meta[name="theme-color"]').content = S.settings.theme === 'dark' ? '#000000' : '#f7f7f7';
+  const t = themeNow();
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]').content = t === 'dark' ? '#000000' : '#f7f7f7';
   // iPad 앱이면 앱 바탕색도 같이 (다음에 켤 때 처음 보이는 색)
-  window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'theme', value: S.settings.theme });
+  window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'theme', value: t });
 }
+darkMQ.addEventListener?.('change', () => { if (S.settings.theme === 'system') applyTheme(); });
 const otherNotesFor = (passages, exceptId) =>
   S.allNotes().filter((n) => n.id !== exceptId && n.passages.some((p) => passages.some((q) => B.overlaps(p, q))));
 const refList = (n, short = true) => (n.passages.length ? n.passages.map((p) => B.refText(p, short)).join(', ') : '본문 없음');
@@ -81,7 +87,7 @@ function go(screen, arg) {
   curScreen = screen;
   if (screen === 'home' && C.currentUser() && Date.now() - C.syncStatus().lastSync > 30000) C.sync();
   trackScreen(screen === 'note' && arg?.noteId ? 'note_view' : screen);
-  ({ home: Home, pick: Pick, note: NoteScreen, notes: NotesScreen, bible: BibleScreen, bookmarks: BookmarksScreen })[screen](arg);
+  ({ home: Home, pick: Pick, note: NoteScreen, notes: NotesScreen, bible: BibleScreen, bookmarks: BookmarksScreen, settings: SettingsScreen, onboarding: OnboardingScreen })[screen](arg);
   window.__lumenibGo = go; // 회귀 점검(tools/regression.js)에서 화면을 바로 옮길 때 씀
 }
 
@@ -601,6 +607,292 @@ function BookmarksScreen() {
 // 상단 바 "북마크" 탭: 어느 화면에서 눌러도 북마크 탭으로 (11/26)
 document.addEventListener('click', (e) => { if (e.target.closest?.('.home-nav [data-act="bookmarks"]') && curScreen !== 'bookmarks') go('bookmarks'); });
 
+
+// =========================================================
+// 설정 (11/26) · 피그마 "설정 v3 · 컴포넌트 (11-26, Claude)"
+// 왼쪽 = 계정 카드 + 메뉴(읽기 기록 · 화면과 입력 · 도움말 · 앱 정보), 오른쪽 = 고른 페이지(가운데 560)
+// 2차로 미룬 것: 문의하기, 사진·이름 바꾸기, 사용한 용량, 모든 노트 PDF, (앱) 화면 켜 두기 네이티브
+// =========================================================
+const APP_VERSION = '1.0 (40)';
+const PENCIL_TAP = [
+  ['system', 'iPad 설정 따르기'],
+  ['undo', '실행 취소'],
+  ['switchEraser', '지우개로 바꾸기'],
+  ['switchPrevious', '바로 전 도구로 바꾸기'],
+  ['none', '아무것도 하지 않기'],
+];
+const ST_TITLE = {
+  account: '계정 · 보관', 'account-info': '계정 정보',
+  reading: '읽기 기록', 'reading-books': '권별로 지우기',
+  display: '화면과 입력', pencil: 'Apple Pencil',
+  help: '도움말 · 앱 정보', terms: '이용약관', privacy: '개인정보 처리방침', bible: '성경 본문 저작권', licenses: '오픈소스 라이선스',
+};
+const ST_PARENT = { 'account-info': 'account', 'reading-books': 'reading', pencil: 'display', terms: 'help', privacy: 'help', bible: 'help', licenses: 'help' };
+const stTop = (p) => (ST_PARENT[p] ? stTop(ST_PARENT[p]) : p);
+const ST_CHEV = '<i class="st-chev" aria-hidden="true"></i>';
+function avatarHTML(cls = '') {
+  const u = C.currentUser();
+  if (!u) return `<span class="st-avatar empty ${cls}" aria-hidden="true"><i></i></span>`;
+  const url = C.avatarUrl();
+  const nm = C.displayName();
+  return url ? `<span class="st-avatar photo ${cls}" aria-hidden="true"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('photo');this.parentNode.textContent='${esc(nm.slice(0, 1))}'"></span>`
+    : `<span class="st-avatar ${cls}" aria-hidden="true">${esc(nm.slice(0, 1))}</span>`;
+}
+function syncLine() {
+  const s = C.syncStatus();
+  return {
+    syncing: '보관하는 중…',
+    ok: s.pending ? `보관할 노트 ${s.pending}개 대기 중` : `모두 보관했어요${s.lastSync ? ' · ' + relTime(s.lastSync) : ''}`,
+    offline: '인터넷 연결이 없어요. 연결되면 보관해요',
+    error: '보관하지 못했어요. 이 기기에는 저장돼 있어요',
+    quota: '보관 용량이 다 찼어요',
+    off: '',
+  }[s.status] || '';
+}
+// 설정 행 하나: 제목 + 설명 + 오른쪽(값 ›, 토글, 버튼)
+const stRow = ({ act = '', title, sub = '', value = '', chev = false, toggle = null, btn = '', btnAct = '', primary = false, cls = '' }) => `
+  <${act || toggle !== null ? 'button' : 'div'} class="st-row ${cls}"${act ? ` data-act="${act}"` : ''}${toggle !== null ? ` role="switch" aria-checked="${toggle}"` : ''}>
+    <span class="st-rt"><span class="st-rtt">${title}</span>${sub ? `<span class="st-rts">${sub}</span>` : ''}</span>
+    <span class="st-tr">${btn ? `<span class="st-btn${primary ? ' primary' : ''}" data-act="${btnAct}">${btn}</span>` : ''}${value ? `<span class="st-val">${value}</span>` : ''}${chev ? ST_CHEV : ''}${toggle !== null ? `<span class="st-toggle${toggle ? ' on' : ''}"><i></i></span>` : ''}</span>
+  </${act || toggle !== null ? 'button' : 'div'}>`;
+const stGroup = (title, rows) => `<section class="st-group">${title ? `<h4>${title}</h4>` : ''}<div class="st-card">${rows.join('<i class="st-div"></i>')}</div></section>`;
+// 확인 창 (피그마 확인 창: 제목 · 설명 · [취소][빨간 아닌 검정 버튼])
+function stConfirm(title, desc, yes, onYes) {
+  modal(`<div class="modal st-confirm" role="alertdialog"><h3>${title}</h3><p class="desc">${desc}</p>
+    <div class="modal-actions"><button class="btn st-cancel" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">${yes}</button></div></div>`, (d, close) => {
+    d.querySelector('[data-a="no"]').addEventListener('click', close);
+    d.querySelector('[data-a="yes"]').addEventListener('click', () => { close(); onYes(); });
+  });
+}
+
+function openSettings(page) { go('settings', { page: typeof page === 'string' ? page : undefined }); }
+
+function SettingsScreen(arg = {}) {
+  const st = { page: arg.page || 'account', pick: new Set() };
+  const leftItems = [['reading', '읽기 기록'], ['display', '화면과 입력'], ['help', '도움말 · 앱 정보']];
+
+  function leftHTML() {
+    const u = C.currentUser(), top = stTop(st.page);
+    return `<div class="st-ltitle">설정</div>
+      <button class="st-acct${top === 'account' ? ' on' : ''}" data-go="account">${avatarHTML()}
+        <span class="st-acct-t"><b>${u ? esc(C.displayName()) : '로그인하지 않았어요'}</b><span>${u ? esc(syncLine()) : '로그인하면 노트를 보관해요'}</span></span>${ST_CHEV}</button>
+      <nav class="st-menu">${leftItems.map(([k, l]) => `<button class="st-mi${top === k ? ' on' : ''}" data-go="${k}">${l}</button>`).join('')}</nav>
+      <div class="st-fill"></div>
+      <div class="st-ver">lumenib ${APP_VERSION}</div>`;
+  }
+  function headHTML() {
+    const back = ST_PARENT[st.page];
+    return `${back ? `<button class="st-back" data-go="${back}"><i class="bt-ico bt-cl" aria-hidden="true"></i>${ST_TITLE[back]}</button>` : ''}<h2>${ST_TITLE[st.page]}</h2>`;
+  }
+
+  // ---------- 페이지 ----------
+  const pages = {
+    account() {
+      const u = C.currentUser();
+      const login = C.enabled && Object.values(C.loginOptions).some(Boolean);
+      const acct = u
+        ? stGroup('계정', [stRow({ act: 'go-info', title: esc(C.displayName()), sub: esc([C.providerName() && C.providerName() + ' 계정', u.email].filter(Boolean).join(' · ')), chev: true })])
+        : login ? stGroup('계정', [stRow({ title: '로그인하고 노트 보관하기', sub: 'iPad를 바꾸거나 앱을 지워도 노트가 남아요.', btn: '로그인', btnAct: 'login', primary: true })]) : '';
+      const keep = u ? stGroup('노트 보관', [stRow({ title: esc(syncLine().split(' · ')[0] || '모두 보관했어요'), sub: C.syncStatus().lastSync ? `마지막 보관 · ${relTime(C.syncStatus().lastSync)}` : '', btn: '지금 보관하기', btnAct: 'sync' })]) : '';
+      const privacy = stGroup('개인정보', [stRow({ act: 'track', title: '앱 사용 기록 보내기', sub: '앱을 더 편하게 고치는 데 써요. 손글씨와 노트 내용은 보내지 않아요.', toggle: trackingPref() })]);
+      return acct + keep + privacy;
+    },
+    'account-info'() {
+      const u = C.currentUser();
+      if (!u) { st.page = 'account'; return pages.account(); }
+      return `<section class="st-group"><div class="st-card st-profile">${avatarHTML('lg')}<span class="st-rt"><span class="st-pname">${esc(C.displayName())}</span><span class="st-rts">${esc(C.providerName() || '')} 계정으로 로그인했어요</span></span></div>
+        <p class="st-note">로그인한 계정의 사진이 보여요.</p></section>
+        ${stGroup('계정', [stRow({ title: '이름', value: esc(C.displayName()) }), stRow({ title: '로그인 방법', value: esc(C.providerName() || '') }), stRow({ title: '이메일', value: esc(u.email || '') })])}
+        ${stGroup('', [stRow({ act: 'logout', title: '로그아웃', chev: true })])}
+        <button class="st-textbtn" data-act="delacct">탈퇴하기</button>`;
+    },
+    reading() {
+      const total = B.books().reduce((a, b) => a + b.verses.length, 0);
+      const read = S.readingArray(B.books()).reduce((a, r) => a + r, 0);
+      return `<section class="st-group"><div class="st-card st-rsum"><div><b>${read.toLocaleString()}</b><span> / ${total.toLocaleString()}장 읽음</span></div><i class="st-bar"><i style="width:${(read / total) * 100}%"></i></i></div></section>
+        ${stGroup('기록 지우기', [
+          stRow({ act: 'go-books', title: '권별로 지우기', sub: '권을 골라 그 권의 읽은 표시만 지울 수 있어요.', chev: true }),
+          stRow({ act: 'reset-all', title: '전체 읽기 기록 지우기', sub: '노트와 북마크는 지워지지 않아요.', value: '지우기', chev: true }),
+        ])}`;
+    },
+    'reading-books'() {
+      const rows = B.books().map((b) => ({ b, n: b.verses.length, r: S.readCount(b.id, b.verses.length) })).filter((x) => x.r > 0);
+      if (!rows.length) return '<p class="st-empty">아직 읽은 장이 없어요</p>';
+      const n = [...st.pick].filter((id) => rows.some((x) => x.b.id === id)).length;
+      return `<section class="st-group"><div class="st-card">${rows.map(({ b, n: all, r }) => `<button class="st-row st-book" data-book="${b.id}"><span class="st-rtt">${esc(b.name)}</span>
+          <span class="st-tr"><i class="st-bar sm"><i style="width:${(r / all) * 100}%"></i></i><span class="st-cnt">${r} / ${all}${unitOf(b.id)}</span>${NOTE_ICON(st.pick.has(b.id) ? 'cb-on' : 'cb-off')}</span></button>`).join('<i class="st-div"></i>')}</div></section>
+        <button class="btn btn-l btn-primary st-wide" data-act="reset-books" ${n ? '' : 'disabled'}>${n ? `${n}권 읽기 기록 지우기` : '지울 권을 골라 주세요'}</button>`;
+    },
+    display() {
+      const th = S.settings.theme;
+      const card = (k, l) => `<button class="st-theme${th === k ? ' on' : ''}" data-theme="${k}"><span class="st-thumb t-${k}" aria-hidden="true"><i></i><i></i></span><span class="st-radio-l"><i class="st-radio${th === k ? ' on' : ''}"></i>${l}</span></button>`;
+      const tap = PENCIL_TAP.find((x) => x[0] === (S.settings.pencilTap || 'system')) || PENCIL_TAP[0];
+      return `<section class="st-group"><h4>화면 모드</h4><div class="st-card st-themes">${card('system', '시스템 설정')}${card('light', '라이트')}${card('dark', '다크')}</div><p class="st-note">시스템을 고르면 iPad 설정에 맞춰 바뀌어요.</p></section>
+        ${stGroup('예배 중', [stRow({ act: 'awake', title: '노트 쓰는 동안 화면 켜 두기', sub: '설교를 듣는 동안 화면이 꺼지지 않아요.', toggle: S.settings.keepAwake !== false })])}
+        ${stGroup('입력', [
+          stRow({ act: 'finger', title: '손가락으로 쓰기', sub: '한 손가락으로 쓰고, 두 손가락으로 화면을 움직여요.', toggle: !!S.settings.fingerDraw }),
+          stRow({ act: 'go-pencil', title: 'Apple Pencil', value: `두 번 탭 · ${tap[1]}`, chev: true }),
+          stRow({ act: 'shape', title: '그리고 멈추면 도형으로', sub: '선을 그린 뒤 펜을 잠깐 멈추면 반듯한 도형이 돼요.', toggle: S.settings.autoShape !== false }),
+        ])}`;
+    },
+    pencil() {
+      const cur = S.settings.pencilTap || 'system';
+      return `<section class="st-group"><h4>두 번 탭</h4><div class="st-card">${PENCIL_TAP.map(([k, l]) => `<button class="st-row" data-tap="${k}"><span class="st-rtt">${l}</span><span class="st-tr"><i class="st-radio${cur === k ? ' on' : ''}"></i></span></button>`).join('<i class="st-div"></i>')}</div>
+        <p class="st-note">Apple Pencil 2세대와 Apple Pencil Pro에서 쓸 수 있어요. "iPad 설정 따르기"는 iPad 설정 → Apple Pencil에서 고른 동작을 따라요.</p></section>`;
+    },
+    help() {
+      return `<section class="st-group"><div class="st-card st-app"><i class="st-logo" aria-hidden="true"></i><span class="st-rt"><span class="st-pname">lumenib 루메닙</span><span class="st-rts">말씀의 빛을 필기로 남기다</span><span class="st-rts">버전 ${APP_VERSION}</span></span></div></section>
+        ${stGroup('도움말', [stRow({ act: 'onboarding', title: '처음 안내 다시 보기', chev: true })])}
+        ${stGroup('약관 · 정보', [
+          stRow({ act: 'go-terms', title: '이용약관', chev: true }),
+          stRow({ act: 'go-privacy', title: '개인정보 처리방침', chev: true }),
+          stRow({ act: 'go-bible', title: '성경 본문 저작권', value: '개역한글', chev: true }),
+          stRow({ act: 'go-licenses', title: '오픈소스 라이선스', chev: true }),
+        ])}`;
+    },
+    terms: () => `<article class="st-legal">${L.TERMS()}</article>`,
+    privacy: () => `<article class="st-legal">${L.PRIVACY()}</article>`,
+    bible: () => `<article class="st-legal">${L.BIBLE()}</article>`,
+    licenses: () => `<article class="st-legal">${L.LICENSES()}</article>`,
+  };
+
+  function render() {
+    const body = pages[st.page] ? pages[st.page]() : pages.account();
+    app.innerHTML = `<div class="home settings">${tabBar('settings')}<div class="st-wrap">
+      <aside class="st-left">${leftHTML()}</aside>
+      <section class="st-right"><header class="st-head">${headHTML()}</header><div class="st-scroll"><div class="st-body">${body}</div></div></section>
+    </div></div>`;
+    bind();
+  }
+  const goPage = (p) => { st.page = p; track('settings_' + p); render(); };
+
+  function bind() {
+    app.querySelector('.home-nav [data-act="home"]').addEventListener('click', () => go('home'));
+    app.querySelector('.home-nav [data-act="bible"]').addEventListener('click', () => go('bible'));
+    app.querySelector('.home-nav [data-act="notes"]').addEventListener('click', () => go('notes'));
+    app.querySelector('.home-nav [data-act="settings"]').addEventListener('click', () => goPage('account'));
+    app.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => goPage(b.dataset.go)));
+    const on = (act, f) => app.querySelectorAll(`[data-act="${act}"]`).forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); f(e); }));
+    on('go-info', () => goPage('account-info'));
+    on('go-books', () => { st.pick.clear(); goPage('reading-books'); });
+    on('go-pencil', () => goPage('pencil'));
+    ['terms', 'privacy', 'bible', 'licenses'].forEach((k) => on('go-' + k, () => goPage(k)));
+    on('login', () => openLogin());
+    on('sync', async (e) => { const b = e.currentTarget; b.classList.add('busy'); await C.sync(); render(); });
+    on('track', () => { setTrackingPref(!trackingPref()); render(); });
+    on('logout', () => stConfirm('로그아웃할까요?', '이 기기에서만 노트가 빠지고, 보관한 노트는 그대로 남아요. 다시 로그인하면 돌아와요.', '로그아웃', async () => {
+      if (await C.signOut()) { go('home'); toast('로그아웃했어요'); return; }
+      stConfirm('아직 보관하지 못한 노트가 있어요', '지금 로그아웃하면 그 노트의 마지막 내용이 사라질 수 있어요. 인터넷 연결을 확인하고 다시 해 주세요.', '그래도 로그아웃', async () => { await C.signOut({ force: true }); go('home'); toast('로그아웃했어요'); });
+    }));
+    on('delacct', () => {
+      const n = C.currentUser() ? S.ownedBy(C.currentUser().id).length : 0;
+      stConfirm('탈퇴할까요?', `보관한 노트 ${n}개와 읽기 기록, 북마크가 모두 지워지고 되돌릴 수 없어요. 필요한 노트는 먼저 PDF로 내보내 주세요.`, '탈퇴하기', async () => {
+        try { await C.deleteAccount(); go('home'); toast('탈퇴했어요. 그동안 고마웠어요'); }
+        catch (err) { console.warn(err); toast('지우지 못했어요. 인터넷 연결을 확인해 주세요', 3000); }
+      });
+    });
+    on('reset-all', () => {
+      const n = S.readingArray(B.books()).reduce((a, r) => a + r, 0);
+      if (!n) { toast('지울 읽기 기록이 없어요'); return; }
+      stConfirm('전체 읽기 기록을 지울까요?', `읽은 장 ${n.toLocaleString()}개의 표시가 모두 지워져요. 노트와 북마크는 그대로 남아요.`, '지우기', () => {
+        B.books().forEach((b) => S.resetBookReading(b.id)); track('bible_reset_all'); render(); toast('읽기 기록을 지웠어요');
+      });
+    });
+    app.querySelectorAll('[data-book]').forEach((b) => b.addEventListener('click', () => {
+      const id = +b.dataset.book; if (st.pick.has(id)) st.pick.delete(id); else st.pick.add(id); render();
+    }));
+    on('reset-books', () => {
+      const ids = [...st.pick]; if (!ids.length) return;
+      const names = ids.map((id) => B.book(id).name);
+      const r = ids.reduce((a, id) => a + S.readCount(id, B.book(id).verses.length), 0);
+      stConfirm(ids.length === 1 ? `${names[0]} 읽기 기록을 지울까요?` : `${ids.length}권 읽기 기록을 지울까요?`, `읽은 장 ${r}개의 표시가 지워져요. 노트와 북마크는 그대로 남아요.`, '지우기', () => {
+        ids.forEach((id) => S.resetBookReading(id)); track('bible_reset_book'); st.pick.clear(); render(); toast('읽기 기록을 지웠어요');
+      });
+    });
+    app.querySelectorAll('[data-theme]').forEach((b) => b.addEventListener('click', () => { S.settings.theme = b.dataset.theme; S.saveSettings(); applyTheme(); track('theme_' + b.dataset.theme); render(); }));
+    on('awake', () => { S.settings.keepAwake = S.settings.keepAwake === false; S.saveSettings(); render(); });
+    on('finger', () => { S.settings.fingerDraw = !S.settings.fingerDraw; S.saveSettings(); render(); });
+    on('shape', () => { S.settings.autoShape = S.settings.autoShape === false; S.saveSettings(); render(); });
+    app.querySelectorAll('[data-tap]').forEach((b) => b.addEventListener('click', () => { S.settings.pencilTap = b.dataset.tap; S.saveSettings(); track('pencil_tap_' + b.dataset.tap); render(); }));
+    on('onboarding', () => go('onboarding', { again: true }));
+  }
+
+  const off = C.on((w) => { if ((w === 'user' || w === 'status' || w === 'bible') && curScreen === 'settings') render(); });
+  cleanup = () => { off?.(); };
+  render();
+}
+
+// =========================================================
+// 온보딩 (11/26) · 피그마 "온보딩 (11-26, Claude)" 5장
+// 1 환영 → 2 본문 옆에서 필기 → 3 인용 구절 끌어오기 → 4 같은 본문 예전 노트 → 5 노트 보관(로그인)
+// =========================================================
+const OB_PAGES = [
+  null,
+  { art: 'ob2', t: '본문을 보면서 바로 필기해요', d: '오늘 본문을 고르면 노트 맨 위에 들어가요.<br>그 위에 밑줄을 긋고, 설교를 들으며 메모하세요.' },
+  { art: 'ob3', t: '설교에 나온 다른 구절도 끌어와요', d: '왼쪽 성경에서 구절을 찾아 범위를 고르고,<br>노트로 끌어 놓으면 인용으로 들어가요.' },
+  { art: 'ob4', t: '같은 본문의 지난 설교도 꺼내 봐요', d: '같은 본문으로 쓴 예전 노트가 있으면 알려 드려요.<br>예배가 끝난 뒤 탭으로 열어, 다른 설교에서는 어떤 내용이었는지 보세요.' },
+];
+const obArt = {};
+async function loadObArt(name) {
+  if (!obArt[name]) obArt[name] = fetch(`icons/onboarding/${name}.svg`).then((r) => r.text()).catch(() => '');
+  return obArt[name];
+}
+function OnboardingScreen(arg = {}) {
+  const loginOk = C.enabled && Object.values(C.loginOptions).some(Boolean) && !C.currentUser();
+  const last = loginOk ? 4 : 3; // 로그인했거나 로그인을 못 쓰면 4장까지
+  let i = 0;
+  const finish = () => { S.settings.onboarded = true; S.saveSettings(); track('onboarding_done_' + i); go(arg.again ? 'settings' : 'home', arg.again ? { page: 'help' } : undefined); };
+  function render() {
+    const dots = `<div class="ob-dots">${[0, 1, 2, 3, 4].slice(0, last + 1).map((k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>`;
+    if (i === 0) {
+      app.innerHTML = `<div class="ob ob-welcome"><div class="ob-mid"><i class="ob-logo" aria-hidden="true"></i><h1>말씀의 빛을 필기로 남기다</h1><p>예배 중에 성경 본문을 보면서, 바로 손글씨로 설교 노트를 써요.</p></div>
+        <div class="ob-foot"><button class="btn btn-l btn-primary ob-next" data-a="next">시작하기</button></div></div>`;
+    } else if (i <= 3) {
+      const p = OB_PAGES[i];
+      app.innerHTML = `<div class="ob"><button class="ob-skip" data-a="skip">건너뛰기</button>
+        <div class="ob-mid"><div class="ob-art" data-art="${p.art}"></div><h1>${p.t}</h1><p>${p.d}</p></div>
+        <div class="ob-foot">${dots}<button class="btn btn-l btn-primary ob-next" data-a="next">${i === last ? '시작하기' : '다음'}</button></div></div>`;
+      loadObArt(p.art).then((svg) => { const el = app.querySelector(`.ob-art[data-art="${p.art}"]`); if (el) el.innerHTML = svg; });
+    } else {
+      // 5 노트 보관: 기존 로그인 창과 같은 규칙 (앱 안에선 구글 로그인이 막혀요)
+      const L = C.loginOptions, native = C.isNativeApp();
+      const google = L.google && !native;
+      app.innerHTML = `<div class="ob ob-login"><div class="ob-mid">
+        <h1>내 노트를 안전하게 보관할까요?</h1><p>로그인하면 노트를 계정에 보관해서, iPad를 바꿔도 그대로 남아요.<br>지금 안 해도 나중에 설정에서 할 수 있어요.</p>
+        <ul class="ob-points"><li>손글씨, 제목, 설교자, 본문, 날짜를 보관해요.</li><li>나만 열 수 있어요. 운영자는 노트 수와 용량만 봐요.</li><li>로그인 전에 이 기기에서 쓴 노트도 함께 옮겨요.</li></ul>
+        <label class="agree"><input type="checkbox" class="cbx" data-a="agree"><span>위 내용을 확인했고 <a data-a="privacy">개인정보 처리방침</a>에 동의해요</span></label>
+        <div class="ob-logins">
+          ${google ? '<button class="btn btn-l ob-lg google" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>' : ''}
+          ${L.kakao ? '<button class="btn btn-l ob-lg kakao" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>' : ''}
+          ${L.apple ? '<button class="btn btn-l ob-lg apple" data-p="apple" disabled>Apple로 계속하기</button>' : ''}
+        </div>
+        <button class="ob-later" data-a="later">나중에 할게요</button></div></div>`;
+    }
+    bind();
+  }
+  function bind() {
+    app.querySelector('[data-a="next"]')?.addEventListener('click', () => { if (i >= last) finish(); else { i++; render(); } });
+    app.querySelector('[data-a="skip"]')?.addEventListener('click', finish);
+    app.querySelector('[data-a="later"]')?.addEventListener('click', finish);
+    app.querySelector('[data-a="privacy"]')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); modal(`<div class="modal st-legal-modal"><h3>개인정보 처리방침</h3><article class="st-legal">${L.PRIVACY()}</article><div class="modal-actions"><button class="btn btn-primary" data-a="ok">확인</button></div></div>`, (d, close) => d.querySelector('[data-a="ok"]').addEventListener('click', close)); });
+    const agree = app.querySelector('[data-a="agree"]');
+    agree?.addEventListener('change', () => app.querySelectorAll('[data-p]').forEach((b) => { b.disabled = !agree.checked; }));
+    app.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', async () => {
+      track('login_' + b.dataset.p + '_onboarding');
+      S.settings.onboarded = true; S.saveSettings();
+      b.disabled = true;
+      try { await C.signInWith(b.dataset.p); } catch (e) { console.warn(e); b.disabled = false; toast('로그인 창을 열지 못했어요', 2600); }
+    }));
+  }
+  // 옆으로 밀어서 넘기기
+  let x0 = null;
+  const down = (e) => { x0 = e.clientX; };
+  const up = (e) => { if (x0 == null || i === 0 || i > 3) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) < 60) return; if (dx < 0 && i < last) { i++; render(); } else if (dx > 0 && i > 1) { i--; render(); } };
+  app.addEventListener('pointerdown', down); app.addEventListener('pointerup', up);
+  cleanup = () => { app.removeEventListener('pointerdown', down); app.removeEventListener('pointerup', up); };
+  render();
+}
+
 // =========================================================
 // T9 성경 탭 (11/25) · 피그마 "성경 탭 (11-25, Claude)" 라이트 시안 · 정책 14
 // 왼쪽 376 = 장 고르기 / 권 고르기, 오른쪽 = 장 읽기(가운데 640)
@@ -988,84 +1280,6 @@ function relTime(ms) {
   const h = Math.floor(m / 60); return h < 24 ? `${h}시간 전` : `${Math.floor(h / 24)}일 전`;
 }
 
-function openSettings() {
-  const loggedIn = !!C.currentUser();
-  const close0 = modal(`<div class="modal sheet">
-    <h3>설정</h3>
-    ${accountHTML()}
-    <div class="toggle-row">화면 모드 <div class="seg2"><button data-th="dark" class="${S.settings.theme === 'dark' ? 'on' : ''}">다크</button><button data-th="light" class="${S.settings.theme === 'light' ? 'on' : ''}">라이트</button></div></div>
-    <button class="toggle-row" data-act="finger"><span>손가락으로도 필기하기<small class="toggle-sub">애플펜슬이 없을 때 켜요. 켜면 두 손가락으로 스크롤해요.</small></span> <span class="switch ${S.settings.fingerDraw ? 'on' : ''}"></span></button>
-    <button class="toggle-row" data-act="reset-reading"><span>성경 읽기 기록 초기화<small class="toggle-sub">읽은 장 표시를 모두 지워요. 노트와 북마크는 그대로예요.</small></span></button>
-    ${loggedIn ? '' : `<button class="toggle-row" data-act="reset" style="color:var(--accent-mid)">테스트 기록 지우기</button>`}
-    <div class="about"><div class="logo"></div>1차 사용성 테스트 버전 · 성경 본문: 개역한글 (대한성서공회)<br>사용 기록(Clarity): ${isTracking() ? '켜짐' : '꺼짐'}</div>
-    <div class="modal-actions"><button class="btn btn-primary" data-act="close">닫기</button></div>
-  </div>`, (d, close) => {
-    const off = C.on((what) => {
-      if (!d.isConnected) { off(); return; }
-      if (what === 'user') { close(); openSettings(); }
-      else if (what === 'status') { // 보관 상태 글자만 바꿔요
-        const fresh = document.createElement('div'); fresh.innerHTML = accountHTML();
-        const n = fresh.querySelector('[data-sync]'), o = d.querySelector('[data-sync]');
-        if (n && o) o.textContent = n.textContent;
-      }
-    });
-    d.querySelector('[data-act="login"]')?.addEventListener('click', () => { close(); openLogin(); });
-    d.querySelector('[data-act="sync"]')?.addEventListener('click', async (e) => {
-      const btn = e.currentTarget; btn.disabled = true; await C.sync(); btn.disabled = false;
-    });
-    d.querySelector('[data-act="logout"]')?.addEventListener('click', async () => {
-      close();
-      if (await C.signOut()) { go('home'); toast('로그아웃했어요'); return; }
-      modal(`<div class="modal"><h3>아직 서버에 못 올린 노트가 있어요</h3><p class="desc">지금 로그아웃하면 그 노트의 마지막 내용이 사라질 수 있어요. 인터넷 연결을 확인하고 다시 해 주세요.</p>
-        <div class="modal-actions"><button class="btn btn-outline" data-a="force">그래도 로그아웃</button><button class="btn btn-primary" data-a="no">취소</button></div></div>`, (d2, close2) => {
-        d2.querySelector('[data-a="no"]').addEventListener('click', close2);
-        d2.querySelector('[data-a="force"]').addEventListener('click', async () => { close2(); await C.signOut({ force: true }); go('home'); toast('로그아웃했어요'); });
-      });
-    });
-    d.querySelector('[data-act="delacct"]')?.addEventListener('click', () => {
-      close();
-      modal(`<div class="modal"><h3>계정과 노트를 모두 지울까요?</h3><p class="desc">서버에 보관한 노트와 로그인 정보가 모두 지워지고, 이 기기에서도 빠져요. 되돌릴 수 없어요. 필요한 노트는 먼저 PDF로 내보내 주세요.</p>
-        <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">모두 지우기</button></div></div>`, (d2, close2) => {
-        d2.querySelector('[data-a="no"]').addEventListener('click', close2);
-        d2.querySelector('[data-a="yes"]').addEventListener('click', async (e) => {
-          e.currentTarget.disabled = true;
-          try { await C.deleteAccount(); close2(); go('home'); toast('계정과 노트를 모두 지웠어요'); }
-          catch (err) { console.warn(err); close2(); toast('지우지 못했어요. 인터넷 연결을 확인해 주세요', 3000); }
-        });
-      });
-    });
-    d.querySelectorAll('[data-th]').forEach((b) => b.addEventListener('click', () => {
-      S.settings.theme = b.dataset.th; S.saveSettings(); applyTheme();
-      d.querySelectorAll('[data-th]').forEach((x) => x.classList.toggle('on', x === b));
-    }));
-    d.querySelector('[data-act="finger"]').addEventListener('click', (e) => {
-      S.settings.fingerDraw = !S.settings.fingerDraw; S.saveSettings();
-      e.currentTarget.querySelector('.switch').classList.toggle('on', S.settings.fingerDraw);
-    });
-    d.querySelector('[data-act="reset-reading"]').addEventListener('click', () => {
-      close();
-      const n = S.readingArray(B.books()).reduce((a, r) => a + r, 0);
-      modal(`<div class="modal"><h3>성경 읽기 기록을 모두 지울까요?</h3><p class="desc">읽은 장 ${n}개의 표시가 지워져요. 노트와 북마크는 그대로 남아요.</p>
-        <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">지우기</button></div></div>`, (d2, close2) => {
-        d2.querySelector('[data-a="no"]').addEventListener('click', close2);
-        d2.querySelector('[data-a="yes"]').addEventListener('click', () => {
-          B.books().forEach((b) => S.resetBookReading(b.id)); track('bible_reset_all'); close2();
-          go(app.querySelector('.bible-tab') ? 'bible' : 'home'); toast('성경 읽기 기록을 지웠어요');
-        });
-      });
-    });
-    d.querySelector('[data-act="reset"]')?.addEventListener('click', () => {
-      close();
-      modal(`<div class="modal"><h3>테스트 기록을 지울까요?</h3><p class="desc">이 기기에서 쓴 노트가 모두 지워지고, 미리 넣어 둔 예시 노트만 남아요.</p>
-        <div class="modal-actions"><button class="btn btn-outline" data-a="no">취소</button><button class="btn btn-primary" data-a="yes">지우기</button></div></div>`, (d2, close2) => {
-        d2.querySelector('[data-a="no"]').addEventListener('click', close2);
-        d2.querySelector('[data-a="yes"]').addEventListener('click', () => { S.resetAll(); lastLocation = null; close2(); go('home'); toast('테스트 기록을 지웠어요'); });
-      });
-    });
-    d.querySelector('[data-act="close"]').addEventListener('click', close);
-  });
-  return close0;
-}
 
 // ---------- 로그인 · 보관 안내 ----------
 // 보관 안내 문구 (로그인 전 창과 로그인 뒤 확인 창이 같이 써요)
@@ -1312,6 +1526,14 @@ function bindInfo(root, info, onEdit, onToggle) {
 // T4 노트 쓰기 (+ T5 인용 · T6 이 장 노트 · T7 예전 노트 탭)
 // =========================================================
 async function NoteScreen({ noteId, start, openOld, from, back }) {
+  // 예배 중 화면이 꺼지지 않게 (설정 > 화면과 입력, 11/26)
+  let wake = null;
+  const keepAwake = async () => { if (S.settings.keepAwake === false || document.visibilityState !== 'visible') return; try { wake = await navigator.wakeLock?.request('screen'); } catch {} };
+  keepAwake();
+  window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'keepAwake', value: S.settings.keepAwake !== false });
+  const onVis = () => { if (document.visibilityState === 'visible' && !wake) keepAwake(); };
+  document.addEventListener('visibilitychange', onVis);
+  const releaseWake = () => { document.removeEventListener('visibilitychange', onVis); wake?.release?.().catch(() => {}); wake = null; window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'keepAwake', value: false }); };
   // 나갈 곳: 노트 목록·성경 탭에서 열었거나, 성경 탭 "노트 쓰기"로 새로 썼으면 그 화면으로 (11/26 민정님)
   const exitTo = back || (from === 'notes' || from === 'bible' ? from : null);
   const main = S.getNote(noteId);
@@ -1978,6 +2200,9 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
   window.lumenibPencil = (kind, action = 'undo') => {
     const p = ns.paper;
     if (!p || p.readonly || !p.scrollEl?.isConnected) return false;
+    const pref = S.settings.pencilTap || 'system'; // 설정 > 화면과 입력 > Apple Pencil (11/26)
+    if (pref === 'none') return true;
+    if (pref !== 'system') action = pref;
     track('pencil_' + kind + '_' + action);
     if (action === 'switchEraser') {
       setTool(tool.type === 'eraser' ? (prevTool !== 'eraser' ? prevTool : 'pen') : 'eraser');
@@ -2133,7 +2358,7 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
     });
   }
 
-  cleanup = () => { clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); ns.offInk?.(); document.removeEventListener('pointerdown', closeMenusOutside, true); window.removeEventListener('pointerup', tbRelease, true); window.removeEventListener('pointercancel', tbRelease, true); document.removeEventListener('pointerdown', tbOutside, true); clearTimeout(tbTimer); };
+  cleanup = () => { releaseWake(); clearInterval(timer); ns.paper?.destroy(); clearTimeout(savedT); tbRO.disconnect(); ns.offInk?.(); document.removeEventListener('pointerdown', closeMenusOutside, true); window.removeEventListener('pointerup', tbRelease, true); window.removeEventListener('pointercancel', tbRelease, true); document.removeEventListener('pointerdown', tbOutside, true); clearTimeout(tbTimer); };
 
   renderTabs();
   renderInfo();
@@ -2156,7 +2381,8 @@ async function main() {
     if (what === 'bible' && curScreen === 'bible' && !overlay.querySelector('.dim') && !app.querySelector('.bt-v.sel')) go('bible'); // 다른 기기에서 읽은 기록이 들어오면
   });
   C.restoreOwnerFast(); // 지난번 로그인한 계정 노트를 홈에 바로 (서버 확인은 뒤에서)
-  go('home');
+  // 처음 켠 사람(쓴 노트가 없고 안내를 안 본 사람)에게만 온보딩 (11/26)
+  if (!S.settings.onboarded && !S.allNotes().length && !C.currentUser()) go('onboarding'); else go('home');
   C.init().catch((e) => console.warn('[cloud] init', e)); // 로그인돼 있으면 서버 노트를 받아 와요 (홈은 먼저 보여 줘요)
   if (window.__trackMsg) setTimeout(() => toast(window.__trackMsg), 600);
   const wait = Math.max(0, 900 - (Date.now() - t0));

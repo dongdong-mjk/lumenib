@@ -15,6 +15,12 @@ try {
   optOut = localStorage.getItem(OPT_KEY) === '1';
 } catch {}
 export const isTracking = () => on;
+// 설정의 "앱 사용 기록 보내기" 스위치 (11/26). 끄면 바로 멈추고, 다음에 켤 때부터 불러오지 않아요
+export const trackingPref = () => { try { return localStorage.getItem(OPT_KEY) !== '1'; } catch { return true; } };
+export function setTrackingPref(v) {
+  try { if (v) localStorage.removeItem(OPT_KEY); else localStorage.setItem(OPT_KEY, '1'); } catch {}
+  if (!v && window.clarity) { try { window.clarity('consent', false); window.clarity('stop'); } catch {} }
+}
 const on = !!CLARITY_ID && !optOut && !/^(localhost|127\.)/.test(location.hostname);
 if (on) {
   (function (c, l, a, r, i, t, y) {

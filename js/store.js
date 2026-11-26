@@ -206,7 +206,9 @@ export function removeLocal(uid, id) { userNotes = userNotes.filter((n) => !(n.i
 export function dropOwner(uid) { userNotes = userNotes.filter((n) => n.owner !== uid); saveNotes(true); clearBibleLocal(); }
 
 // ---------- 설정 ----------
-export const settings = Object.assign({ theme: 'dark', fingerDraw: false, verseSize: 16 }, read(KEY_SET, {}));
+export const settings = Object.assign({ theme: 'system', fingerDraw: false, verseSize: 16, pencilTap: 'system', autoShape: true, keepAwake: true }, read(KEY_SET, {}));
+// 예전엔 기본이 다크라 모두 'dark'로 저장돼 있었어요. 한 번만 시스템 설정을 따르게 바꿔요 (11/26 민정님)
+if (!settings.themeV2) { settings.theme = 'system'; settings.themeV2 = true; write(KEY_SET, settings); }
 export const saveSettings = () => write(KEY_SET, settings);
 
 // ---------- 최근 고른 권 ----------

@@ -1,0 +1,13 @@
+  h4 { font-size: 17px; margin: 24px 0 6px; color: var(--text); }
+  .lg-date, .lg-sub { font-size: 14px; color: var(--sub); }
+  ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+<main><article><h1>이용약관</h1><div id="doc">불러오는 중…</div></article></main>
+<script type="module">
+import { TERMS } from './js/legal.js';
+document.getElementById('doc').innerHTML = TERMS();
+</script>
+</body>
+</html>
