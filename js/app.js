@@ -883,7 +883,11 @@ function OnboardingScreen(arg = {}) {
       track('login_' + b.dataset.p + '_onboarding');
       S.settings.onboarded = true; S.saveSettings();
       b.disabled = true;
-      try { if ((await C.signInWith(b.dataset.p)) === false) b.disabled = false; } catch (e) { console.warn(e); b.disabled = false; toast('로그인 창을 열지 못했어요', 2600); }
+      try {
+        const ok = await C.signInWith(b.dataset.p);
+        if (ok === false) b.disabled = false;
+        else if (ok === true) finish(); // 앱 안 로그인(구글 시스템 창·Apple)은 화면이 그대로라, 끝나면 바로 넘어가요 (11/26)
+      } catch (e) { console.warn(e); b.disabled = false; toast(`로그인하지 못했어요 (${e?.message || e})`, 4000); }
     }));
   }
   // 옆으로 밀어서 넘기기
@@ -891,7 +895,8 @@ function OnboardingScreen(arg = {}) {
   const down = (e) => { x0 = e.clientX; };
   const up = (e) => { if (x0 == null || i === 0 || i > 3) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) < 60) return; if (dx < 0 && i < last) { i++; render(); } else if (dx > 0 && i > 1) { i--; render(); } };
   app.addEventListener('pointerdown', down); app.addEventListener('pointerup', up);
-  cleanup = () => { app.removeEventListener('pointerdown', down); app.removeEventListener('pointerup', up); };
+  const offUser = C.on((w) => { if (w === 'user' && C.currentUser() && curScreen === 'onboarding') finish(); });
+  cleanup = () => { app.removeEventListener('pointerdown', down); app.removeEventListener('pointerup', up); offUser?.(); };
   render();
 }
 
@@ -1342,7 +1347,7 @@ function openLogin() {
       track('login_' + b.dataset.p);
       b.disabled = true;
       try { if ((await C.signInWith(b.dataset.p)) === false) b.disabled = false; } // 로그인 화면으로 넘어가요 (Apple 창을 닫으면 false)
-      catch (e) { console.warn(e); b.disabled = false; toast('로그인 창을 열지 못했어요', 2600); }
+      catch (e) { console.warn(e); b.disabled = false; toast(`로그인하지 못했어요 (${e?.message || e})`, 4000); }
     }));
     const box = d.querySelector('.email-box');
     d.querySelector('[data-a="email"]')?.addEventListener('click', (e) => { e.currentTarget.hidden = true; box.hidden = false; box.querySelector('[data-f="email"]').focus(); });
