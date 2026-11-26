@@ -1166,7 +1166,7 @@ function BibleScreen(arg = {}) {
     leftEl.querySelector('[data-act="books"]').addEventListener('click', () => { st.left = 'books'; st.query = ''; renderLeft(); });
     leftEl.querySelectorAll('[data-ch]').forEach((x) => x.addEventListener('click', () => openChapter(st.book, +x.dataset.ch)));
     const cur = leftEl.querySelector('.bt-chip.cur'), sc = leftEl.querySelector('.bt-lscroll');
-    if (cur && sc) sc.scrollTop = Math.max(0, cur.offsetTop - sc.clientHeight / 2);
+    if (cur && sc) sc.scrollTop = Math.max(0, cur.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - (sc.clientHeight - cur.offsetHeight) / 2); // 목록 칸 기준으로 가운데 (offsetTop은 위 '다 읽음' 줄 높이까지 더해져 너무 내려갔어요, 11/26)
   }
 
   // ---------- 왼쪽: 권 고르기 (검색 · 최근 · 목차순/가나다순 · 읽은 장 비율) ----------
@@ -1196,7 +1196,7 @@ function BibleScreen(arg = {}) {
         <div class="bt-lscroll">${groups.map(([label, list]) => `<div class="bt-glabel">${esc(label)}</div>${grid(list)}`).join('')}<div style="height:16px"></div></div>`;
       bindBooks();
       const cur = body.querySelector('.bt-book.cur'), sc = body.querySelector('.bt-lscroll');
-      if (cur && sc) sc.scrollTop = Math.max(0, cur.offsetTop - sc.clientHeight / 2);
+      if (cur && sc) sc.scrollTop = Math.max(0, cur.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - (sc.clientHeight - cur.offsetHeight) / 2); // 목록 칸 기준으로 가운데 (offsetTop은 위 '다 읽음' 줄 높이까지 더해져 너무 내려갔어요, 11/26)
     };
     const bindBooks = () => {
       leftEl.querySelectorAll('[data-book]').forEach((x) => x.addEventListener('click', () => { S.pushRecentBook(+x.dataset.book); st.left = 'chapters'; openChapter(+x.dataset.book, 1); }));
