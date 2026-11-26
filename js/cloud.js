@@ -121,8 +121,31 @@ export const markConsent = () => localStorage.setItem(PENDING_CONSENT, CONSENT.V
 export async function signInWith(provider) {
   markConsent();
   if (provider === 'apple' && hasNativeApple()) return signInWithAppleNative();
+  if (hasNativeOAuth() && provider === 'google') return signInWithSystemBrowser(provider); // 카카오는 앱 안에서도 되니 그대로
   const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: redirectURL() } });
   if (error) throw error;
+}
+// 앱 안 구글(·카카오) 로그인 (11/26): 시스템 로그인 창 → lumenib://auth?code=… → 세션
+export const hasNativeOAuth = () => !!window.webkit?.messageHandlers?.lumenibOAuth;
+async function signInWithSystemBrowser(provider) {
+  const { data, error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: 'lumenib://auth', skipBrowserRedirect: true } });
+  if (error) throw error;
+  return new Promise((resolve, reject) => {
+    window.lumenibOAuth = async (r) => {
+      window.lumenibOAuth = null;
+      if (!r || r.error) { if (r?.error === 'cancel') { resolve(false); return; } reject(new Error(r?.error || 'oauth')); return; }
+      try {
+        const u = new URL(r.url);
+        const code = u.searchParams.get('code');
+        const err = u.searchParams.get('error_description') || u.searchParams.get('error');
+        if (err) throw new Error(err);
+        const { error: e2 } = await sb.auth.exchangeCodeForSession(code);
+        if (e2) throw e2;
+        resolve(true);
+      } catch (e) { reject(e); }
+    };
+    window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'oauth', url: data.url, scheme: 'lumenib' });
+  });
 }
 // Apple로 로그인 (11/26): 앱 안에서만. iPad 기본 Apple 창 → identity token → Supabase
 export const hasNativeApple = () => !!window.webkit?.messageHandlers?.lumenibApple;

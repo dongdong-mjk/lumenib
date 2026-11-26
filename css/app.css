@@ -1051,17 +1051,7 @@ button.st-row:active { background: var(--bg-hover); }
 .ob p { margin: 0; font-size: 17px; line-height: 26px; color: var(--text-secondary); }
 .ob-art { width: 100%; max-width: 640px; aspect-ratio: 640 / 360; }
 .ob-art svg { width: 100%; height: 100%; display: block; }
-.ob-art [fill="white"] { fill: var(--bg-panel); }
-.ob-art [stroke="#E8E8E8"] { stroke: var(--border-panel); }
-.ob-art [fill="#E8E8E8"] { fill: var(--border-panel); }
-.ob-art [fill="#F5F5F5"] { fill: var(--bg-panel-inset); }
-.ob-art [fill="#111111"] { fill: var(--text-primary); }
-.ob-art [stroke="#111111"] { stroke: var(--text-primary); }
-.ob-art [fill="#555555"] { fill: var(--text-secondary); }
-.ob-art [stroke="#555555"] { stroke: var(--text-secondary); }
-.ob-art [stroke="#6B6B6B"] { stroke: var(--text-tertiary); }
-.ob-art [stroke="#D4D4D4"] { stroke: var(--border-strong); }
-.ob-art rect[fill="#111111"] + text[fill="white"] { fill: var(--bg-panel); }
+/* 온보딩 그림은 피그마에서 라이트 모드로 고정이라 다크에서도 같은 그림 그대로 (11/26) */
 .ob-art text { font-family: var(--font-sans, 'Wanted Sans'), sans-serif; }
 .ob-foot { flex: none; display: flex; flex-direction: column; align-items: center; gap: 24px; width: 320px; max-width: 100%; }
 .ob-dots { display: flex; gap: 8px; }
@@ -1077,9 +1067,9 @@ button.st-row:active { background: var(--bg-hover); }
 .ob-login .agree a { text-decoration: underline; cursor: pointer; }
 .ob-logins { width: 100%; display: flex; flex-direction: column; gap: 8px; }
 .ob-lg { width: 100%; gap: 8px; border-radius: 12px; font-size: 15px; }
-.ob-lg.google { background: #fff; color: #111; border: 1px solid #e8e8e8; }
-.ob-lg.kakao { background: #FEE500; color: #191919; }
-.ob-lg.apple { background: #000; color: #fff; }
+.ob-lg.google { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-card); }
+.ob-lg.kakao { background: #FEE500; color: #000; } /* action/kakao · text/on-kakao */
+.ob-lg.apple { background: var(--action-primary); color: var(--text-on-primary); } /* 피그마: action/primary · text/on-primary (다크에선 흰 버튼) */
 .ob-lg[disabled] { opacity: .4; }
 .ob-later { margin-top: 16px; padding: 10px 16px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); }
 /* 온보딩 로그인 버튼 로고 (11/26: 크기 규칙이 로그인 창에만 있어서 온보딩에선 안 보였어요) */

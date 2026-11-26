@@ -61,6 +61,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibPinch")
         // Apple로 로그인: 이 통로가 있으면 웹이 Apple 버튼을 보여 주고, 누르면 iPad 기본 Apple 로그인 창을 띄워요 (11/26)
         webView?.configuration.userContentController.add(self, name: "lumenibApple")
+        // 구글 로그인: 구글은 앱 안 웹화면 로그인을 막아서, 시스템 로그인 창(ASWebAuthenticationSession)으로 열어요 (11/26)
+        webView?.configuration.userContentController.add(self, name: "lumenibOAuth")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
@@ -691,6 +693,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
         if message.name == "lumenibCanvas" { noteCanvasMessage(body); return }
         if action == "appleSignIn" { startAppleSignIn(); return }
+        if action == "oauth", let s = body["url"] as? String, let u = URL(string: s) { startWebAuth(u, scheme: (body["scheme"] as? String) ?? "lumenib"); return }
         if action == "keepAwake" { UIApplication.shared.isIdleTimerDisabled = (body["value"] as? Bool) ?? false; return } // 노트 쓰는 동안 화면 켜 두기 (설정, 11/26)
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
@@ -885,5 +888,33 @@ extension PencilBridgeViewController: ASAuthorizationControllerDelegate, ASAutho
             }
         }
         return out
+    }
+}
+
+
+// MARK: - 구글 등 OAuth 로그인 (11/26)
+// 구글은 WKWebView 안 로그인을 막아요(disallowed_useragent). 시스템 로그인 창으로 열고,
+// lumenib://auth 로 돌아온 주소(PKCE code)를 웹에 넘기면 웹이 Supabase 세션으로 바꿔요.
+extension PencilBridgeViewController: ASWebAuthenticationPresentationContextProviding {
+    private static var webAuthSession: ASWebAuthenticationSession?
+
+    func startWebAuth(_ url: URL, scheme: String) {
+        let session = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { [weak self] callback, error in
+            Self.webAuthSession = nil
+            var d: [String: Any] = [:]
+            if let callback = callback { d["url"] = callback.absoluteString }
+            else if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin { d["error"] = "cancel" }
+            else { d["error"] = error?.localizedDescription ?? "oauth" }
+            guard let data = try? JSONSerialization.data(withJSONObject: d), let json = String(data: data, encoding: .utf8) else { return }
+            DispatchQueue.main.async { self?.webView?.evaluateJavaScript("window.lumenibOAuth && window.lumenibOAuth(\(json))", completionHandler: nil) }
+        }
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false
+        Self.webAuthSession = session
+        session.start()
+    }
+
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        view.window ?? UIWindow()
     }
 }

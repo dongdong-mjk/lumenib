@@ -858,7 +858,7 @@ function OnboardingScreen(arg = {}) {
     } else {
       // 5 노트 보관: 기존 로그인 창과 같은 규칙 (앱 안에선 구글 로그인이 막혀요)
       const L = C.loginOptions, native = C.isNativeApp();
-      const google = L.google && !native;
+      const google = L.google && (!native || C.hasNativeOAuth());
       app.innerHTML = `<div class="ob ob-login"><div class="ob-mid">
         <h1>내 노트를 안전하게 보관할까요?</h1><p>로그인하면 노트를 계정에 보관해서, iPad를 바꿔도 그대로 남아요.<br>지금 안 해도 나중에 설정에서 할 수 있어요.</p>
         <ul class="ob-points"><li>손글씨, 제목, 설교자, 본문, 날짜를 보관해요.</li><li>나만 열 수 있어요. 운영자는 노트 수와 용량만 봐요.</li><li>로그인 전에 이 기기에서 쓴 노트도 함께 옮겨요.</li></ul>
@@ -1310,7 +1310,7 @@ function askConsentAfterLogin({ localCount }) {
 function openLogin() {
   const L = C.loginOptions;
   const native = C.isNativeApp();
-  const google = L.google && !native; // 구글은 앱 안 화면(WebView)에서 로그인을 막아요
+  const google = L.google && (!native || C.hasNativeOAuth()); // 앱 안 웹화면 로그인은 구글이 막아서, 시스템 로그인 창이 있는 빌드(42~)에서만
   const linkMode = C.emailMode !== 'code';
   // 링크 방식은 메일 링크가 Safari로 열려서, 아이패드 앱·홈 화면 앱 안에서는 로그인이 이어지지 않아요
   const email = L.email && !(linkMode && (native || C.isStandalone()));
