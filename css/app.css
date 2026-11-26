@@ -224,17 +224,6 @@ svg { display: block; }
 
 .ch-notes { margin: 0 8px 4px; background: var(--bg-panel-inset); border-radius: 12px; flex: none; position: relative; z-index: 5; }
 /* 펼친 목록은 본문을 밀어내지 않고 위에 겹쳐 떠요 */
-.ch-notes.open { border-radius: 12px 12px 0 0; }
-.ch-notes-list { position: absolute; left: 0; right: 0; top: 100%; max-height: 50vh; overflow-y: auto; background: var(--bg-panel-inset); border-radius: 0 0 12px 12px; box-shadow: var(--shadow-floating); clip-path: inset(0 -24px -24px -24px); }
-.ch-notes-head { width: 100%; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 13px; font-weight: 600; }
-.ch-notes-head .badge { min-width: 18px; height: 18px; border-radius: 9px; background: var(--text-primary); color: var(--bg-panel); font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
-.ch-notes-head .chev { margin-left: auto; color: var(--icon-secondary); width: 14px; height: 14px; }
-.ch-note-row { width: 100%; text-align: left; display: flex; align-items: center; padding: 10px 16px; gap: 8px; border-top: 1px solid var(--border-panel); }
-.ch-note-row .t1 { font-size: 13px; font-weight: 600; }
-.ch-note-row .t1 small { font-weight: 400; color: var(--text-tertiary); margin-left: 6px; font-size: 12px; }
-.ch-note-row .t2 { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
-.ch-note-row .t2 em { font-style: normal; color: var(--text-tertiary); }
-.ch-note-row .chev { margin-left: auto; color: var(--icon-secondary); width: 14px; height: 14px; }
 
 .bp-float { position: absolute; left: 0; bottom: 0; width: calc(var(--bp-w) - 2px); height: 0; z-index: 3; }
 .bp-action { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 8px; z-index: 3; }
@@ -1084,3 +1073,21 @@ button.st-row:active { background: var(--bg-hover); }
 .st-photo { position: relative; flex: none; }
 .st-photo-menu { right: 0; left: auto; top: calc(100% + 6px); min-width: 200px; z-index: 30; }
 .st-card.st-profile { overflow: visible; } /* 사진 바꾸기 메뉴가 카드 밖으로 나오게 */
+
+/* 노트 쓰기 성경 패널 "이 장에 쓴 노트" = 피그마 Section Bar(S) + Note List Row(S) (11/26) */
+.ch-notes { padding-bottom: 0; }
+.ch-notes.open { padding-bottom: 4px; }
+.ch-notes-head { width: 100%; height: 40px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 10px 12px 10px 16px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-primary); }
+.ch-notes-head .badge { min-width: 0; height: 16px; box-sizing: border-box; border-radius: 999px; background: var(--action-primary); color: var(--text-on-primary); font-size: 11px; line-height: 14px; font-weight: 600; display: inline-flex; align-items: center; padding: 1px 6px; }
+.ch-notes-head .chev { margin-left: auto; color: var(--icon-primary); width: 12px; height: 12px; }
+.ch-notes-list { max-height: 40vh; overflow-y: auto; }
+.ch-note-row { width: 100%; box-sizing: border-box; text-align: left; display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; color: var(--text-primary); }
+.ch-note-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
+.ch-note-row .t1, .ch-note-row .t2 { display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.ch-note-row .t1 { font-size: 13px; line-height: 18px; }
+.ch-note-row .t1 b { font-weight: 600; }
+.ch-note-row .t2 { font-size: 12px; line-height: 14px; }
+.ch-note-row .t2 span { overflow: hidden; text-overflow: ellipsis; }
+.ch-note-row i, .ch-note-row em { font-style: normal; color: var(--text-tertiary); flex: none; }
+.ch-chev { flex: none; width: 8px; height: 8px; background: var(--icon-secondary); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M2.5 1 5.5 4l-3 3' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M2.5 1 5.5 4l-3 3' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
+.ch-note-row:active { background: var(--bg-hover); }

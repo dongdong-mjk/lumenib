@@ -160,9 +160,9 @@ export class BiblePanel {
     const chNotesHTML = this.o.mode === 'note' && chNotes.length ? `
       <div class="ch-notes ${this.chNotesOpen ? 'open' : ''}">
         <button class="ch-notes-head" data-act="chnotes">이 장에 쓴 노트 <span class="badge num">${chNotes.length}</span>${this.chNotesOpen ? icon.chevUp : icon.chevDown}</button>
-        ${this.chNotesOpen ? '<div class="ch-notes-list">' + chNotes.map((n) => `<button class="ch-note-row" data-note="${n.id}"><div>
-          <div class="t1">${esc(n.passages.map((p) => B.refText(p, true)).join(', '))}<small class="num">${esc(marks.fmt(n.date))}</small></div>
-          <div class="t2">${esc(n.title || '제목 없음')} <em>· ${esc(n.preacher || '설교자 없음')}</em></div></div>${icon.chevRight}</button>`).join('') + '</div>' : ''}
+        ${this.chNotesOpen ? '<div class="ch-notes-list">' + chNotes.map((n) => `<button class="ch-note-row" data-note="${n.id}"><div class="txt">
+          <div class="t1"><b>${esc(n.passages.map((p) => B.refText(p, true)).join(', '))}</b><i>·</i><em class="num">${esc(String(n.date || '').split('-').slice(1).map(Number).join('/'))}</em></div>
+          <div class="t2"><span>${esc(n.title || '제목 없음')}</span>${n.preacher ? `<i>·</i><em>${esc(n.preacher)}</em>` : ''}</div></div><i class="ch-chev" aria-hidden="true"></i></button>`).join('') + '</div>' : ''}
       </div>` : '';
     const last = B.chapterCount(this.book);
     this.el.innerHTML = `${this.head()}${chNotesHTML}
