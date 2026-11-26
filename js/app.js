@@ -864,7 +864,7 @@ function OnboardingScreen(arg = {}) {
         <div class="ob-logins">
           ${google ? '<button class="btn btn-l ob-lg google" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>' : ''}
           ${L.kakao ? '<button class="btn btn-l ob-lg kakao" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>' : ''}
-          ${L.apple && C.hasNativeApple() ? '<button class="btn btn-l ob-lg apple" data-p="apple" disabled><span aria-hidden="true">\uF8FF</span>Apple로 계속하기</button>' : ''}
+          ${L.apple && C.hasNativeApple() ? '<button class="btn btn-l ob-lg apple" data-p="apple" disabled><span class="lg lg-apple" aria-hidden="true"></span>Apple로 계속하기</button>' : ''}
         </div>
         <button class="ob-later" data-a="later">나중에 할게요</button></div></div>`;
     }
@@ -1320,7 +1320,7 @@ function openLogin() {
     <div class="login-btns">
       ${google ? `<button class="btn btn-l btn-outline" data-p="google" disabled><span class="lg lg-google" aria-hidden="true"></span>구글로 계속하기</button>` : ''}
       ${L.kakao ? `<button class="btn btn-l btn-outline" data-p="kakao" disabled><span class="lg lg-kakao" aria-hidden="true"></span>카카오로 계속하기</button>` : ''}
-      ${L.apple && C.hasNativeApple() ? `<button class="btn btn-l ob-lg apple" data-p="apple" disabled><span aria-hidden="true">\uF8FF</span>Apple로 계속하기</button>` : ''}
+      ${L.apple && C.hasNativeApple() ? `<button class="btn btn-l ob-lg apple" data-p="apple" disabled><span class="lg lg-apple" aria-hidden="true"></span>Apple로 계속하기</button>` : ''}
       ${email ? `<button class="btn btn-l btn-outline" data-a="email" disabled>${linkMode ? '이메일로 로그인 링크 받기' : '이메일로 코드 받기'}</button>
       <div class="email-box" hidden>
         <div class="field"><label>이메일</label><input type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" data-f="email"></div>
