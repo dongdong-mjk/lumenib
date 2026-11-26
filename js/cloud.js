@@ -87,6 +87,7 @@ let loggingIn = false;
 async function afterLogin(u) {
   if (loggingIn) return;
   loggingIn = true;
+  try { const p = localStorage.getItem('lumenib.loginWith'); if (p) { localStorage.setItem('lumenib.provider.' + u.id, p); localStorage.removeItem('lumenib.loginWith'); } } catch {}
   try {
     // 1) 보관 동의 확인 (로그인 전에 동의했으면 그걸 저장, 아니면 지금 물어봄)
     let agreed = false;
@@ -120,6 +121,7 @@ export const markConsent = () => localStorage.setItem(PENDING_CONSENT, CONSENT.V
 
 export async function signInWith(provider) {
   markConsent();
+  try { localStorage.setItem('lumenib.loginWith', provider); } catch {} // 이 기기에서 고른 로그인 방법 (같은 이메일로 여러 방법을 쓰면 서버 정보만으론 헷갈려요, 11/26)
   if (provider === 'apple' && hasNativeApple()) return signInWithAppleNative();
   if (hasNativeOAuth() && provider === 'google') return signInWithSystemBrowser(provider); // 카카오는 앱 안에서도 되니 그대로
   const { error } = await sb.auth.signInWithOAuth({ provider, options: { redirectTo: redirectURL() } });
@@ -214,15 +216,25 @@ export function displayName() {
 export function providerName() {
   // app_metadata.provider는 계정을 처음 만든 방식이라, 같은 이메일로 다른 방식(구글↔카카오)으로 들어오면 틀려요.
   // 가장 최근에 로그인한 연결(identity)을 써요 (11/26 민정님: 구글로 들어왔는데 카카오라고 나옴)
-  const ids = (user?.identities || []).slice().sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0));
-  const p = ids[0]?.provider || user?.app_metadata?.provider;
+  const p = currentProvider();
   return { google: 'Google', kakao: '카카오', apple: 'Apple', email: '이메일' }[p] || '';
 }
 // 로그인한 계정의 프로필 사진 (카카오: avatar_url / picture, 구글: picture). 없으면 '' (11/26)
-const lastIdentity = () => (user?.identities || []).slice().sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0))[0];
+// 지금 로그인한 방식: 이 기기에서 로그인할 때 누른 버튼 → 없으면 가장 최근에 로그인한 연결 → 처음 가입한 방식
+function currentProvider() {
+  if (!user) return '';
+  let p = null;
+  try { p = localStorage.getItem('lumenib.provider.' + user.id); } catch {}
+  if (p) return p;
+  const ids = (user.identities || []).slice().sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0));
+  return ids[0]?.provider || user.app_metadata?.provider || '';
+}
+const currentIdentity = () => (user?.identities || []).find((i) => i.provider === currentProvider());
 export function avatarUrl() {
-  // 지금 로그인한 방식(가장 최근 연결)의 사진을 먼저, 없으면 계정 정보
-  const m = { ...(user?.user_metadata || {}), ...(lastIdentity()?.identity_data || {}) };
+  // 1) 앱에서 직접 바꾼 사진 2) 지금 로그인한 방식의 사진 3) 없으면 '' (기본 아바타)
+  if (user?.user_metadata?.lumenib_avatar_url) return user.user_metadata.lumenib_avatar_url;
+  const idd = currentIdentity()?.identity_data;
+  const m = idd || user?.user_metadata || {};
   const u = m.avatar_url || m.picture || m.profile_image || m.profile_image_url || '';
   return typeof u === 'string' ? u.replace(/^http:\/\//, 'https://') : '';
 }
@@ -366,4 +378,32 @@ export async function sync({ skipId } = {}) {
   await pushNow();
   if (changed) emit('notes');
   return changed;
+}
+
+// ---------- 프로필 사진 바꾸기 (11/26) ----------
+// 내 폴더(ink/<계정>/)에 _avatar_<시각>.jpg 로 올리고, 1년짜리 서명 주소를 계정 정보에 남겨요. 예전 사진은 지워요
+export const hasCustomAvatar = () => !!user?.user_metadata?.lumenib_avatar_url;
+async function removeAvatarFiles(keep) {
+  const { data } = await sb.storage.from(BUCKET).list(user.id, { search: '_avatar_' });
+  const old = (data || []).map((f) => `${user.id}/${f.name}`).filter((p) => p !== keep);
+  if (old.length) await sb.storage.from(BUCKET).remove(old);
+}
+export async function setAvatar(blob) {
+  if (!user) throw new Error('login');
+  const path = `${user.id}/_avatar_${Date.now()}.jpg`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+  if (error) throw error;
+  const { data, error: e2 } = await sb.storage.from(BUCKET).createSignedUrl(path, 60 * 60 * 24 * 365);
+  if (e2) throw e2;
+  const { data: u, error: e3 } = await sb.auth.updateUser({ data: { lumenib_avatar_url: data.signedUrl, lumenib_avatar_path: path } });
+  if (e3) throw e3;
+  user = u.user; emit('user');
+  removeAvatarFiles(path).catch(() => {});
+}
+export async function clearAvatar() {
+  if (!user) return;
+  const { data: u, error } = await sb.auth.updateUser({ data: { lumenib_avatar_url: null, lumenib_avatar_path: null } });
+  if (error) throw error;
+  user = u.user; emit('user');
+  removeAvatarFiles(null).catch(() => {});
 }

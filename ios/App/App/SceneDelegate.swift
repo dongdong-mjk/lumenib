@@ -63,6 +63,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibApple")
         // 구글 로그인: 구글은 앱 안 웹화면 로그인을 막아서, 시스템 로그인 창(ASWebAuthenticationSession)으로 열어요 (11/26)
         webView?.configuration.userContentController.add(self, name: "lumenibOAuth")
+        // 카메라 권한 문구가 들어간 빌드라는 표시 (웹은 이게 있을 때만 "사진 찍기"를 보여 줘요, 11/26)
+        webView?.configuration.userContentController.add(self, name: "lumenibCamera")
         applyTheme(UserDefaults.standard.string(forKey: "theme"))
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)

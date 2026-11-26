@@ -966,9 +966,6 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .st-avatar.lg { width: 72px; height: 72px; font-size: 24px; }
 .st-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .st-avatar.photo { background: var(--bg-panel-inset); }
-.st-avatar.empty { background: transparent; position: relative; }
-.st-avatar.empty::before { content: ""; position: absolute; left: 50%; top: 8px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--chart-track); }
-.st-avatar.empty i { position: absolute; left: 50%; bottom: 6px; width: 28px; height: 13px; margin-left: -14px; border-radius: 14px 14px 6px 6px; background: var(--chart-track); }
 .st-chev { flex: none; width: 20px; height: 20px; background: currentColor; color: var(--icon-primary); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M7.5 4.5 13 10l-5.5 5.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M7.5 4.5 13 10l-5.5 5.5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
 .st-right { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 12px 24px 0; }
 .st-head { flex: none; position: relative; height: 44px; display: flex; align-items: center; justify-content: center; }
@@ -1077,4 +1074,13 @@ button.st-row:active { background: var(--bg-hover); }
 .lg-apple { background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16.37 12.73c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.32-3.51zM14.2 6.27c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.67-.92 2.66.97.07 1.96-.49 2.56-1.21z'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16.37 12.73c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.3-.88-2.32-3.51zM14.2 6.27c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.67-.92 2.66.97.07 1.96-.49 2.56-1.21z'/%3E%3C/svg%3E") center/contain no-repeat; }
 
 /* 프로필 사진이 없을 때: 루메닙 로고 (11/26) */
-.st-avatar.logo { background: #000 url(../icons/icon-192.png) center/cover no-repeat; } /* 앱 아이콘(펜촉) */
+
+/* 기본 아바타 (피그마 Avatar type=empty: bg/panel-inset + border/default) · 사진 바꾸기 (11/26) */
+.st-avatar.empty { background: transparent; }
+.st-avatar.empty svg { width: 100%; height: 100%; display: block; }
+.st-avatar.empty .av-bg { fill: var(--bg-panel-inset); }
+.st-avatar.empty .av-fg { fill: var(--border-default); }
+.st-acct.on .st-avatar.empty .av-bg { fill: var(--bg-panel); } /* 회색 카드 위에선 흰 동그라미로 */
+.st-photo { position: relative; flex: none; }
+.st-photo-menu { right: 0; left: auto; top: calc(100% + 6px); min-width: 200px; z-index: 30; }
+.st-card.st-profile { overflow: visible; } /* 사진 바꾸기 메뉴가 카드 밖으로 나오게 */

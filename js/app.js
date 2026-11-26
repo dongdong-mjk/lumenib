@@ -630,13 +630,15 @@ const ST_TITLE = {
 const ST_PARENT = { 'account-info': 'account', 'reading-books': 'reading', pencil: 'display', terms: 'help', privacy: 'help', bible: 'help', licenses: 'help' };
 const stTop = (p) => (ST_PARENT[p] ? stTop(ST_PARENT[p]) : p);
 const ST_CHEV = '<i class="st-chev" aria-hidden="true"></i>';
+const AVATAR_EMPTY = '<svg viewBox="0 0 44 44" aria-hidden="true"><circle class="av-bg" cx="22" cy="22" r="22"/><circle class="av-fg" cx="22" cy="16.72" r="7.92"/><ellipse class="av-fg" cx="22" cy="40.48" rx="15.4" ry="13.2"/></svg>';
+window.AVATAR_EMPTY_HTML = AVATAR_EMPTY; // 사진을 못 불러올 때 onerror에서 써요
 function avatarHTML(cls = '') {
   const u = C.currentUser();
-  if (!u) return `<span class="st-avatar empty ${cls}" aria-hidden="true"><i></i></span>`;
-  // 사진이 없으면(Apple 로그인 등) 루메닙 로고를 보여 줘요 (11/26 민정님). 사진을 못 불러와도 로고로
+  // 로그인 전 · 사진이 없을 때(Apple 등) · 사진을 못 불러올 때 = 기본 아바타 (피그마 Avatar type=empty, 11/26 민정님)
+  const empty = `<span class="st-avatar empty ${cls}" aria-hidden="true">${AVATAR_EMPTY}</span>`;
+  if (!u) return empty;
   const url = C.avatarUrl();
-  const logo = `<span class="st-avatar logo ${cls}" aria-hidden="true"><i></i></span>`;
-  return url ? `<span class="st-avatar photo ${cls}" aria-hidden="true"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.classList.replace('photo','logo');this.parentNode.innerHTML='<i></i>'"></span>` : logo;
+  return url ? `<span class="st-avatar photo ${cls}" aria-hidden="true"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.className='st-avatar empty ${cls}';this.parentNode.innerHTML=AVATAR_EMPTY_HTML"></span>` : empty;
 }
 function syncLine() {
   const s = C.syncStatus();
@@ -663,6 +665,18 @@ function stConfirm(title, desc, yes, onYes) {
     d.querySelector('[data-a="no"]').addEventListener('click', close);
     d.querySelector('[data-a="yes"]').addEventListener('click', () => { close(); onYes(); });
   });
+}
+
+// 고른 사진을 가운데 정사각형으로 잘라 512px JPEG로 (용량 작게)
+async function squareJpeg(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
+    const s = Math.min(img.naturalWidth, img.naturalHeight), n = Math.min(512, s);
+    const c = document.createElement('canvas'); c.width = c.height = n;
+    c.getContext('2d').drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, n, n);
+    return await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
+  } finally { URL.revokeObjectURL(url); }
 }
 
 function openSettings(page) { go('settings', { page: typeof page === 'string' ? page : undefined }); }
@@ -700,7 +714,11 @@ function SettingsScreen(arg = {}) {
     'account-info'() {
       const u = C.currentUser();
       if (!u) { st.page = 'account'; return pages.account(); }
-      return `<section class="st-group"><div class="st-card st-profile">${avatarHTML('lg')}<span class="st-rt"><span class="st-pname">${esc(C.displayName())}</span><span class="st-rts">${esc(C.providerName() || '')} 계정으로 로그인했어요</span></span></div>
+      const cam = !C.isNativeApp() || !!window.webkit?.messageHandlers?.lumenibCamera; // 앱은 카메라 권한이 들어간 빌드(43~)부터
+      return `<section class="st-group"><div class="st-card st-profile">${avatarHTML('lg')}<span class="st-rt"><span class="st-pname">${esc(C.displayName())}</span><span class="st-rts">${esc(C.providerName() || '')} 계정으로 로그인했어요</span></span>
+          <div class="st-photo"><button class="st-btn primary" data-act="photo">사진 바꾸기</button>
+          ${st.photoMenu ? `<div class="nl-menu st-photo-menu"><button class="nl-mi" data-act="photo-lib">사진 보관함에서 고르기</button>${cam ? '<button class="nl-mi" data-act="photo-cam">사진 찍기</button>' : ''}${C.hasCustomAvatar() ? '<button class="nl-mi" data-act="photo-reset">기본 이미지로 되돌리기</button>' : ''}</div>` : ''}</div></div>
+        <input type="file" accept="image/*" data-f="lib" hidden><input type="file" accept="image/*" capture="user" data-f="cam" hidden>
 </section>
         ${stGroup('계정', [stRow({ title: '이름', value: esc(C.displayName()) }), stRow({ title: '로그인 방법', value: esc(C.providerName() || '') }), stRow({ title: '이메일', value: esc(u.email || '') })])}
         ${stGroup('', [stRow({ act: 'logout', title: '로그아웃', chev: true })])}
@@ -815,11 +833,26 @@ function SettingsScreen(arg = {}) {
     on('shape', () => { S.settings.autoShape = S.settings.autoShape === false; S.saveSettings(); render(); });
     app.querySelectorAll('[data-tap]').forEach((b) => b.addEventListener('click', () => { S.settings.pencilTap = b.dataset.tap; S.saveSettings(); track('pencil_tap_' + b.dataset.tap); render(); }));
     on('onboarding', () => go('onboarding', { again: true }));
+    // 사진 바꾸기 (피그마 계정 정보 · 사진 바꾸기, 11/26)
+    on('photo', () => { st.photoMenu = !st.photoMenu; render(); });
+    const pick = async (inp) => {
+      const f = inp.files?.[0]; inp.value = ''; st.photoMenu = false;
+      if (!f) { render(); return; }
+      try { toast('사진을 올리는 중이에요'); await C.setAvatar(await squareJpeg(f)); track('avatar_set'); toast('사진을 바꿨어요'); }
+      catch (e) { console.warn(e); toast('사진을 바꾸지 못했어요. 인터넷 연결을 확인해 주세요', 3000); }
+      render();
+    };
+    app.querySelectorAll('input[data-f]').forEach((inp) => inp.addEventListener('change', () => pick(inp)));
+    on('photo-lib', () => app.querySelector('input[data-f="lib"]').click());
+    on('photo-cam', () => app.querySelector('input[data-f="cam"]').click());
+    on('photo-reset', async () => { st.photoMenu = false; try { await C.clearAvatar(); toast('기본 이미지로 되돌렸어요'); } catch (e) { console.warn(e); toast('되돌리지 못했어요', 2600); } render(); });
     if (st.page === 'help') ['ob2', 'ob3', 'ob4'].forEach(loadObArt); // 처음 안내 다시 보기 전에 미리
   }
 
   const off = C.on((w) => { if ((w === 'user' || w === 'status' || w === 'bible') && curScreen === 'settings') render(); });
-  cleanup = () => { off?.(); };
+  const outside = (e) => { if (st.photoMenu && !e.target.closest('.st-photo')) { st.photoMenu = false; render(); } };
+  document.addEventListener('pointerdown', outside, true);
+  cleanup = () => { off?.(); document.removeEventListener('pointerdown', outside, true); };
   render();
 }
 
