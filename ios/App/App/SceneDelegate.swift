@@ -65,6 +65,14 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibOAuth")
         // 카메라 권한 문구가 들어간 빌드라는 표시 (웹은 이게 있을 때만 "사진 찍기"를 보여 줘요, 11/26)
         webView?.configuration.userContentController.add(self, name: "lumenibCamera")
+        // 위 탭 바·설정 버튼을 앱이 그려요 (iPad 기본 유리 모양). 웹은 이 통로가 있으면 자기 탭 바를 숨겨요 (11/26)
+        webView?.configuration.userContentController.add(self, name: "lumenibTopBar")
+        if let web = webView {
+            topBar.frame = web.bounds
+            topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            topBar.onTap = { [weak self] act in self?.js("window.lumenibTopBar && window.lumenibTopBar('\(act)')") }
+            web.addSubview(topBar)
+        }
         applyTheme(UserDefaults.standard.string(forKey: "themeMode") ?? "system") // 예전 "theme"(다크 기본) 값은 안 써요 (11/26)
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
@@ -72,6 +80,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.scrollView.bounces = false
         webView?.scrollView.alwaysBounceVertical = false
     }
+
+    let topBar = NativeTopBar()
 
     // MARK: 노트 글씨 판 (다 쓴 글씨도 앱이 그려요, 11/24)
     private let noteInk = NoteInkView()
@@ -706,6 +716,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         if message.name == "lumenibCanvas" { noteCanvasMessage(body); return }
         if action == "appleSignIn" { startAppleSignIn(); return }
         if action == "oauth", let s = body["url"] as? String, let u = URL(string: s) { startWebAuth(u, scheme: (body["scheme"] as? String) ?? "lumenib"); return }
+        if action == "topBar" { topBar.update(body); if let web = webView { web.bringSubviewToFront(topBar) }; return }
         if action == "keepAwake" { UIApplication.shared.isIdleTimerDisabled = (body["value"] as? Bool) ?? false; return } // 노트 쓰는 동안 화면 켜 두기 (설정, 11/26)
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
@@ -929,5 +940,152 @@ extension PencilBridgeViewController: ASWebAuthenticationPresentationContextProv
 
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         view.window ?? UIWindow()
+    }
+}
+
+
+// MARK: - 위 탭 바 · 설정 버튼 (iPad 기본 모양, 11/26)
+// 웹은 탭 바 자리를 그대로 두고(안 보이게) 자리·글자·색을 보내요. 앱은 그 자리에 진짜 버튼과 유리 알약을 얹어요.
+// 누르면 웹의 같은 버튼을 대신 눌러서, 화면 이동은 웹이 하던 그대로예요.
+final class NativeTopBar: UIView {
+    var onTap: ((String) -> Void)?
+    private let tabsBox = UIView()
+    private let pill: UIView
+    private var tabs: [(act: String, icon: String, btn: UIButton)] = []
+    private let gear = UIButton(type: .system)
+    private var active = ""
+    private var primary = UIColor.label, secondary = UIColor.secondaryLabel, iconColor = UIColor.label
+    private var lastKey = ""
+
+    override init(frame: CGRect) {
+        if #available(iOS 26.0, *) {
+            let g = UIGlassEffect()
+            g.isInteractive = true
+            pill = UIVisualEffectView(effect: g)
+        } else {
+            pill = UIView()
+        }
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isHidden = true
+        pill.isUserInteractionEnabled = false
+        tabsBox.addSubview(pill)
+        addSubview(tabsBox)
+        addSubview(gear)
+        gear.accessibilityLabel = "설정"
+        gear.addAction(UIAction { [weak self] _ in self?.onTap?("settings") }, for: .touchUpInside)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    // 버튼이 없는 곳은 웹이 그대로 받아요
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let v = super.hitTest(point, with: event)
+        return (v === self || v === tabsBox) ? nil : v
+    }
+
+    static func icon(_ name: String, _ size: CGFloat) -> UIImage? {
+        guard let img = UIImage(named: "nav-\(name)") else { return nil }
+        let r = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+        return r.image { _ in img.draw(in: CGRect(x: 0, y: 0, width: size, height: size)) }.withRenderingMode(.alwaysTemplate)
+    }
+
+    static func cssColor(_ s: String?) -> UIColor? {
+        guard var s = s?.trimmingCharacters(in: .whitespaces), !s.isEmpty else { return nil }
+        if s.hasPrefix("#") {
+            s.removeFirst()
+            if s.count == 3 { s = s.map { "\($0)\($0)" }.joined() }
+            guard s.count == 6 || s.count == 8, let v = UInt64(s, radix: 16) else { return nil }
+            let a = s.count == 8 ? CGFloat(v & 0xff) / 255 : 1
+            let rgb = s.count == 8 ? v >> 8 : v
+            return UIColor(red: CGFloat((rgb >> 16) & 0xff) / 255, green: CGFloat((rgb >> 8) & 0xff) / 255, blue: CGFloat(rgb & 0xff) / 255, alpha: a)
+        }
+        let n = s.components(separatedBy: CharacterSet(charactersIn: "0123456789.").inverted).compactMap { Double($0) }
+        guard n.count >= 3 else { return nil }
+        return UIColor(red: n[0] / 255, green: n[1] / 255, blue: n[2] / 255, alpha: n.count > 3 ? n[3] : 1)
+    }
+
+    private static func rect(_ a: Any?) -> CGRect? {
+        guard let a = a as? [Any], a.count == 4 else { return nil }
+        let v = a.map { ($0 as? NSNumber)?.doubleValue ?? 0 }
+        return CGRect(x: v[0], y: v[1], width: v[2], height: v[3])
+    }
+
+    func update(_ b: [String: Any]) {
+        guard (b["show"] as? Bool) == true, let box = Self.rect(b["box"]) else { isHidden = true; lastKey = ""; return }
+        let dark = (b["dark"] as? Bool) ?? false
+        overrideUserInterfaceStyle = dark ? .dark : .light
+        let c = b["colors"] as? [String: Any] ?? [:]
+        primary = Self.cssColor(c["primary"] as? String) ?? .label
+        secondary = Self.cssColor(c["secondary"] as? String) ?? .secondaryLabel
+        iconColor = Self.cssColor(c["icon"] as? String) ?? primary
+        let pillColor = Self.cssColor(c["pill"] as? String) ?? .systemBackground
+        let list = (b["tabs"] as? [[String: Any]]) ?? []
+        let key = "\(list.map { ($0["act"] as? String ?? "") + ($0["label"] as? String ?? "") })\(dark)"
+        if key != lastKey {
+            tabs.forEach { $0.btn.removeFromSuperview() }
+            tabs = list.map { t in
+                let act = t["act"] as? String ?? "", btn = UIButton(type: .system)
+                var cfg = UIButton.Configuration.plain()
+                cfg.title = t["label"] as? String
+                cfg.imagePadding = 6
+                cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 18)
+                cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
+                    var a = a; a.font = UIFont.systemFont(ofSize: 15, weight: .semibold); return a
+                }
+                btn.configuration = cfg
+                btn.accessibilityLabel = t["label"] as? String
+                btn.addAction(UIAction { [weak self] _ in self?.select(act, animated: true); self?.onTap?(act) }, for: .touchUpInside)
+                tabsBox.addSubview(btn)
+                return (act, t["icon"] as? String ?? "", btn)
+            }
+            lastKey = key
+        }
+        tabsBox.frame = box
+        for (i, t) in list.enumerated() where i < tabs.count {
+            if let r = Self.rect(t["rect"]) { tabs[i].btn.frame = r.offsetBy(dx: -box.minX, dy: -box.minY) }
+        }
+        if #available(iOS 26.0, *), let v = pill as? UIVisualEffectView, let g = v.effect as? UIGlassEffect {
+            let ng = UIGlassEffect(); ng.isInteractive = g.isInteractive; ng.tintColor = pillColor.withAlphaComponent(0.6)
+            v.effect = ng
+            v.cornerConfiguration = .capsule()
+        } else {
+            pill.backgroundColor = pillColor
+        }
+        if let g = Self.rect(b["gear"]) {
+            gear.isHidden = false
+            gear.frame = g
+            if #available(iOS 26.0, *) {
+                var cfg = UIButton.Configuration.glass()
+                cfg.image = Self.icon("settings", 24)
+                cfg.baseForegroundColor = iconColor
+                cfg.cornerStyle = .capsule
+                gear.configuration = cfg
+            } else {
+                var cfg = UIButton.Configuration.plain()
+                cfg.image = Self.icon("settings", 24)
+                cfg.baseForegroundColor = iconColor
+                gear.configuration = cfg
+            }
+        } else { gear.isHidden = true }
+        let was = isHidden
+        isHidden = false
+        select((list.first { ($0["on"] as? Bool) == true }?["act"] as? String) ?? "", animated: !was && !active.isEmpty)
+    }
+
+    private func select(_ act: String, animated: Bool) {
+        let changed = act != active
+        active = act
+        for t in tabs {
+            let on = t.act == act
+            var cfg = t.btn.configuration ?? .plain()
+            cfg.image = Self.icon(on ? "\(t.icon)-fill" : t.icon, 20)
+            cfg.baseForegroundColor = on ? primary : secondary
+            t.btn.configuration = cfg
+        }
+        guard let target = tabs.first(where: { $0.act == act })?.btn else { pill.isHidden = true; return }
+        let f = target.frame
+        let place = { self.pill.frame = f; if #unavailable(iOS 26.0) { self.pill.layer.cornerRadius = f.height / 2 } }
+        if pill.isHidden || !animated || !changed { pill.isHidden = false; UIView.performWithoutAnimation(place); return }
+        UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.78, initialSpringVelocity: 0.4, options: [.allowUserInteraction, .beginFromCurrentState], animations: place)
     }
 }

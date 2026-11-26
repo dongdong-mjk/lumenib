@@ -1094,3 +1094,6 @@ button.st-row:active { background: var(--bg-hover); }
 .ch-note-row:active { background: var(--bg-hover); }
 
 .force-light { color: var(--text-primary); color-scheme: light; }
+
+/* 위 탭 바·설정 버튼을 앱이 그릴 때(.native-top): 웹 것은 자리만 지키고 안 보여요 (11/26) */
+.native-top .home-nav .home-tabs, .native-top .home-nav [data-act="settings"] { visibility: hidden; }

@@ -29,6 +29,7 @@ function applyTheme() {
   // iPad 앱이면 앱 바탕색도 같이 (다음에 켤 때 처음 보이는 색)
   // value = 지금 보이는 모드(예전 빌드용), mode = 고른 설정(system이면 앱이 iPad 설정을 따르게, 44~)
   window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'theme', value: t, mode: S.settings.theme });
+  try { syncTopBar(); } catch {} // 첫 화면 전에 불리면 아직 준비 전이에요
 }
 darkMQ.addEventListener?.('change', () => { if (S.settings.theme === 'system') applyTheme(); });
 const otherNotesFor = (passages, exceptId) =>
@@ -53,6 +54,39 @@ function modal(html, bind) {
   d.addEventListener('click', (e) => { if (e.target === d) close(); });
   bind(d, close);
   return close;
+}
+
+// 위 탭 바·설정 버튼은 앱이 그려요 (iPad 기본 유리 모양, 11/26). 웹 탭 바는 자리만 지키고 안 보여요.
+// 자리·글자·색을 앱에 보내고, 앱에서 누르면 같은 웹 버튼을 대신 눌러요 (화면마다 하던 일 그대로).
+const nativeTop = !!window.webkit?.messageHandlers?.lumenibTopBar;
+document.documentElement.classList.toggle('native-top', nativeTop);
+let topRaf = 0, topLast = '';
+function syncTopBar() { if (!nativeTop || topRaf) return; topRaf = setTimeout(() => { topRaf = 0; sendTopBar(); }, 16); } // 여러 번 불려도 한 번만
+function sendTopBar() {
+  const nav = app.querySelector('.home-nav'), tabs = nav?.querySelector('.home-tabs');
+  const gear = nav?.querySelector('[data-act="settings"]');
+  const R = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map((x) => Math.round(x * 2) / 2); };
+  let m = { show: false };
+  // 바텀시트·확인 창이 떠 있으면 앱 탭 바도 숨겨요 (어두운 막 위에 버튼이 뜨지 않게)
+  if (nav && tabs && !overlay.firstElementChild && R(tabs)[2] > 0) {
+    const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
+    m = {
+      show: true, box: R(tabs), gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
+      colors: { primary: v('--text-primary'), secondary: v('--text-secondary'), icon: v('--icon-primary'), pill: v('--bg-tab-active') },
+      tabs: [...tabs.querySelectorAll('.home-tab')].map((b) => ({ act: b.dataset.act, label: b.textContent.trim(), icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', on: b.classList.contains('on'), rect: R(b) })),
+    };
+  }
+  const k = JSON.stringify(m);
+  if (k === topLast) return;
+  topLast = k;
+  window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'topBar', ...m });
+}
+window.lumenibTopBar = (act) => { app.querySelector(`.home-nav [data-act="${act}"]`)?.click(); };
+if (nativeTop) {
+  new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
+  new MutationObserver(syncTopBar).observe(overlay, { childList: true });
+  addEventListener('resize', syncTopBar);
+  document.addEventListener('scroll', syncTopBar, { capture: true, passive: true });
 }
 
 // iPad 앱 표시 (앱에서만 필요한 화면 조정용)
