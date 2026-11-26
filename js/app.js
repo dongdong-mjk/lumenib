@@ -2143,9 +2143,15 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
       hlAlpha: S.settings.hlAlpha, hlStab: S.settings.hlStab, scale: p?.scale || 1,
       eraserR: ERASER_SIZES[tool.eraserSize], eraserMode: tool.eraserMode,
       // 종이 위 버튼·메뉴 자리: 앱이 그리는 글씨가 그 위를 덮지 않게 비워요 (보이는 것만, 둥근 정도 포함)
+      // 인용 아이콘(옮기기 · 빼기 · 너비 손잡이)은 버튼 전체가 아니라 아이콘 모양 자리만 비워요: 버튼 바탕이 없어서 그 둘레 글씨는 보여요 (11/26)
       ui: p?.citeDragging ? [] : [...(p?.scrollEl?.querySelectorAll('.cite-ui button, .cite-rs, .lasso-menu, .passage-block button') || [])]
         .filter((el) => (el.checkVisibility ? el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : true))
-        .map((el) => { const r = el.getBoundingClientRect(); return r.width && r.height ? [r.left, r.top, r.width, r.height, Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, r.width / 2, r.height / 2)] : null; }).filter(Boolean),
+        .map((el) => {
+          if (el.matches('.cite-ui button')) { const g = el.querySelector('svg')?.getBoundingClientRect(); return g && g.width ? [g.left, g.top, g.width, g.height, 3] : null; }
+          const r = el.getBoundingClientRect();
+          if (el.matches('.cite-rs')) return r.width ? [r.right - 19, r.bottom - 19, 16, 16, 3] : null;
+          return r.width && r.height ? [r.left, r.top, r.width, r.height, Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, r.width / 2, r.height / 2)] : null;
+        }).filter(Boolean),
       sel: (() => { const sl = p?.selection, pg = sl && p.pages[sl.page]; if (!pg?.el) return null; const r = pg.el.getBoundingClientRect(), b = sl.box, k = p.scale; return [r.left + b[0] * k, r.top + b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k]; })(), // 고른 상자: 이 근처에서 시작하면 옮기기라 앱이 올가미 선을 안 그려요
       pages: [...(p?.scrollEl?.querySelectorAll('.page') || [])].map(rect), // 종이 한 장씩의 자리: 네이티브 임시 선을 종이 안으로 잘라요
       area: rect(p?.scrollEl), exclude: [rect(toolbarEl), rect(toolbarEl?.querySelector('.tb-menu')), rect(p?.lassoMenu), ...btns].filter(Boolean),

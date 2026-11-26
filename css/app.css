@@ -302,7 +302,8 @@ button { touch-action: manipulation; }
 /* 옮기기·빼기: 32×32 (WCAG 2.2 최소 24×24 이상), 아이콘 간격을 좁혀 한 묶음으로 보이게 (11/23, 전 40×40) */
 .cite-ui { position: absolute; right: 22px; display: flex; gap: 0; padding-top: 5px; pointer-events: auto; } /* 피그마: 상자 오른쪽 위에서 5·5 */
 .cite-ui button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; touch-action: none; }
-.cite-ui button:active { background: #eee; }
+.cite-ui button { background: none; }
+.cite-ui button:active { background: rgba(17, 17, 17, .16); } /* 버튼 컴포넌트 눌림 = text/primary 16% (종이는 늘 밝아서 #111 기준, 11/26) */
 .cite-grip { cursor: grab; }
 .cite-moving .cite-ui:not(.moving) { visibility: hidden; }
 /* 인용 상자 너비 조절 손잡이 (오른쪽 아래 모서리) */
