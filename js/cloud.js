@@ -189,12 +189,17 @@ export function displayName() {
   return m.full_name || m.name || m.nickname || m.preferred_username || user.email || '내 계정';
 }
 export function providerName() {
-  const p = user?.app_metadata?.provider;
+  // app_metadata.provider는 계정을 처음 만든 방식이라, 같은 이메일로 다른 방식(구글↔카카오)으로 들어오면 틀려요.
+  // 가장 최근에 로그인한 연결(identity)을 써요 (11/26 민정님: 구글로 들어왔는데 카카오라고 나옴)
+  const ids = (user?.identities || []).slice().sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0));
+  const p = ids[0]?.provider || user?.app_metadata?.provider;
   return { google: 'Google', kakao: '카카오', apple: 'Apple', email: '이메일' }[p] || '';
 }
 // 로그인한 계정의 프로필 사진 (카카오: avatar_url / picture, 구글: picture). 없으면 '' (11/26)
+const lastIdentity = () => (user?.identities || []).slice().sort((a, b) => new Date(b.last_sign_in_at || 0) - new Date(a.last_sign_in_at || 0))[0];
 export function avatarUrl() {
-  const m = user?.user_metadata || {};
+  // 지금 로그인한 방식(가장 최근 연결)의 사진을 먼저, 없으면 계정 정보
+  const m = { ...(user?.user_metadata || {}), ...(lastIdentity()?.identity_data || {}) };
   const u = m.avatar_url || m.picture || m.profile_image || m.profile_image_url || '';
   return typeof u === 'string' ? u.replace(/^http:\/\//, 'https://') : '';
 }
