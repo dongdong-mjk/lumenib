@@ -959,7 +959,7 @@ final class NativeTopBar: UIView {
 
     override init(frame: CGRect) {
         if #available(iOS 26.0, *) {
-            let g = UIGlassEffect()
+            let g = UIGlassEffect(style: .regular)
             g.isInteractive = true
             pill = UIVisualEffectView(effect: g)
         } else {
@@ -1029,6 +1029,7 @@ final class NativeTopBar: UIView {
                 cfg.title = t["label"] as? String
                 cfg.imagePadding = 6
                 cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 18)
+                cfg.titleLineBreakMode = .byClipping
                 cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
                     var a = a; a.font = UIFont.systemFont(ofSize: 15, weight: .semibold); return a
                 }
@@ -1040,14 +1041,18 @@ final class NativeTopBar: UIView {
             }
             lastKey = key
         }
-        tabsBox.frame = box
-        for (i, t) in list.enumerated() where i < tabs.count {
-            if let r = Self.rect(t["rect"]) { tabs[i].btn.frame = r.offsetBy(dx: -box.minX, dy: -box.minY) }
+        var x: CGFloat = 0
+        for t in tabs {
+            var cfg = t.btn.configuration ?? .plain()
+            if cfg.image == nil { cfg.image = Self.icon("\(t.icon)-fill", 20); t.btn.configuration = cfg }
+            let w = ceil(t.btn.sizeThatFits(CGSize(width: 400, height: box.height)).width)
+            t.btn.frame = CGRect(x: x, y: 0, width: w, height: box.height)
+            x += w + 2
         }
-        if #available(iOS 26.0, *), let v = pill as? UIVisualEffectView, let g = v.effect as? UIGlassEffect {
-            let ng = UIGlassEffect(); ng.isInteractive = g.isInteractive; ng.tintColor = pillColor.withAlphaComponent(0.6)
-            v.effect = ng
-            v.cornerConfiguration = .capsule()
+        let total = max(0, x - 2)
+        tabsBox.frame = CGRect(x: round(box.midX - total / 2), y: box.minY, width: total, height: box.height)
+        if #available(iOS 26.0, *), let v = pill as? UIVisualEffectView {
+            v.cornerConfiguration = .capsule() // 설정 버튼과 같은 맑은 유리 (색을 입히면 흰 알약처럼 보여서 안 입혀요, 45 피드백)
         } else {
             pill.backgroundColor = pillColor
         }
