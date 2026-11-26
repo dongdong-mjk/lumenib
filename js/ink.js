@@ -422,6 +422,7 @@ export class Paper {
     grip.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
       try { grip.setPointerCapture(e.pointerId); } catch {}
+      if (this.nativeCanvas) { this.ghostCiteDrag(this.pages[c.page] || page, c, e, grip); return; }
       if (this.selection) this.clearSelection(); // 올가미 선택 중에 옮기기 아이콘을 쓰면 선택은 풀어요 (선택 테두리만 남아 있던 것, 11/23)
       this.raiseCite(page, c);
       // 인용 안에 쓴 밑줄·메모도 같이 옮겨요 (11/21). 원래 획은 되돌리기 기록에 두고, 새 획으로 바꿔 끼워 옮겨요
@@ -1006,51 +1007,7 @@ export class Paper {
       } else if (k.kind === 'lasso') {
         this.finishLasso(page, k.pts);
       } else if (k.kind === 'move') {
-        if (Math.abs(k.dx) + Math.abs(k.dy) > 1) {
-          const sel = this.selection;
-          // 손을 뗀 곳이 다른 장이면 그 장으로 옮겨요 (올가미로도 다음·이전 장으로, 11/22)
-          let to = page;
-          if (k.cy != null) {
-            to = this.pages.find((q) => { const b = q?.el.getBoundingClientRect(); return b && k.cy >= b.top && k.cy <= b.bottom; }) || page;
-          }
-          const off = to === page ? 0 : (page.el.getBoundingClientRect().top - to.el.getBoundingClientRect().top) / this.scale;
-          // 놓는 장 안에 머물도록 맞춰요: 인용만 제자리로 돌아오고 글씨·선택 테두리는 그대로 나가 있던 것 (11/23)
-          const [cdx, dy] = this.clampSelMove(k.dx, k.dy + off);
-          k.dx = cdx; k.dy = dy - off;
-          // 되돌리기 기록: 인용 자리와 관련된 장의 획 목록만 (노트 전체를 저장하면 손을 뗀 뒤 버벅여요)
-          const strokesBefore = { [sel.page]: this.note.pages[sel.page].strokes.slice() };
-          if (to !== page) strokesBefore[to.i] = this.note.pages[to.i].strokes.slice();
-          if (sel.cites?.size || to !== page) this._push({ t: 'cites', items: [...(sel.cites || [])].map((c) => ({ ci: this.note.citations.indexOf(c), page: c.page, y: c.y, x: c.x })), strokes: strokesBefore });
-          else this.pagePush(sel.page);
-          this.cloneSelection();
-          for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + dy); } }
-          // 인용 없이 글씨만 옮겼으면 원래 인용 묶음에서 빠지고, 놓은 자리에 따라 다시 묶여요
-          const movedIds = new Set([...(sel.cites || [])].map(citeId));
-          for (const s of sel.set) if (!movedIds.has(s.cg)) delete s.cg;
-          if (to !== page) {
-            this.note.pages[page.i].strokes = this.note.pages[page.i].strokes.filter((q) => !sel.set.has(q));
-            this.note.pages[to.i].strokes.push(...sel.set);
-          }
-          if (sel.cites?.size) {
-            for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.page = to.i; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + dy))); const nx = Math.round(Math.max(20, Math.min(citeMaxX(c), citeX(c) + k.dx))); if (nx !== 20 || c.x != null) c.x = nx; }
-            this.renderCitations(page); if (to !== page) this.renderCitations(to);
-            this.drawPage(page); if (to !== page) this.drawPage(to); // 놓은 인용 아래 다른 인용 글씨는 가려요 (놓으면 다시 보이던 것, 11/23)
-            this.onChange({});
-          }
-          if (to !== page) {
-            this.selection = null; this.hideLassoMenu();
-            this.drawPage(page); this.drawPage(to);
-            this.changed(page, false); this.changed(to, false);
-            if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
-            return;
-          }
-          sel.box = moveBox(sel.box, k.dx, k.dy);
-          if (sel.poly) sel.poly = sel.poly.map(([px, py]) => [px + k.dx, py + k.dy]);
-          this.changed(page, false);
-        }
-        for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.transform = '';
-        this.drawSelection(page);
-        this.showLassoMenu();
+        this.commitSelMove(page, k);
       } else if (k.kind === 'rotate') {
         if (Math.abs(k.ang) > 0.001) {
           this.pagePush(this.selection.page);
@@ -1405,13 +1362,112 @@ export class Paper {
       ctx.setTransform(k2, 0, 0, k2, -gx * k2, -gy * k2);
       for (const q of sel.set) if (q.tool === 'hl') drawStroke(ctx, q);
       for (const q of sel.set) if (q.tool !== 'hl') drawStroke(ctx, q);
-      if (withBox) { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
+      if (withBox && !k.noFrame) { const b = sel.box, u = 1 / this.scale; ctx.setLineDash([6 * u, 5 * u]); ctx.strokeStyle = '#3d7bff'; ctx.lineWidth = 1.4 * u; ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]); }
       this.pagesEl.appendChild(g);
       this.clearLive(page, false); // 원래 자리의 선택 그림은 지워요
       k.ghost = g; k.ghostCv = cv; k.ghostOrg = [gx, gy];
     }
     if (withBox) k.ghost.style.transform = `translate(${k.dx * this.scale}px, ${k.dy * this.scale}px)`;
   }
+
+  // 올가미로 고른 것(인용 포함)을 k.dx·k.dy만큼 옮겨 놓아요. 올가미 옮기기와 인용 이동 버튼이 같이 써요 (11/26)
+  // quiet: 이동 버튼에서 부른 것 → 놓은 뒤 선택 테두리·메뉴 없이 선택을 풀어요
+  commitSelMove(page, k, quiet = false) {
+    if (Math.abs(k.dx) + Math.abs(k.dy) > 1) {
+      const sel = this.selection;
+      // 손을 뗀 곳이 다른 장이면 그 장으로 옮겨요 (올가미로도 다음·이전 장으로, 11/22)
+      let to = page;
+      if (k.cy != null) {
+        to = this.pages.find((q) => { const b = q?.el.getBoundingClientRect(); return b && k.cy >= b.top && k.cy <= b.bottom; }) || page;
+      }
+      const off = to === page ? 0 : (page.el.getBoundingClientRect().top - to.el.getBoundingClientRect().top) / this.scale;
+      // 놓는 장 안에 머물도록 맞춰요: 인용만 제자리로 돌아오고 글씨·선택 테두리는 그대로 나가 있던 것 (11/23)
+      const [cdx, dy] = this.clampSelMove(k.dx, k.dy + off);
+      k.dx = cdx; k.dy = dy - off;
+      // 되돌리기 기록: 인용 자리와 관련된 장의 획 목록만 (노트 전체를 저장하면 손을 뗀 뒤 버벅여요)
+      const strokesBefore = { [sel.page]: this.note.pages[sel.page].strokes.slice() };
+      if (to !== page) strokesBefore[to.i] = this.note.pages[to.i].strokes.slice();
+      if (sel.cites?.size || to !== page) this._push({ t: 'cites', items: [...(sel.cites || [])].map((c) => ({ ci: this.note.citations.indexOf(c), page: c.page, y: c.y, x: c.x })), strokes: strokesBefore });
+      else this.pagePush(sel.page);
+      this.cloneSelection();
+      for (const s of sel.set) { _dense.delete(s); for (let i = 0; i < s.pts.length; i += 3) { s.pts[i] = round(s.pts[i] + k.dx); s.pts[i + 1] = round(s.pts[i + 1] + dy); } }
+      // 인용 없이 글씨만 옮겼으면 원래 인용 묶음에서 빠지고, 놓은 자리에 따라 다시 묶여요
+      const movedIds = new Set([...(sel.cites || [])].map(citeId));
+      for (const s of sel.set) if (!movedIds.has(s.cg)) delete s.cg;
+      if (to !== page) {
+        this.note.pages[page.i].strokes = this.note.pages[page.i].strokes.filter((q) => !sel.set.has(q));
+        this.note.pages[to.i].strokes.push(...sel.set);
+      }
+      if (sel.cites?.size) {
+        for (const c of sel.cites) { const h = citeEls.get(c)?.offsetHeight || 60; c.page = to.i; c.y = Math.round(Math.max(10, Math.min(PAGE_H - h - 10, c.y + dy))); const nx = Math.round(Math.max(20, Math.min(citeMaxX(c), citeX(c) + k.dx))); if (nx !== 20 || c.x != null) c.x = nx; }
+        this.renderCitations(page); if (to !== page) this.renderCitations(to);
+        this.drawPage(page); if (to !== page) this.drawPage(to); // 놓은 인용 아래 다른 인용 글씨는 가려요 (놓으면 다시 보이던 것, 11/23)
+        this.onChange({});
+      }
+      if (to !== page) {
+        this.selection = null; this.hideLassoMenu();
+        this.drawPage(page); this.drawPage(to);
+        this.changed(page, false); this.changed(to, false);
+        if (!this.readonly && this.ensureTrailingPage()) { this.buildPage(this.note.pages.length - 1); this.layout(); }
+        return;
+      }
+      sel.box = moveBox(sel.box, k.dx, k.dy);
+      if (sel.poly) sel.poly = sel.poly.map(([px, py]) => [px + k.dx, py + k.dy]);
+      this.changed(page, false);
+    }
+    for (const c of this.selection.cites || []) for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.transform = '';
+    if (quiet) { this.clearSelection(); this.drawPage(page); return; }
+    this.drawSelection(page);
+    this.showLassoMenu();
+  }
+
+  // 인용 이동 버튼 (아이패드 앱): 올가미로 옮길 때처럼 인용 상자와 그 위 글씨를 한 장으로 찍어 그 한 장만 옮겨요.
+  // 상자는 웹이, 글씨는 앱이 따로 옮기면 상자가 한 박자 늦게 따라왔어요 (11/26)
+  ghostCiteDrag(page, c, e, grip) {
+    if (this.selection) this.clearSelection();
+    this.hideLassoMenu();
+    this.raiseCite(page, c);
+    const set = new Set(this.strokesInCite(page.i, c));
+    let box = this.citeBox(c);
+    if (set.size) { const b = bbox([...set]); box = [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])]; }
+    this.selection = { page: page.i, set, cites: new Set([c]), box, poly: null, hit: new Set(), full: null };
+    this.nativeSync(page); // 고른 글씨는 앱 판에서 빼요 (찍은 그림이 대신 보여요)
+    const [x0, y0] = this.toLocal(page, e);
+    const k = { kind: 'move', x0, y0, dx: 0, dy: 0, cx: e.clientX, cy: e.clientY, noFrame: true };
+    this.moveGhost(page, k);
+    this.scrollEl.classList.add('cite-moving');
+    this.citeDragging = true; this.onLayout?.();
+    const id = e.pointerId;
+    const upd = () => { const [mx, my] = this.toLocal(page, { clientX: k.cx, clientY: k.cy }); k.dx = this.clampSelMove(mx - k.x0, 0)[0]; k.dy = my - k.y0; this.moveGhost(page, k); };
+    const tick = () => {
+      if (!k.live) return;
+      const r = this.scrollEl.getBoundingClientRect(), edge = 70;
+      const v = k.cy > r.bottom - edge ? Math.min(18, (k.cy - (r.bottom - edge)) / 3) : k.cy < r.top + edge ? -Math.min(18, ((r.top + edge) - k.cy) / 3) : 0;
+      if (v) { const b0 = this.scrollEl.scrollTop; this.scrollEl.scrollTop += v; if (this.scrollEl.scrollTop !== b0) upd(); }
+      k.raf = requestAnimationFrame(tick);
+    };
+    k.live = true; k.raf = requestAnimationFrame(tick);
+    const move = (ev) => { if (ev.pointerId !== id) return; k.cx = ev.clientX; k.cy = ev.clientY; upd(); };
+    const end = (ev) => {
+      if (ev.pointerId !== id) return;
+      k.live = false; cancelAnimationFrame(k.raf);
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+      this.scrollEl.classList.remove('cite-moving');
+      this.citeDragging = false;
+      k.ghost?.remove();
+      for (const el of [citeEls.get(c), citeUis.get(c), citeRs.get(c)]) if (el) el.style.visibility = '';
+      if (Math.abs(k.dx) + Math.abs(k.dy) > 1) { this.commitSelMove(page, k, true); this.onHistory?.(); }
+      else { this.clearSelection(); this.drawPage(page); }
+      this.updateCiteCover(page);
+      this.onLayout?.();
+    };
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+  }
+
   // 올가미 크기 조절 중: 고른 글씨를 한 번만 그린 판을 늘리기만 해요 (움직일 때마다 전부 다시 그리면 여러 개일 때 버벅였어요, 11/24)
   scaleGhost(page, k) {
     if (!k.ghost) this.moveGhost(page, k, false);
