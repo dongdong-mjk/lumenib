@@ -27,7 +27,8 @@ function applyTheme() {
   document.documentElement.dataset.theme = t;
   document.querySelector('meta[name="theme-color"]').content = t === 'dark' ? '#000000' : '#f7f7f7';
   // iPad 앱이면 앱 바탕색도 같이 (다음에 켤 때 처음 보이는 색)
-  window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'theme', value: t });
+  // value = 지금 보이는 모드(예전 빌드용), mode = 고른 설정(system이면 앱이 iPad 설정을 따르게, 44~)
+  window.webkit?.messageHandlers?.lumenibNative?.postMessage({ action: 'theme', value: t, mode: S.settings.theme });
 }
 darkMQ.addEventListener?.('change', () => { if (S.settings.theme === 'system') applyTheme(); });
 const otherNotesFor = (passages, exceptId) =>

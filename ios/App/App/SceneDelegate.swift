@@ -65,7 +65,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibOAuth")
         // 카메라 권한 문구가 들어간 빌드라는 표시 (웹은 이게 있을 때만 "사진 찍기"를 보여 줘요, 11/26)
         webView?.configuration.userContentController.add(self, name: "lumenibCamera")
-        applyTheme(UserDefaults.standard.string(forKey: "theme"))
+        applyTheme(UserDefaults.standard.string(forKey: "themeMode") ?? "system") // 예전 "theme"(다크 기본) 값은 안 써요 (11/26)
         setupInk()
         // 앱처럼: 화면 전체가 끌리거나 튕기지 않게 (노트 종이 안의 스크롤은 그대로 돼요)
         // (isScrollEnabled = false 는 쓰면 안 돼요: 웹 안 스크롤 영역(노트 종이·성경 목록)과 확대까지 같이 멈춰요)
@@ -680,15 +680,25 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     }
 
     // 웹앱의 화면 모드(라이트/다크)를 기억해서, 앱을 켤 때 웹이 뜨기 전 바탕색도 맞춰요
+    // 화면 모드: "system"(기본, iPad 설정 따름) · "light" · "dark" (11/26)
+    // system이면 앱이 모드를 덮어쓰지 않아서 웹의 prefers-color-scheme가 iPad 설정을 그대로 따라가요
     private func applyTheme(_ t: String?) {
-        let light = t == "light"
+        let style: UIUserInterfaceStyle = t == "light" ? .light : t == "dark" ? .dark : .unspecified
+        overrideUserInterfaceStyle = style
+        view.window?.overrideUserInterfaceStyle = style
+        updateThemeBackground()
+    }
+    private func updateThemeBackground() {
+        let light = traitCollection.userInterfaceStyle != .dark
         let bg = light ? UIColor(red: 0xF7 / 255.0, green: 0xF7 / 255.0, blue: 0xF7 / 255.0, alpha: 1) : .black
         view.backgroundColor = bg
         webView?.backgroundColor = bg
         webView?.scrollView.backgroundColor = bg
         webView?.isOpaque = false
-        overrideUserInterfaceStyle = light ? .light : .dark
-        view.window?.overrideUserInterfaceStyle = light ? .light : .dark
+    }
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        updateThemeBackground()
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -710,8 +720,9 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             return
         }
         if action == "theme", let t = body["value"] as? String {
-            UserDefaults.standard.set(t, forKey: "theme")
-            applyTheme(t)
+            let mode = (body["mode"] as? String) ?? t // 새 웹은 mode(system/light/dark)를 같이 보내요
+            UserDefaults.standard.set(mode, forKey: "themeMode")
+            applyTheme(mode)
             return
         }
         guard action == "openInk", presentedViewController == nil else { return }
