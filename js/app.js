@@ -633,10 +633,10 @@ const ST_CHEV = '<i class="st-chev" aria-hidden="true"></i>';
 function avatarHTML(cls = '') {
   const u = C.currentUser();
   if (!u) return `<span class="st-avatar empty ${cls}" aria-hidden="true"><i></i></span>`;
+  // 사진이 없으면(Apple 로그인 등) 루메닙 로고를 보여 줘요 (11/26 민정님). 사진을 못 불러와도 로고로
   const url = C.avatarUrl();
-  const nm = C.displayName();
-  return url ? `<span class="st-avatar photo ${cls}" aria-hidden="true"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('photo');this.parentNode.textContent='${esc(nm.slice(0, 1))}'"></span>`
-    : `<span class="st-avatar ${cls}" aria-hidden="true">${esc(nm.slice(0, 1))}</span>`;
+  const logo = `<span class="st-avatar logo ${cls}" aria-hidden="true"><i></i></span>`;
+  return url ? `<span class="st-avatar photo ${cls}" aria-hidden="true"><img src="${esc(url)}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.classList.replace('photo','logo');this.parentNode.innerHTML='<i></i>'"></span>` : logo;
 }
 function syncLine() {
   const s = C.syncStatus();
@@ -701,7 +701,7 @@ function SettingsScreen(arg = {}) {
       const u = C.currentUser();
       if (!u) { st.page = 'account'; return pages.account(); }
       return `<section class="st-group"><div class="st-card st-profile">${avatarHTML('lg')}<span class="st-rt"><span class="st-pname">${esc(C.displayName())}</span><span class="st-rts">${esc(C.providerName() || '')} 계정으로 로그인했어요</span></span></div>
-        <p class="st-note">로그인한 계정의 사진이 보여요.</p></section>
+</section>
         ${stGroup('계정', [stRow({ title: '이름', value: esc(C.displayName()) }), stRow({ title: '로그인 방법', value: esc(C.providerName() || '') }), stRow({ title: '이메일', value: esc(u.email || '') })])}
         ${stGroup('', [stRow({ act: 'logout', title: '로그아웃', chev: true })])}
         <button class="st-textbtn" data-act="delacct">탈퇴하기</button>`;
@@ -815,6 +815,7 @@ function SettingsScreen(arg = {}) {
     on('shape', () => { S.settings.autoShape = S.settings.autoShape === false; S.saveSettings(); render(); });
     app.querySelectorAll('[data-tap]').forEach((b) => b.addEventListener('click', () => { S.settings.pencilTap = b.dataset.tap; S.saveSettings(); track('pencil_tap_' + b.dataset.tap); render(); }));
     on('onboarding', () => go('onboarding', { again: true }));
+    if (st.page === 'help') ['ob2', 'ob3', 'ob4'].forEach(loadObArt); // 처음 안내 다시 보기 전에 미리
   }
 
   const off = C.on((w) => { if ((w === 'user' || w === 'status' || w === 'bible') && curScreen === 'settings') render(); });
@@ -838,6 +839,7 @@ async function loadObArt(name) {
   return obArt[name];
 }
 function OnboardingScreen(arg = {}) {
+  ['ob2', 'ob3', 'ob4'].forEach(loadObArt); // 그림 셋을 처음에 한꺼번에 받아 둬요 (넘길 때 늦게 뜨지 않게, 11/26)
   const loginOk = C.enabled && Object.values(C.loginOptions).some(Boolean) && !C.currentUser();
   const last = loginOk ? 4 : 3; // 로그인했거나 로그인을 못 쓰면 4장까지
   let i = 0;
