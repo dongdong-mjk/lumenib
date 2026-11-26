@@ -228,7 +228,7 @@ function Home({ highlight } = {}) {
 // 홈 "최근 노트 · 전체보기"와 위 탭 "노트"가 같은 화면이에요
 // =========================================================
 // 위 탭 바 (홈·노트 화면 공통). 고른 탭 뒤의 알약은 하나만 있고, 탭을 옮기면 유리알처럼 미끄러져 가요 (11/25)
-function tabBar(active, { write = false } = {}) {
+function tabBar(active, { write = false, search = false } = {}) {
   // 아이콘은 피그마 Icon 페이지의 outline(fill=false) / fill(fill=true) 세트 그대로. 고른 탭만 fill (11/25)
   const ico = (name, on) => `<i class="nav-ico ni-${name}${on ? '-fill' : ''}" aria-hidden="true"></i>`;
   const t = (key, name, label, attrs) => `<button class="home-tab${active === key ? ' on' : ''}" ${attrs}>${ico(name, active === key)}${label}</button>`;
@@ -239,7 +239,8 @@ function tabBar(active, { write = false } = {}) {
       ${t('notes', 'note', '노트', 'data-act="notes"')}
       ${t('bookmark', 'bookmark', '북마크', 'data-act="bookmarks"')}
     </div>
-    ${write ? '<button class="icon-btn gear nav-write" data-act="write-note" aria-label="노트 쓰기"><i class="nav-ico gear-ico ni-pen" aria-hidden="true"></i><span class="nav-tip" role="tooltip">노트 쓰기</span></button>' : ''}
+    ${write ? `<button class="icon-btn gear nav-write${search ? ' with-search' : ''}" data-act="write-note" aria-label="노트 쓰기"><i class="nav-ico gear-ico ni-pen" aria-hidden="true"></i><span class="nav-tip" role="tooltip">노트 쓰기</span></button>` : ''}
+    ${search ? '<button class="icon-btn gear nav-search" data-act="search" aria-label="검색"><i class="nav-ico gear-ico ni-search" aria-hidden="true"></i></button>' : ''}
     <button class="icon-btn gear" data-act="settings" aria-label="설정"><i class="nav-ico gear-ico ni-settings" aria-hidden="true"></i></button>
   </nav>`;
 }
@@ -304,7 +305,7 @@ function NotesScreen() {
   const st = {
     view: S.settings.notesView === 'passage' ? 'passage' : 'date',
     sort: { date: 'new', passage: 'bible', ...(S.settings.notesSort || {}) },
-    q: '', selecting: false, sel: new Set(), menu: false,
+    q: '', selecting: false, sel: new Set(), menu: false, searching: false,
   };
   const remember = () => { S.settings.notesView = st.view; S.settings.notesSort = st.sort; S.saveSettings(); };
   const chapName = (p) => `${B.book(p.book).name} ${p.ch}${p.book === 19 ? '편' : '장'}`;
@@ -372,15 +373,60 @@ function NotesScreen() {
         <h3 class="nl-gh">${esc(g.label)}<span>${g.notes.length}</span></h3>
         <div class="nl-grid">${g.notes.map(card).join('')}</div></section>`).join('') : `<p class="nl-empty">${emptyMsg}</p>`;
   }
+  // ---------- 검색 (피그마 T8.노트 검색 · 처음 / 결과, 11/26) ----------
+  const RECENT_KEY = 'lumenib.recentSearch.notes';
+  const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; } };
+  const saveRecent = (list) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 10))); } catch {} };
+  const pushRecent = () => { const q = st.q.trim(); if (q) saveRecent([q, ...recent().filter((x) => x !== q)]); };
+  function searchBodyHTML() {
+    const q = st.q.trim();
+    if (!q) {
+      const r = recent();
+      return r.length ? `<section class="ns-recent"><div class="ns-rhead"><h3>최근 검색</h3><button class="ns-clearall" data-act="recent-clear">모두 지우기</button></div>
+        ${r.map((x) => `<button class="ns-ritem" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</section>` : '';
+    }
+    curAll = S.allNotes();
+    const hits = curAll.filter(matches).sort(byDate).reverse();
+    return hits.length ? `<section class="nl-group"><h3 class="nl-gh">노트<span>${hits.length}</span></h3><div class="nl-grid">${hits.map(card).join('')}</div></section>`
+      : `<p class="nl-empty">'${esc(q)}'에 맞는 노트가 없어요</p>`;
+  }
+  function renderSearch() {
+    app.innerHTML = `<div class="home notes searching"><div class="nl-wrap">
+      <div class="ns-bar">
+        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문으로 찾기" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.q ? '' : 'hidden'}>${icon.x}</button></label>
+        <button class="ns-cancel" data-act="search-cancel">취소</button>
+      </div>
+      <div class="nl-list ns-list">${searchBodyHTML()}</div>
+    </div></div>`;
+    const input = app.querySelector('.ns-bar input'), clear = app.querySelector('.ns-bar .bp-search-clear');
+    const fill = () => { app.querySelector('.ns-list').innerHTML = searchBodyHTML(); bindSearchBody(); };
+    input.addEventListener('input', () => { st.q = input.value; clear.hidden = !input.value; fill(); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { pushRecent(); input.blur(); } });
+    clear.addEventListener('pointerdown', (e) => e.preventDefault());
+    clear.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input')); input.focus(); });
+    app.querySelector('[data-act="search-cancel"]').addEventListener('click', () => { st.searching = false; st.q = ''; render(); });
+    bindSearchBody();
+    if (!st.q) input.focus();
+  }
+  function bindSearchBody() {
+    app.querySelector('[data-act="recent-clear"]')?.addEventListener('click', () => { saveRecent([]); app.querySelector('.ns-list').innerHTML = searchBodyHTML(); });
+    app.querySelectorAll('.ns-ritem').forEach((b) => b.addEventListener('click', () => {
+      st.q = b.dataset.q; const input = app.querySelector('.ns-bar input'); input.value = st.q;
+      app.querySelector('.ns-bar .bp-search-clear').hidden = false; pushRecent();
+      app.querySelector('.ns-list').innerHTML = searchBodyHTML(); bindSearchBody();
+    }));
+    app.querySelectorAll('.ns-list .nl-card').forEach((c) => c.addEventListener('click', () => { pushRecent(); track('notes_search_open'); go('note', { noteId: c.dataset.id, from: 'notes' }); }));
+  }
+
   function render() {
+    if (st.searching) { renderSearch(); return; }
     const all = S.allNotes();
     const sorts = SORTS[st.view], cur = sorts.find((x) => x[0] === st.sort[st.view]) || sorts[0];
     const n = st.sel.size;
     app.innerHTML = `<div class="home notes"><div class="nl-wrap">
-      ${tabBar('notes', { write: !st.selecting })}
+      ${tabBar('notes', { write: !st.selecting, search: !st.selecting })}
       <div class="nl-head">
-        ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>
-        <label class="nl-search">${NOTE_ICON('search')}<input type="search" placeholder="제목, 설교자, 본문 검색" value="${esc(st.q)}" autocomplete="off" enterkeyhint="search"><button type="button" class="bp-search-clear" aria-label="검색어 지우기" ${st.q ? '' : 'hidden'}>${icon.x}</button></label>`}
+        ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>`}
       </div>
       <div class="nl-controls">
         <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist">
@@ -408,6 +454,7 @@ function NotesScreen() {
     app.querySelector('.home-nav [data-act="bible"]')?.addEventListener('click', () => go('bible'));
     app.querySelector('[data-act="settings"]').addEventListener('click', openSettings);
     bindWriteBtn(app.querySelector('[data-act="write-note"]'), () => { track('notes_write_note'); go('pick', { back: 'notes' }); });
+    app.querySelector('.home-nav [data-act="search"]')?.addEventListener('click', () => { track('notes_search'); st.searching = true; st.q = ''; st.menu = false; render(); });
     app.querySelectorAll('[data-oos]').forEach((b) => b.addEventListener('click', () => { track('out_of_scope'); toast(OUT_OF_SCOPE); }));
     // 검색바: 본문 고르기 화면(성경 패널) 검색바와 같은 상태 — 포커스(테두리 진하게) · 입력 중(값 + 지우기 ×) · 입력 완료
     // 입력할 때는 목록만 다시 그려서 키보드·커서가 그대로예요
@@ -458,7 +505,7 @@ function NotesScreen() {
   // 메뉴 밖을 누르면 정렬 메뉴를 닫아요
   const outside = (e) => { if (st.menu && !e.target.closest('.nl-sort')) { st.menu = false; render(); } };
   document.addEventListener('pointerdown', outside, true);
-  const off = C.on((w) => { if ((w === 'notes' || w === 'user') && curScreen === 'notes' && !st.selecting) render(); });
+  const off = C.on((w) => { if ((w === 'notes' || w === 'user') && curScreen === 'notes' && !st.selecting && !st.searching) render(); });
   cleanup = () => { document.removeEventListener('pointerdown', outside, true); off?.(); };
   render();
 }

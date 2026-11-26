@@ -760,9 +760,35 @@ export async function run() {
     const counts = heads.map((h) => +h.querySelector('span').textContent);
     if (counts.some((c, i) => i && c > counts[i - 1])) return '노트 많은 순이 아니에요 ' + counts;
     $('[data-view="date"]').click(); await wait(150);
-    const inp = $('.nl-search input'); inp.value = 'zzzz없는말'; inp.dispatchEvent(new Event('input')); await wait(150);
+    // 검색 (11/26 피그마 T8.노트 검색): 위 검색 아이콘 → 검색 화면(검색창 + 취소) → 결과 · 최근 검색 → 취소하면 목록
+    if ($('.nl-head .nl-search')) return '목록 머리에 예전 검색창이 남아 있어요';
+    const sb = $('.home-nav [data-act="search"]'); if (!sb) return '위에 검색 아이콘이 없어요';
+    const w = $('.home-nav [data-act="write-note"]').getBoundingClientRect(), g = $('.home-nav [data-act="settings"]').getBoundingClientRect(), sr = sb.getBoundingClientRect();
+    if (!(w.right <= sr.left && sr.right <= g.left) || Math.round(g.left - sr.right) !== 4) return '검색 아이콘 자리가 노트 쓰기와 설정 사이가 아니에요';
+    const rs0 = localStorage.getItem('lumenib.recentSearch.notes');
+    localStorage.setItem('lumenib.recentSearch.notes', '[]');
+    sb.click(); await wait(200);
+    if (!$('.ns-bar .nl-search') || !$('[data-act="search-cancel"]')) return '검색 화면(검색창 + 취소)이 안 열려요';
+    const inp = $('.ns-bar input'); inp.value = 'zzzz없는말'; inp.dispatchEvent(new Event('input')); await wait(150);
     if (!$('.nl-empty')) return '검색 결과 없음 문구가 안 보여요';
-    const inp2 = $('.nl-search input'); inp2.value = ''; inp2.dispatchEvent(new Event('input')); await wait(150);
+    const t0 = S.allNotes().find((x) => x.title)?.title;
+    if (t0) {
+      inp.value = t0; inp.dispatchEvent(new Event('input')); await wait(150);
+      if (!/^노트\d+$/.test($('.ns-list .nl-gh')?.textContent || '') || !$$('.ns-list .nl-card').length) return '검색 결과 "노트 N" 묶음이 달라요';
+      inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); await wait(50);
+      inp.value = ''; inp.dispatchEvent(new Event('input')); await wait(150);
+      if (!$$('.ns-ritem').some((b) => b.textContent === t0)) return '최근 검색에 안 남아요';
+      $('[data-act="recent-clear"]').click(); await wait(100);
+      if ($('.ns-ritem')) return '모두 지우기가 안 돼요';
+    }
+    if (rs0 !== null) localStorage.setItem('lumenib.recentSearch.notes', rs0);
+    $('[data-act="search-cancel"]').click(); await wait(200);
+    if (!$('.nl-head') || $$('.nl-card').length !== total) return '취소하면 원래 목록으로 안 돌아가요';
+    // 세그먼트 색 = 피그마 bg/segmented · 고른 칸 bg/default
+    const cs = getComputedStyle(document.documentElement);
+    const rgb = (v) => { const d = document.createElement('i'); d.style.color = v; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; };
+    if (getComputedStyle($('.nl-seg')).backgroundColor !== rgb(cs.getPropertyValue('--bg-segmented'))) return '세그먼트 바탕이 bg/segmented가 아니에요';
+    if (getComputedStyle($('.nl-seg button.on')).backgroundColor !== rgb(cs.getPropertyValue('--bg-default'))) return '고른 칸이 bg/default가 아니에요';
     $('[data-act="select"]').click(); await wait(150);
     $$('.nl-card')[0].click(); await wait(100);
     if ($('.nl-title').textContent !== '1개 선택됨') return '선택 모드 제목이 달라요';
@@ -910,10 +936,10 @@ export async function run() {
     return n3 === 1 || '저장 토스트의 되돌리기가 안 돼요 ' + n3;
   });
 
-  await check('노트 탭 노트 쓰기(펜) 버튼: 설정 왼쪽 · 누르면 본문 고르기(뒤로 = 노트) · 노트 쓰고 나오면 노트 목록', async () => {
+  await check('노트 탭 노트 쓰기(펜) 버튼: 검색 왼쪽(펜 · 검색 · 설정, 11/26) · 누르면 본문 고르기(뒤로 = 노트) · 노트 쓰고 나오면 노트 목록', async () => {
     const W = wait;
     window.__lumenibGo?.('notes'); await W(600);
-    const pen = $('.home-nav [data-act="write-note"]'), gear = $('.home-nav [data-act="settings"]');
+    const pen = $('.home-nav [data-act="write-note"]'), gear = $('.home-nav [data-act="search"]');
     if (!pen) return '펜 버튼이 없어요';
     const pr = pen.getBoundingClientRect(), gr = gear.getBoundingClientRect();
     if (Math.round(gr.left - pr.right) !== 4 || Math.round(pr.width) !== 40) return `펜 버튼 자리·크기가 시안과 달라요 (간격 ${gr.left - pr.right}, 폭 ${pr.width})`;

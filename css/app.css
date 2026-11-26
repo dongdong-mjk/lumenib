@@ -12,6 +12,7 @@
   --bg-tab-strip: #1e1e1e;
   --bg-card: #2c2c2c;
   --bg-input: #111111;
+  --bg-segmented: #222222; /* 피그마 bg/segmented (11/26) */
   --bg-tab-active: #111111;
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-dim: rgba(0, 0, 0, 0.7);
@@ -51,6 +52,7 @@
   --bg-tab-strip: #f5f5f5;
   --bg-card: #ffffff;
   --bg-input: #f5f5f5;
+  --bg-segmented: #f0f0f0;
   --bg-tab-active: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-dim: rgba(0, 0, 0, 0.4);
@@ -1097,3 +1099,22 @@ button.st-row:active { background: var(--bg-hover); }
 
 /* 위 탭 바·설정 버튼을 앱이 그릴 때(.native-top): 웹 것은 자리만 지키고 안 보여요 (11/26) */
 .native-top .home-nav .home-tabs, .native-top .home-nav [data-act="settings"] { visibility: hidden; }
+
+/* 세그먼트 컨트롤 = 피그마 Segmented Control: 바탕 bg/segmented, 고른 칸 bg/default + border/card (11/26) */
+.nl-seg { background: var(--bg-segmented); }
+.nl-seg button.on { background: var(--bg-default); border-color: var(--border-card); }
+/* 노트 탭 위: 노트 쓰기 · 검색 · 설정 (피그마 T8 노트 목록 · 검색 아이콘, 40칸 사이 4) */
+.nav-ico.ni-search { --m: url("data:image/svg+xml,%3Csvg preserveAspectRatio=%22none%22 overflow=%22visible%22 style=%22display: block;%22 width=%2220%22 height=%2220%22 viewBox=%220 0 20 20%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E %3Cg id=%22search%22%3E %3Cpath id=%22Icon%22 d=%22M8.75 2.58301C12.1559 2.58301 14.917 5.34412 14.917 8.75C14.917 10.1826 14.4262 11.4995 13.6068 12.5464L17.1973 16.1361C17.4902 16.429 17.4902 16.9044 17.1973 17.1973C16.9044 17.4902 16.429 17.4902 16.1361 17.1973L12.5464 13.6068C11.4995 14.4262 10.1826 14.917 8.75 14.917C5.34412 14.917 2.58301 12.1559 2.58301 8.75C2.58301 5.34412 5.34412 2.58301 8.75 2.58301ZM8.75 4.08366C6.17255 4.08366 4.08366 6.17255 4.08366 8.75C4.08366 11.3275 6.17255 13.4163 8.75 13.4163C11.3275 13.4163 13.4163 11.3275 13.4163 8.75C13.4163 6.17255 11.3275 4.08366 8.75 4.08366Z%22 fill-rule=%22evenodd%22 clip-rule=%22evenodd%22 fill=%22%23555555%22/%3E %3C/g%3E %3C/svg%3E"); }
+.home-nav .gear.nav-search, .notes .home-nav .gear.nav-search { right: 44px; }
+.home-nav .gear.nav-write.with-search, .notes .home-nav .gear.nav-write.with-search { right: 88px; }
+/* 노트 검색 (피그마 T8.노트 검색 · 처음 / 결과): 위 검색 줄 = 검색창 + 취소 */
+.ns-bar { flex: none; height: 54px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; margin: calc(16px - min(16px, var(--safe-top))) -12px 0 0; padding: 5px 0; }
+.ns-bar > .nl-search { flex: 1; width: auto; background: var(--bg-default); border-color: var(--border-default); }
+.ns-bar > .nl-search:focus-within { background: var(--bg-panel); border-color: var(--text-secondary); }
+.ns-cancel { flex: none; height: 40px; padding: 0 12px; border-radius: 999px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); }
+.ns-list { margin-top: 0; padding-top: 16px; gap: 8px; }
+.ns-recent { display: flex; flex-direction: column; gap: 8px; }
+.ns-rhead { display: flex; justify-content: space-between; align-items: center; height: 36px; }
+.ns-rhead h3 { margin: 0; padding: 0 8px; font-size: 17px; line-height: 26px; font-weight: 600; color: var(--text-primary); }
+.ns-clearall { height: 36px; padding: 0 8px; border-radius: 999px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-primary); }
+.ns-ritem { height: 48px; padding: 11px 0; text-align: left; font-size: 17px; line-height: 26px; color: var(--text-secondary); }
