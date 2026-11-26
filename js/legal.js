@@ -4,7 +4,7 @@
 export const OPERATOR = {
   name: '김민정',  // 운영자(상호 또는 이름)
   cpo: '김민정',   // 개인정보 보호책임자 이름 (11/26 민정님)
-  email: '', // 문의 이메일
+  email: 'lumenib.info@gmail.com', // 문의 이메일 (11/26 민정님)
 };
 export const EFFECTIVE = '2026년 12월 1일';
 
