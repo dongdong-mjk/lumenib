@@ -166,7 +166,7 @@ export class BiblePanel {
       </div>` : '';
     const last = B.chapterCount(this.book);
     this.el.innerHTML = `${this.head()}${chNotesHTML}
-      <div class="bp-body" style="--verse-size:${settings.verseSize}px"><div class="verses">
+      <div class="bp-body" style="${this.o.viewStyle ? this.o.viewStyle() : `--verse-size:${settings.verseSize}px`}"><div class="verses">
       ${verses.map((v) => {
         const inSel = sel && v.n >= sel.from && v.n <= sel.to;
         const cls = ['verse', isToday(v.n) && !inSel ? 'today' : '', inSel ? 'sel' : '', inSel && v.n === sel.from ? 'first' : '', inSel && v.n === sel.to ? 'last' : ''].join(' ');
@@ -224,6 +224,7 @@ export class BiblePanel {
       this.setLocation(bk, ch, v ? { from: v, to: v } : null, v);
     }));
     el.querySelector('[data-act="aa"]')?.addEventListener('click', () => {
+      if (this.o.onAa) { this.o.onAa(); return; } // 성경 탭과 같은 보기 설정 바텀시트 (11/26)
       const i = SIZES.indexOf(settings.verseSize);
       settings.verseSize = SIZES[(i + 1) % SIZES.length]; saveSettings();
       el.querySelector('.bp-body').style.setProperty('--verse-size', settings.verseSize + 'px');
@@ -233,6 +234,9 @@ export class BiblePanel {
     if (this.chNotesOpen) el.querySelector('.bp-body')?.addEventListener('pointerdown', () => { this.chNotesOpen = false; this.render({ keepScroll: true }); }, { once: true, capture: true });
     el.querySelectorAll('[data-note]').forEach((b) => b.addEventListener('click', () => this.o.onOpenNote?.(b.dataset.note)));
   }
+
+  // 보기 설정(글꼴·크기·간격)을 바꾸면 바로 본문에 적용
+  applyView() { const b = this.el.querySelector('.bp-body'); if (b && this.o.viewStyle) b.setAttribute('style', this.o.viewStyle()); }
 
   bindVerses(body) {
     let drag = null;

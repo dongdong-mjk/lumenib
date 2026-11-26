@@ -958,6 +958,39 @@ const BV_SIZE = [80, 90, 100, 110, 120, 130, 140, 150, 160];
 const BV_LH = [1.45, 1.55, 1.7, 1.85, 2.0];
 const bibleView = () => ({ font: 'serif', size: 100, ls: 0, lh: 0, ...(S.settings.bibleView || {}) });
 const bIco = (name, extra = '') => `<i class="bt-ico bt-${name}" aria-hidden="true"${extra}></i>`;
+const bibleViewStyle = () => {
+  const v = bibleView(), size = 16 * v.size / 100;
+  return `--bv-size:${size}px;--bv-lh:${BV_LH[v.lh + 2]};--bv-ls:${(-2 + v.ls) / 100}em;--bv-font:${v.font === 'sans' ? 'var(--font-ui)' : 'var(--font-serif)'}`;
+};
+// 성경 보기 설정 바텀시트: 성경 탭 · 노트 쓰기 · 본문 고르기 패널이 같이 써요 (바꾸면 바로 적용, 바깥·핸들로 닫기)
+function openViewSheet(onSave) {
+  const close = modal(`<div class="bsheet" role="dialog" aria-label="보기 설정"><button class="bs-handle" data-a="close" aria-label="닫기"><i></i></button><div class="bs-body"></div></div>`, (d, cl) => {
+    d.classList.add('bs-dim');
+    const body = d.querySelector('.bs-body');
+    const draw = () => {
+      const v = bibleView();
+      const stepper = (key, label, val, atMin, atMax) => `<div class="bs-row"><span>${label}</span><div class="stepper"><button data-k="${key}" data-d="-1" ${atMin ? 'disabled' : ''} aria-label="${label} 줄이기"><i class="minus"></i></button><b>${val}</b><button data-k="${key}" data-d="1" ${atMax ? 'disabled' : ''} aria-label="${label} 키우기">${bIco('plus')}</button></div></div>`;
+      const lvl = (x) => (x === 0 ? '기본' : (x > 0 ? '+' : '') + x);
+      body.innerHTML = `<div class="bs-row"><span>글꼴</span><div class="nl-seg bs-seg"><button class="${v.font === 'serif' ? 'on' : ''} serif" data-font="serif">명조체</button><button class="${v.font === 'sans' ? 'on' : ''}" data-font="sans">고딕체</button></div></div>
+        <div class="bs-div"></div>
+        ${stepper('size', '글자 크기', v.size + '%', v.size <= BV_SIZE[0], v.size >= BV_SIZE.at(-1))}
+        ${stepper('ls', '글자 간격', lvl(v.ls), v.ls <= -2, v.ls >= 2)}
+        ${stepper('lh', '줄 간격', lvl(v.lh), v.lh <= -2, v.lh >= 2)}`;
+      body.querySelectorAll('[data-font]').forEach((x) => x.addEventListener('click', () => save({ font: x.dataset.font })));
+      body.querySelectorAll('[data-k]').forEach((x) => x.addEventListener('click', () => {
+        const k = x.dataset.k, dlt = +x.dataset.d, cur = bibleView();
+        if (k === 'size') save({ size: Math.min(160, Math.max(80, cur.size + dlt * 10)) });
+        else save({ [k]: Math.min(2, Math.max(-2, cur[k] + dlt)) });
+      }));
+    };
+    const save = (patch) => { S.settings.bibleView = { ...bibleView(), ...patch }; S.saveSettings(); track('bible_view'); onSave?.(); draw(); };
+    d.querySelector('[data-a="close"]').addEventListener('click', cl);
+    sheetDragClose(d.querySelector('.bsheet'), cl);
+    draw();
+  });
+  return close;
+}
+
 
 function BibleScreen(arg = {}) {
   const books = B.books();
@@ -1100,10 +1133,7 @@ function BibleScreen(arg = {}) {
   }
 
   // ---------- 본문 ----------
-  function viewStyle() {
-    const v = bibleView(), size = 16 * v.size / 100;
-    return `--bv-size:${size}px;--bv-lh:${BV_LH[v.lh + 2]};--bv-ls:${(-2 + v.ls) / 100}em;--bv-font:${v.font === 'sans' ? 'var(--font-ui)' : 'var(--font-serif)'}`;
-  }
+  const viewStyle = bibleViewStyle;
   function chapterNotes() { return S.allNotes().filter((n) => n.passages.some((p) => p.book === st.book && p.ch === st.ch)); }
   async function renderText() {
     const tok = (renderText.t = (renderText.t || 0) + 1);
@@ -1196,34 +1226,8 @@ function BibleScreen(arg = {}) {
     else rtoastAct(`${b.name} ${chLabel(st.book, st.ch)}${objJosa(chLabel(st.book, st.ch))} 다 읽었어요`, '되돌리기', undo);
   }
 
-  // ---------- Aa 보기 설정 (바텀시트: 바꾸면 바로 적용, 바깥·핸들로 닫기) ----------
-  function openAa() {
-    const close = modal(`<div class="bsheet" role="dialog" aria-label="보기 설정"><button class="bs-handle" data-a="close" aria-label="닫기"><i></i></button><div class="bs-body"></div></div>`, (d, cl) => {
-      d.classList.add('bs-dim');
-      const body = d.querySelector('.bs-body');
-      const draw = () => {
-        const v = bibleView();
-        const stepper = (key, label, val, atMin, atMax) => `<div class="bs-row"><span>${label}</span><div class="stepper"><button data-k="${key}" data-d="-1" ${atMin ? 'disabled' : ''} aria-label="${label} 줄이기"><i class="minus"></i></button><b>${val}</b><button data-k="${key}" data-d="1" ${atMax ? 'disabled' : ''} aria-label="${label} 키우기">${bIco('plus')}</button></div></div>`;
-        const lvl = (x) => (x === 0 ? '기본' : (x > 0 ? '+' : '') + x);
-        body.innerHTML = `<div class="bs-row"><span>글꼴</span><div class="nl-seg bs-seg"><button class="${v.font === 'serif' ? 'on' : ''} serif" data-font="serif">명조체</button><button class="${v.font === 'sans' ? 'on' : ''}" data-font="sans">고딕체</button></div></div>
-          <div class="bs-div"></div>
-          ${stepper('size', '글자 크기', v.size + '%', v.size <= BV_SIZE[0], v.size >= BV_SIZE.at(-1))}
-          ${stepper('ls', '글자 간격', lvl(v.ls), v.ls <= -2, v.ls >= 2)}
-          ${stepper('lh', '줄 간격', lvl(v.lh), v.lh <= -2, v.lh >= 2)}`;
-        body.querySelectorAll('[data-font]').forEach((x) => x.addEventListener('click', () => save({ font: x.dataset.font })));
-        body.querySelectorAll('[data-k]').forEach((x) => x.addEventListener('click', () => {
-          const k = x.dataset.k, dlt = +x.dataset.d, cur = bibleView();
-          if (k === 'size') save({ size: Math.min(160, Math.max(80, cur.size + dlt * 10)) });
-          else save({ [k]: Math.min(2, Math.max(-2, cur[k] + dlt)) });
-        }));
-      };
-      const save = (patch) => { S.settings.bibleView = { ...bibleView(), ...patch }; S.saveSettings(); track('bible_view'); colEl.setAttribute('style', viewStyle()); draw(); };
-      d.querySelector('[data-a="close"]').addEventListener('click', cl);
-      sheetDragClose(d.querySelector('.bsheet'), cl);
-      draw();
-    });
-    return close;
-  }
+  // ---------- Aa 보기 설정: 공통 바텀시트(openViewSheet) ----------
+  function openAa() { return openViewSheet(() => colEl.setAttribute('style', viewStyle())); }
 
   // ---------- 장 열기 · 읽던 곳 기억 ----------
   function firstVisible() {
@@ -1439,6 +1443,8 @@ function Pick(arg = {}) {
   const right = app.querySelector('.right-panel');
   const bp = new BiblePanel(app.querySelector('.bible-panel'), {
     mode: 'pick',
+    viewStyle: bibleViewStyle,
+    onAa: () => openViewSheet(() => bp.applyView()),
     start: arg.passage ? { book: arg.passage.book, ch: arg.passage.ch, verse: arg.passage.from } : null,
     marks: () => ({
       today: [...st.passages],
@@ -1607,6 +1613,8 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
   // ----- 왼쪽 성경 -----
   const bp = new BiblePanel(leftEl, {
     mode: 'note',
+    viewStyle: bibleViewStyle,
+    onAa: () => openViewSheet(() => bp.applyView()),
     start: startLoc,
     marks: () => {
       const chNotes = S.allNotes().filter((n) => n.id !== main.id && n.passages.some((p) => p.book === bp.book && p.ch === bp.ch));

@@ -210,8 +210,8 @@ svg { display: block; }
 .verses { padding: 12px 8px 64px; } /* 아래 떠 있는 버튼(본문으로 넣기 · 오늘 본문) 높이만큼만 */
 .verse {
   display: flex; gap: 8px; padding: 4px 8px; position: relative; border-radius: 0;
-  font-family: var(--font-serif); font-size: var(--verse-size, 16px); line-height: calc(var(--verse-size, 16px) * 1.6875); letter-spacing: -0.02em; color: var(--text-body);
-}
+  font-family: var(--bv-font, var(--font-serif)); font-size: var(--bv-size, var(--verse-size, 16px)); line-height: var(--bv-lh, 1.6875); letter-spacing: var(--bv-ls, -0.02em); color: var(--text-body);
+} /* --bv-*: 성경 탭과 같은 보기 설정 (11/26) */
 .verse .vn { flex: none; width: 22px; font-family: var(--font-ui); font-size: 13px; line-height: 18px; font-weight: 600; text-align: center; padding-top: 4px; letter-spacing: 0; }
 .verse .vt { flex: 1; }
 .verse.today::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--marker-today); }
