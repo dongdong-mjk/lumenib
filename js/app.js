@@ -1257,7 +1257,7 @@ function accountHTML() {
   if (!C.enabled || !Object.values(C.loginOptions).some(Boolean)) return '';
   const u = C.currentUser();
   if (!u) {
-    return `<button class="toggle-row" data-act="login"><span>로그인하고 노트 보관하기<small class="toggle-sub">기기를 바꾸거나 테스트가 끝나도 내가 쓴 노트가 남아요</small></span>${icon.chevRight}</button>`;
+    return `<button class="toggle-row" data-act="login"><span>로그인하고 노트 보관하기<small class="toggle-sub">iPad를 바꾸거나 앱을 지워도 내가 쓴 노트가 남아요</small></span>${icon.chevRight}</button>`;
   }
   const st = C.syncStatus();
   const ago = st.lastSync ? relTime(st.lastSync) : '';
@@ -1285,11 +1285,11 @@ function relTime(ms) {
 // 보관 안내 문구 (로그인 전 창과 로그인 뒤 확인 창이 같이 써요)
 function consentHTML(localCount) {
   return `<ul class="consent">
-    <li>이 앱에서 쓴 노트(손글씨, 제목, 설교자, 본문, 날짜)를 서버에 보관해요.</li>
+    <li>이 앱에서 쓴 노트(손글씨, 제목, 설교자, 본문, 날짜)와 읽기 기록, 북마크를 서버에 보관해요.</li>
     <li>보관 기간은 ${esc(C.consentInfo.KEEP_UNTIL)}</li>
     <li>노트는 내 계정으로만 열려요. 운영자는 노트 수와 용량만 확인해요.</li>
     <li>설정에서 언제든 모두 지울 수 있어요.</li>
-    <li>로그인에는 이메일과 이름만 써요.</li>
+    <li>로그인에는 이메일, 이름, 프로필 사진만 써요.</li>
     ${localCount ? `<li>이 기기에서 이미 쓴 노트 ${localCount}편도 함께 보관돼요.</li>` : ''}
   </ul>`;
 }
@@ -1314,7 +1314,7 @@ function openLogin() {
   const email = L.email && !(linkMode && (native || C.isStandalone()));
   modal(`<div class="modal login">
     <h3>내 노트를 보관할까요?</h3>
-    <p class="sub">로그인하면 기기를 바꾸거나 테스트가 끝나도 노트가 남아요</p>
+    <p class="sub">로그인하면 iPad를 바꾸거나 앱을 지워도 노트가 남아요</p>
     ${consentHTML(S.unownedCount())}
     <label class="agree"><input type="checkbox" class="cbx" data-a="agree"><span>위 내용을 확인했고 동의해요</span></label>
     <div class="login-btns">
