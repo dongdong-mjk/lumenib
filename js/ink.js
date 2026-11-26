@@ -514,7 +514,13 @@ export class Paper {
       // 옮기는 인용 자리에는 아래 글씨가 비치지 않게 (올가미로 옮길 때처럼, 11/23)
       this.citeHole(d, tp, [citeX(c), c.y, citeX(c) + citeW(c), c.y + h]);
       if (d.layers) { const px = (c.y - d.cy) * this.scale, qx = (citeX(c) - d.cx) * this.scale; for (const l of d.layers) l.style.transform = `translate(${qx}px, ${px}px)`; }
-      if (d.ncarry) { const r = this.nativeRect(tp), k = this.scale; window.webkit.messageHandlers.lumenibCanvas.postMessage({ action: 'noteCarryMove', t: [r[0] + citeX(c) * k - (d.org[0] + d.cx * k), r[1] + c.y * k - (d.org[1] + d.cy * k)], p: tp === d.page0Ref && !d.rebased ? [citeX(c) - d.bx, c.y - d.by] : null }); }
+      if (d.ncarry) {
+        // 앱은 글씨를 바로 옮기지만 웹 상자는 다음 화면에 그려져서, 글씨가 상자보다 먼저 가 있었어요 (상자가 늦게 따라오는 느낌, 11/26).
+        // 글씨 옮기기를 웹이 상자를 그리는 다음 프레임에 맞춰 보내요 (여러 번 움직여도 마지막 자리 하나만)
+        const r = this.nativeRect(tp), k = this.scale;
+        d.ncMsg = { action: 'noteCarryMove', t: [r[0] + citeX(c) * k - (d.org[0] + d.cx * k), r[1] + c.y * k - (d.org[1] + d.cy * k)], p: tp === d.page0Ref && !d.rebased ? [citeX(c) - d.bx, c.y - d.by] : null };
+        if (!d.ncRaf) { const dd = d; dd.ncRaf = requestAnimationFrame(() => { dd.ncRaf = 0; if (dd.ncMsg && d === dd) window.webkit.messageHandlers.lumenibCanvas.postMessage(dd.ncMsg); }); }
+      }
     };
     const onMove = (e) => {
       if (!d || e.pointerId !== d.id) return;
@@ -525,6 +531,7 @@ export class Paper {
       if (!d || (e && e.pointerId !== d.id)) return;
       this.citeDragging = false; // 놓으면 구멍을 다시 (맨 끝 onLayout에서 새 자리로 알려요)
       cancelAnimationFrame(d.raf);
+      if (d.ncRaf) { cancelAnimationFrame(d.ncRaf); d.ncRaf = 0; if (d.ncMsg) window.webkit.messageHandlers.lumenibCanvas.postMessage(d.ncMsg); } // 마지막 자리는 바로
       if (this._coverSkip) { this._coverSkip = null; for (const pg of this.pages) if (pg) pg._coverCache = null; }
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', up, true);
