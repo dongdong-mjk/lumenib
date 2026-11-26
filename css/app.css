@@ -159,7 +159,7 @@ svg { display: block; }
 .pill-back { height: 40px; box-sizing: border-box; padding: 9px 12px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); }
 .pill-back:active { background: var(--bg-hover); }
 
-.workspace { container-type: inline-size; flex: 1; min-height: 0; display: flex; gap: 12px; padding: 4px 12px 12px; padding-bottom: calc(12px + var(--safe-bottom)); }
+.workspace { container-type: inline-size; flex: 1; min-height: 0; display: flex; gap: 12px; padding: 0 12px 12px; padding-bottom: calc(12px + var(--safe-bottom)); }
 .panel { background: var(--bg-panel); border: 1px solid var(--border-panel); border-radius: var(--radius-panel); box-shadow: var(--shadow-panel); }
 .bible-panel { width: var(--bp-w); flex: none; display: flex; flex-direction: column; min-height: 0; overflow: hidden; position: relative; transition: width .28s cubic-bezier(.2, 0, 0, 1), opacity .2s; } /* iOS처럼 빠르게 시작해 부드럽게 멈춤 */
 .bible-panel.closed { width: 0; opacity: 0; border-width: 0; margin-right: -12px; }
@@ -690,7 +690,7 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
    글자: Wanted Sans, 자간 -2.5% (body --ls). 크기·간격은 시안 숫자 그대로 */
 .recent-empty { height: 129px; display: flex; align-items: center; justify-content: center; font-size: 17px; line-height: 26px; color: var(--text-disabled); }
 .notes { display: flex; flex-direction: column; }
-.nl-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 24px; }
+.nl-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 20px; } /* 노트·북마크 좌우 20 (11/26) */
 .notes .home-nav { flex: none; margin-top: calc(16px - min(16px, var(--safe-top))); }
 .notes .home-nav .gear { right: -10px; }
 .nl-head { flex: none; display: flex; justify-content: space-between; align-items: center; height: 44px; padding-left: 4px; }
@@ -718,7 +718,7 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .nl-mi { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 16px; border-radius: 10px; font-size: 16px; line-height: 24px; font-weight: 400; color: var(--text-primary); text-align: left; }
 .nl-mi.on { font-weight: 600; }
 .nl-mi:active { background: var(--bg-hover); }
-.nl-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 20px -24px 0; padding: 8px 24px calc(24px + var(--safe-bottom, 0px)); display: flex; flex-direction: column; gap: 32px; }
+.nl-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 20px -20px 0; padding: 8px 20px calc(24px + var(--safe-bottom, 0px)); display: flex; flex-direction: column; gap: 32px; }
 .nl-group { display: flex; flex-direction: column; gap: 8px; }
 .nl-gh { margin: 0; padding: 0 8px; display: flex; align-items: baseline; gap: 8px; font-size: 17px; line-height: 26px; font-weight: 600; color: var(--text-primary); }
 .nl-gh span { color: var(--text-tertiary); }
@@ -795,7 +795,7 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 /* ===== T9 성경 탭 (11/25) · 피그마 "성경 탭 (11-25, Claude)" 라이트 시안 · 정책 14 ===== */
 .bible-tab { display: flex; flex-direction: column; }
 .bible-tab .home-nav { flex: none; margin: calc(16px - min(16px, var(--safe-top))) 24px 0; }
-.bt-wrap { container-type: inline-size; flex: 1; min-height: 0; display: flex; gap: 12px; padding: 4px 12px calc(12px + var(--safe-bottom, 0px)); }
+.bt-wrap { container-type: inline-size; flex: 1; min-height: 0; display: flex; gap: 12px; padding: 0 12px calc(12px + var(--safe-bottom, 0px)); } /* 위 4px 없앰 (11/26 iOS 헤더) */
 .bt-left, .bt-read { background: var(--bg-panel); border-radius: 20px; box-shadow: var(--shadow-panel); padding: 8px 8px 0; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0; }
 .bt-left { flex: none; width: min(376px, calc((100cqw - 12px) * 4 / 12)); border: 1px solid var(--border-panel); } /* 좌우 4:8, 왼쪽 최대 376 (11/26) */
 .bt-read { flex: 1; min-width: 0; gap: 8px; border: 1px solid var(--border-panel); } /* 피그마: 오른쪽 패널도 border/panel 1 (11/26) */
@@ -1109,7 +1109,7 @@ button.st-row:active { background: var(--bg-hover); }
 .home-nav .gear.nav-search, .notes .home-nav .gear.nav-search { right: 44px; }
 .home-nav .gear.nav-write.with-search, .notes .home-nav .gear.nav-write.with-search { right: 88px; }
 /* 노트 검색 (피그마 T8.노트 검색 · 처음 / 결과): 위 검색 줄 = 검색창 + 취소 */
-.ns-bar { flex: none; height: 54px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; margin: calc(16px - min(16px, var(--safe-top))) -12px 0 0; padding: 5px 0; }
+.ns-bar { flex: none; height: 54px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; margin: calc(16px - min(16px, var(--safe-top))) -8px 0 4px; padding: 5px 0; } /* 피그마 검색 줄: 왼쪽 24 · 오른쪽 12 (목록 여백 20 기준) */
 .ns-bar > .nl-search { flex: 1; width: auto; background: var(--bg-default); border-color: var(--border-default); }
 .ns-bar > .nl-search:focus-within { background: var(--bg-panel); border-color: var(--text-secondary); }
 .ns-cancel { flex: none; height: 40px; padding: 0 12px; border-radius: 999px; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-primary); }
@@ -1122,3 +1122,16 @@ button.st-row:active { background: var(--bg-hover); }
 
 /* 북마크 탭 검색 아이콘 = 설정 왼쪽 (노트 쓰기 버튼이 없어요) */
 .bookmarks .home-nav .gear.nav-search { right: 44px; }
+
+/* ===== iOS 헤더 (피그마 Top Bar iOS, 11/26): 앱에서만. 유리 버튼 44, 화면 끝에서 10, 버튼 사이 12, 위 54 중 가운데 높이 22 ===== */
+.native-top .home-nav { --gx: -14px; } /* 홈 · 성경 · 설정: 탭 바 좌우 24 안쪽 → 끝에서 10 */
+.native-top .notes .home-nav { --gx: -10px; } /* 노트 · 북마크: 좌우 20 안쪽 */
+.native-top .home-tabs { top: -5px; }
+.native-top .home-nav .gear, .native-top .notes .home-nav .gear { width: 44px; height: 44px; top: 0; right: var(--gx); }
+.native-top .home-nav .gear.nav-search, .native-top .notes .home-nav .gear.nav-search { right: calc(var(--gx) + 56px); }
+.native-top .home-nav .gear.nav-write.with-search, .native-top .notes .home-nav .gear.nav-write.with-search { right: calc(var(--gx) + 112px); }
+.native-top .topbar { padding: 0 10px 10px; box-sizing: border-box; grid-template-rows: 44px; }
+.native-top .topbar .left { gap: 12px; }
+.native-top .topbar .left .icon-btn { width: 44px; height: 44px; }
+.native-top .topbar [data-act="done"] { height: 44px; min-width: 58px; padding: 0 16px; }
+.native-glass [data-glass] { visibility: hidden; } /* 48~: 앱이 그 자리에 유리 버튼을 그려요 */

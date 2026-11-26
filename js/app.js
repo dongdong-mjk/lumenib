@@ -61,6 +61,8 @@ function modal(html, bind) {
 const nativeTop = !!window.webkit?.messageHandlers?.lumenibTopBar;
 document.documentElement.classList.toggle('native-top', nativeTop);
 document.documentElement.classList.toggle('native-icons', !!window.webkit?.messageHandlers?.lumenibTopIcons); // 노트 쓰기 · 검색까지 앱이 그리는 빌드 (47~)
+const nativeGlass = !!window.webkit?.messageHandlers?.lumenibGlass; // 노트 쓰기 · 본문 고르기 위 버튼도 앱 유리 버튼 (48~)
+document.documentElement.classList.toggle('native-glass', nativeGlass);
 let topRaf = 0, topLast = '';
 function syncTopBar() { if (!nativeTop || topRaf) return; topRaf = setTimeout(() => { topRaf = 0; sendTopBar(); }, 16); } // 여러 번 불려도 한 번만
 function sendTopBar() {
@@ -71,14 +73,18 @@ function sendTopBar() {
   // 바텀시트·확인 창이 떠 있으면 앱 탭 바도 숨겨요 (어두운 막 위에 버튼이 뜨지 않게)
   const splash = document.getElementById('splash');
   const splashOn = splash && !splash.classList.contains('hide');
-  if (nav && tabs && !splashOn && !overlay.firstElementChild && R(tabs)[2] > 0) {
+  const glass = nativeGlass ? [...app.querySelectorAll('[data-glass]')].filter((b) => b.getClientRects().length) : [];
+  if (!splashOn && !overlay.firstElementChild && ((nav && tabs && R(tabs)[2] > 0) || glass.length)) {
     const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
     m = {
-      show: true, box: R(tabs), gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
+      show: true, box: tabs ? R(tabs) : null, gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
       // 오른쪽 아이콘 버튼 전부 (노트 쓰기 · 검색 · 설정): 앱이 같은 유리 버튼으로 그려요 (11/26)
-      icons: [...nav.querySelectorAll('.gear[data-act]')].map((b) => ({ act: b.dataset.act, label: b.getAttribute('aria-label') || '', icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', rect: R(b) })),
+      icons: nativeGlass ? glass.map((b) => {
+        const text = b.dataset.glassText ?? (b.querySelector('.nav-ico, svg') && !b.dataset.glassIcon?.startsWith('cl') ? '' : b.textContent.trim());
+        return { act: b.dataset.glass, label: b.getAttribute('aria-label') || text, icon: b.dataset.glassIcon || (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', text, iw: +b.dataset.glassIw || undefined, ih: +b.dataset.glassIh || undefined, rect: R(b) };
+      }) : [...(nav?.querySelectorAll('.gear[data-act]') || [])].map((b) => ({ act: b.dataset.act, label: b.getAttribute('aria-label') || '', icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', rect: R(b) })),
       colors: { primary: v('--text-primary'), secondary: v('--text-secondary'), icon: v('--icon-primary'), pill: v('--bg-tab-active') },
-      tabs: [...tabs.querySelectorAll('.home-tab')].map((b) => ({ act: b.dataset.act, label: b.textContent.trim(), icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', on: b.classList.contains('on'), rect: R(b) })),
+      tabs: [...(tabs?.querySelectorAll('.home-tab') || [])].map((b) => ({ act: b.dataset.act, label: b.textContent.trim(), icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', on: b.classList.contains('on'), rect: R(b) })),
     };
   }
   const k = JSON.stringify(m);
@@ -86,7 +92,7 @@ function sendTopBar() {
   topLast = k;
   window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'topBar', ...m });
 }
-window.lumenibTopBar = (act) => { app.querySelector(`.home-nav [data-act="${act}"]`)?.click(); };
+window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
   new MutationObserver(syncTopBar).observe(overlay, { childList: true });
@@ -288,9 +294,9 @@ function tabBar(active, { write = false, search = false } = {}) {
       ${t('notes', 'note', '노트', 'data-act="notes"')}
       ${t('bookmark', 'bookmark', '북마크', 'data-act="bookmarks"')}
     </div>
-    ${write ? `<button class="icon-btn gear nav-write${search ? ' with-search' : ''}" data-act="write-note" aria-label="노트 쓰기"><i class="nav-ico gear-ico ni-pen" aria-hidden="true"></i><span class="nav-tip" role="tooltip">노트 쓰기</span></button>` : ''}
-    ${search ? '<button class="icon-btn gear nav-search" data-act="search" aria-label="검색"><i class="nav-ico gear-ico ni-search" aria-hidden="true"></i></button>' : ''}
-    <button class="icon-btn gear" data-act="settings" aria-label="설정"><i class="nav-ico gear-ico ni-settings" aria-hidden="true"></i></button>
+    ${write ? `<button class="icon-btn gear nav-write${search ? ' with-search' : ''}" data-act="write-note" data-glass="write-note" aria-label="노트 쓰기"><i class="nav-ico gear-ico ni-pen" aria-hidden="true"></i><span class="nav-tip" role="tooltip">노트 쓰기</span></button>` : ''}
+    ${search ? '<button class="icon-btn gear nav-search" data-act="search" data-glass="search" aria-label="검색"><i class="nav-ico gear-ico ni-search" aria-hidden="true"></i></button>' : ''}
+    <button class="icon-btn gear" data-act="settings" data-glass="settings" aria-label="설정"><i class="nav-ico gear-ico ni-settings" aria-hidden="true"></i></button>
   </nav>`;
 }
 function bindWriteBtn(btn, onTap) {
@@ -1545,7 +1551,7 @@ function Pick(arg = {}) {
   const backTo = arg.back || (arg.passage ? 'bible' : 'home');
   const st = { info: { date: todayISO(), title: '', preacher: '' }, infoOpen: true, passages: arg.passage ? [arg.passage] : [], paper: PAPERS.some((p) => p[0] === S.settings.lastPaper) ? S.settings.lastPaper : 'lined' }; // 마지막에 고른 종이로 시작
   app.innerHTML = `<div class="screen">
-    <header class="topbar"><div class="left"><button class="pill-back" data-act="home">${bIco('cl')}${({ home: '홈', bible: '성경', notes: '노트' })[backTo]}</button></div>
+    <header class="topbar"><div class="left"><button class="pill-back" data-act="home" data-glass="pick-back" data-glass-icon="cl" data-glass-iw="9" data-glass-ih="18">${bIco('cl')}${({ home: '홈', bible: '성경', notes: '노트' })[backTo]}</button></div>
       <div class="title">오늘 설교 기록하기</div><div class="right"></div></header>
     <div class="workspace">
       <section class="panel bible-panel"></section>
@@ -1706,9 +1712,9 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
 
   app.innerHTML = `<div class="screen">
     <header class="topbar">
-      <div class="left"><button class="icon-btn" data-act="back" aria-label="뒤로">${icon.back}</button><button class="icon-btn" data-act="side" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
+      <div class="left"><button class="icon-btn" data-act="back" data-glass="back" data-glass-icon="back" aria-label="뒤로">${icon.back}</button><button class="icon-btn" data-act="side" data-glass="side" data-glass-icon="sidebar" aria-label="성경 패널 접기">${icon.sidebar}</button></div>
       <div class="mid"><div class="tb-slot"></div><div class="title">${mainReadonly ? esc(main.title) : from === 'home' || from === 'notes' || from === 'bible' ? '노트' : '오늘 설교 기록하기'}</div></div>
-      <div class="right">${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done">${mainReadonly ? '닫기' : '완료'}</button></div>
+      <div class="right">${mainReadonly ? '' : '<span class="saved-label">자동 저장됨</span>'}<button class="btn btn-primary" data-act="done" data-glass="done" data-glass-text="${mainReadonly ? '닫기' : '완료'}">${mainReadonly ? '닫기' : '완료'}</button></div>
     </header>
     <div class="workspace">
       <section class="panel bible-panel"></section>

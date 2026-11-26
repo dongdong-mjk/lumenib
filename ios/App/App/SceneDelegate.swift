@@ -68,6 +68,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         // 위 탭 바·설정 버튼을 앱이 그려요 (iPad 기본 유리 모양). 웹은 이 통로가 있으면 자기 탭 바를 숨겨요 (11/26)
         webView?.configuration.userContentController.add(self, name: "lumenibTopBar")
         webView?.configuration.userContentController.add(self, name: "lumenibTopIcons") // 노트 쓰기 · 검색 버튼도 앱이 그려요 (47~)
+        webView?.configuration.userContentController.add(self, name: "lumenibGlass") // 노트 쓰기 · 본문 고르기 위 버튼(뒤로 · 사이드바 · 완료 · 〈 홈)도 유리로 (48~)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -981,10 +982,11 @@ final class NativeTopBar: UIView {
         return (v === self || v === tabsBox) ? nil : v
     }
 
-    static func icon(_ name: String, _ size: CGFloat) -> UIImage? {
+    static func icon(_ name: String, _ size: CGFloat) -> UIImage? { icon(name, CGSize(width: size, height: size)) }
+    static func icon(_ name: String, _ size: CGSize) -> UIImage? {
         guard let img = UIImage(named: "nav-\(name)") else { return nil }
-        let r = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
-        return r.image { _ in img.draw(in: CGRect(x: 0, y: 0, width: size, height: size)) }.withRenderingMode(.alwaysTemplate)
+        let r = UIGraphicsImageRenderer(size: size)
+        return r.image { _ in img.draw(in: CGRect(origin: .zero, size: size)) }.withRenderingMode(.alwaysTemplate)
     }
 
     static func cssColor(_ s: String?) -> UIColor? {
@@ -1009,7 +1011,9 @@ final class NativeTopBar: UIView {
     }
 
     func update(_ b: [String: Any]) {
-        guard (b["show"] as? Bool) == true, let box = Self.rect(b["box"]) else { isHidden = true; lastKey = ""; return }
+        guard (b["show"] as? Bool) == true else { isHidden = true; lastKey = ""; return }
+        let box = Self.rect(b["box"]) ?? .zero // 탭 묶음이 없는 화면(노트 쓰기 · 본문 고르기)은 유리 버튼만 (48~)
+        tabsBox.isHidden = box.width <= 0
         let dark = (b["dark"] as? Bool) ?? false
         overrideUserInterfaceStyle = dark ? .dark : .light
         let c = b["colors"] as? [String: Any] ?? [:]
@@ -1040,7 +1044,7 @@ final class NativeTopBar: UIView {
             lastKey = key
         }
         var x: CGFloat = 0
-        for t in tabs {
+        for t in tabs where box.width > 0 {
             var cfg = t.btn.configuration ?? .plain()
             if cfg.image == nil { cfg.image = Self.icon("\(t.icon)-fill", 20); t.btn.configuration = cfg }
             let w = ceil(t.btn.sizeThatFits(CGSize(width: 400, height: box.height)).width)
@@ -1071,23 +1075,28 @@ final class NativeTopBar: UIView {
             btn.accessibilityLabel = it["label"] as? String
             btn.isHidden = false
             btn.frame = r
-            let img = Self.icon(it["icon"] as? String ?? act, 24)
-            if #available(iOS 26.0, *) {
-                var cfg = UIButton.Configuration.glass()
-                cfg.image = img
-                cfg.baseForegroundColor = iconColor
-                cfg.cornerStyle = .capsule
-                btn.configuration = cfg
-            } else {
-                var cfg = UIButton.Configuration.plain()
-                cfg.image = img
-                cfg.baseForegroundColor = iconColor
-                btn.configuration = cfg
+            let iconName = it["icon"] as? String ?? "", text = it["text"] as? String ?? ""
+            let iw = CGFloat((it["iw"] as? NSNumber)?.doubleValue ?? 24), ih = CGFloat((it["ih"] as? NSNumber)?.doubleValue ?? iw)
+            let img = iconName.isEmpty ? nil : Self.icon(iconName, CGSize(width: iw, height: ih))
+            var cfg: UIButton.Configuration
+            if #available(iOS 26.0, *) { cfg = .glass(); cfg.cornerStyle = .capsule } else { cfg = .plain() }
+            cfg.image = img
+            cfg.baseForegroundColor = text.isEmpty ? iconColor : primary
+            if !text.isEmpty { // 글자 유리 버튼 (완료 · 〈 홈)
+                cfg.title = text
+                cfg.imagePadding = 6
+                cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
+                cfg.titleLineBreakMode = .byClipping
+                cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
+                    var a = a; a.font = UIFont.systemFont(ofSize: 15, weight: .semibold); return a
+                }
             }
+            btn.configuration = cfg
         }
         for (act, btn) in iconBtns where !seen.contains(act) { btn.isHidden = true }
         let was = isHidden
         isHidden = false
+        if box.width <= 0 { pill.isHidden = true; active = ""; return }
         select((list.first { ($0["on"] as? Bool) == true }?["act"] as? String) ?? "", animated: !was && !active.isEmpty)
     }
 
