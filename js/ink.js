@@ -440,6 +440,8 @@ export class Paper {
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', up, true);
       window.addEventListener('pointercancel', up, true);
+      // 끄는 동안엔 앱 글씨 판의 '버튼 자리 구멍'을 비워요. 안 그러면 인용 아이콘 3개가 있던 자리만 글씨가 안 보였다가 놓으면 보였어요 (11/26)
+      this.citeDragging = true; this.onLayout?.();
       if (carry.length && this.nativeCarry) {
         // 아이패드 앱: 앱이 그 글씨 층을 그대로 옮겨요. 웹 판과 앱 판을 바꿔치기하지 않아 형광펜이 진해졌다 연해지지 않아요 (11/25)
         d.ncarry = true; d.org = this.nativeRect(page);
@@ -521,6 +523,7 @@ export class Paper {
     };
     const up = (e) => {
       if (!d || (e && e.pointerId !== d.id)) return;
+      this.citeDragging = false; // 놓으면 구멍을 다시 (맨 끝 onLayout에서 새 자리로 알려요)
       cancelAnimationFrame(d.raf);
       if (this._coverSkip) { this._coverSkip = null; for (const pg of this.pages) if (pg) pg._coverCache = null; }
       window.removeEventListener('pointermove', onMove, true);

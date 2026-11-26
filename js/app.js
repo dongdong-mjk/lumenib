@@ -2114,9 +2114,8 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
     m.innerHTML = `<h6>종이 종류</h6><div class="row">${PAPERS.map(([k, l]) => `<button class="paper-opt ${k === main.paper ? 'on' : ''}" data-p="${k}"><span class="paper-thumb ${k}"></span>${l.replace(' 종이', '')}</button>`).join('')}</div>
       <button class="menu-item" data-act="pdf">${icon.download || ''}<span>PDF로 내보내기</span></button>
       ${window.webkit?.messageHandlers?.lumenibNative ? `<p class="menu-diag">글씨: ${ns.paper?.nativeCanvas ? '앱이 그림' : '웹이 그림'}${window.__lumenibBuild ? ' · 앱 ' + window.__lumenibBuild : ''}</p>` : ''}
-      ${window.webkit?.messageHandlers?.lumenibNative ? '<button class="menu-item" data-act="native-ink"><span>네이티브 필기 비교</span></button>' : ''}`;
+`;
     toolbarEl.appendChild(m);
-    m.querySelector('[data-act="native-ink"]')?.addEventListener('click', () => { m.remove(); track('native_ink_open'); window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'openInk' }); });
     m.querySelector('[data-act="pdf"]').addEventListener('click', () => { m.remove(); exportPdf(); });
     m.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => { main.paper = b.dataset.p; S.settings.lastPaper = main.paper; S.saveSettings(); if (ns.paper.note === main) ns.paper.setPaper(main.paper); else ns.paper.render(); S.touch(main); m.remove(); }));
   }
@@ -2144,7 +2143,7 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
       hlAlpha: S.settings.hlAlpha, hlStab: S.settings.hlStab, scale: p?.scale || 1,
       eraserR: ERASER_SIZES[tool.eraserSize], eraserMode: tool.eraserMode,
       // 종이 위 버튼·메뉴 자리: 앱이 그리는 글씨가 그 위를 덮지 않게 비워요 (보이는 것만, 둥근 정도 포함)
-      ui: [...(p?.scrollEl?.querySelectorAll('.cite-ui button, .cite-rs, .lasso-menu, .passage-block button') || [])]
+      ui: p?.citeDragging ? [] : [...(p?.scrollEl?.querySelectorAll('.cite-ui button, .cite-rs, .lasso-menu, .passage-block button') || [])]
         .filter((el) => (el.checkVisibility ? el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) : true))
         .map((el) => { const r = el.getBoundingClientRect(); return r.width && r.height ? [r.left, r.top, r.width, r.height, Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, r.width / 2, r.height / 2)] : null; }).filter(Boolean),
       sel: (() => { const sl = p?.selection, pg = sl && p.pages[sl.page]; if (!pg?.el) return null; const r = pg.el.getBoundingClientRect(), b = sl.box, k = p.scale; return [r.left + b[0] * k, r.top + b[1] * k, (b[2] - b[0]) * k, (b[3] - b[1]) * k]; })(), // 고른 상자: 이 근처에서 시작하면 옮기기라 앱이 올가미 선을 안 그려요
