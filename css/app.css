@@ -41,7 +41,8 @@
   color-scheme: dark;
 }
 
-:root[data-theme="light"] {
+/* .force-light: 다크 화면 안에서도 라이트 토큰으로 고정 (피그마 모드 Light 고정 레이어, 11/26) */
+:root[data-theme="light"], .force-light {
   --bg-app: #f7f7f7;
   --bg-panel: #ffffff;
   --bg-panel-inset: #f5f5f5;
@@ -97,7 +98,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
-:root[data-theme="light"] { --paper: #ffffff; }
+:root[data-theme="light"], .force-light { --paper: #ffffff; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
@@ -1091,3 +1092,5 @@ button.st-row:active { background: var(--bg-hover); }
 .ch-note-row i, .ch-note-row em { font-style: normal; color: var(--text-tertiary); flex: none; }
 .ch-chev { flex: none; width: 8px; height: 8px; background: var(--icon-secondary); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M2.5 1 5.5 4l-3 3' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M2.5 1 5.5 4l-3 3' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat; }
 .ch-note-row:active { background: var(--bg-hover); }
+
+.force-light { color: var(--text-primary); color-scheme: light; }

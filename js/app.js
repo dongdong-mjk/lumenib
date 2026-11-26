@@ -718,7 +718,7 @@ function SettingsScreen(arg = {}) {
       const cam = !C.isNativeApp() || !!window.webkit?.messageHandlers?.lumenibCamera; // 앱은 카메라 권한이 들어간 빌드(43~)부터
       return `<section class="st-group"><div class="st-card st-profile">${avatarHTML('lg')}<span class="st-rt"><span class="st-pname">${esc(C.displayName())}</span><span class="st-rts">${esc(C.providerName() || '')} 계정으로 로그인했어요</span></span>
           <div class="st-photo"><button class="st-btn primary" data-act="photo">사진 바꾸기</button>
-          ${st.photoMenu ? `<div class="nl-menu st-photo-menu"><button class="nl-mi" data-act="photo-lib">사진 보관함에서 고르기</button>${cam ? '<button class="nl-mi" data-act="photo-cam">사진 찍기</button>' : ''}${C.hasCustomAvatar() ? '<button class="nl-mi" data-act="photo-reset">기본 이미지로 되돌리기</button>' : ''}</div>` : ''}</div></div>
+          ${st.photoMenu ? `<div class="nl-menu st-photo-menu force-light"><button class="nl-mi" data-act="photo-lib">사진 보관함에서 고르기</button>${cam ? '<button class="nl-mi" data-act="photo-cam">사진 찍기</button>' : ''}${C.hasCustomAvatar() ? '<button class="nl-mi" data-act="photo-reset">기본 이미지로 되돌리기</button>' : ''}</div>` : ''}</div></div>
         <input type="file" accept="image/*" data-f="lib" hidden><input type="file" accept="image/*" capture="user" data-f="cam" hidden>
 </section>
         ${stGroup('계정', [stRow({ title: '이름', value: esc(C.displayName()) }), stRow({ title: '로그인 방법', value: esc(C.providerName() || '') }), stRow({ title: '이메일', value: esc(u.email || '') })])}
