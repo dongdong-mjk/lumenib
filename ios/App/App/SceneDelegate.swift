@@ -67,6 +67,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibCamera")
         // 위 탭 바·설정 버튼을 앱이 그려요 (iPad 기본 유리 모양). 웹은 이 통로가 있으면 자기 탭 바를 숨겨요 (11/26)
         webView?.configuration.userContentController.add(self, name: "lumenibTopBar")
+        webView?.configuration.userContentController.add(self, name: "lumenibTopIcons") // 노트 쓰기 · 검색 버튼도 앱이 그려요 (47~)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -952,7 +953,7 @@ final class NativeTopBar: UIView {
     private let tabsBox = UIView()
     private let pill: UIView
     private var tabs: [(act: String, icon: String, btn: UIButton)] = []
-    private let gear = UIButton(type: .system)
+    private var iconBtns: [String: UIButton] = [:] // 오른쪽 아이콘 버튼 (노트 쓰기 · 검색 · 설정)
     private var active = ""
     private var primary = UIColor.label, secondary = UIColor.secondaryLabel, iconColor = UIColor.label
     private var lastKey = ""
@@ -971,9 +972,6 @@ final class NativeTopBar: UIView {
         pill.isUserInteractionEnabled = false
         tabsBox.addSubview(pill)
         addSubview(tabsBox)
-        addSubview(gear)
-        gear.accessibilityLabel = "설정"
-        gear.addAction(UIAction { [weak self] _ in self?.onTap?("settings") }, for: .touchUpInside)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -1056,22 +1054,38 @@ final class NativeTopBar: UIView {
         } else {
             pill.backgroundColor = pillColor
         }
-        if let g = Self.rect(b["gear"]) {
-            gear.isHidden = false
-            gear.frame = g
+        // 오른쪽 아이콘 버튼: 웹이 보낸 것만 (노트 탭 = 노트 쓰기 · 검색 · 설정, 북마크 = 검색 · 설정, 홈·성경 = 설정)
+        var icons = (b["icons"] as? [[String: Any]]) ?? []
+        if icons.isEmpty, let g = b["gear"] { icons = [["act": "settings", "icon": "settings", "rect": g, "label": "설정"]] } // 예전 웹
+        var seen = Set<String>()
+        for it in icons {
+            guard let act = it["act"] as? String, let r = Self.rect(it["rect"]) else { continue }
+            seen.insert(act)
+            let btn: UIButton
+            if let e = iconBtns[act] { btn = e } else {
+                btn = UIButton(type: .system)
+                btn.addAction(UIAction { [weak self] _ in self?.onTap?(act) }, for: .touchUpInside)
+                addSubview(btn)
+                iconBtns[act] = btn
+            }
+            btn.accessibilityLabel = it["label"] as? String
+            btn.isHidden = false
+            btn.frame = r
+            let img = Self.icon(it["icon"] as? String ?? act, 24)
             if #available(iOS 26.0, *) {
                 var cfg = UIButton.Configuration.glass()
-                cfg.image = Self.icon("settings", 24)
+                cfg.image = img
                 cfg.baseForegroundColor = iconColor
                 cfg.cornerStyle = .capsule
-                gear.configuration = cfg
+                btn.configuration = cfg
             } else {
                 var cfg = UIButton.Configuration.plain()
-                cfg.image = Self.icon("settings", 24)
+                cfg.image = img
                 cfg.baseForegroundColor = iconColor
-                gear.configuration = cfg
+                btn.configuration = cfg
             }
-        } else { gear.isHidden = true }
+        }
+        for (act, btn) in iconBtns where !seen.contains(act) { btn.isHidden = true }
         let was = isHidden
         isHidden = false
         select((list.first { ($0["on"] as? Bool) == true }?["act"] as? String) ?? "", animated: !was && !active.isEmpty)

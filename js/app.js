@@ -60,6 +60,7 @@ function modal(html, bind) {
 // 자리·글자·색을 앱에 보내고, 앱에서 누르면 같은 웹 버튼을 대신 눌러요 (화면마다 하던 일 그대로).
 const nativeTop = !!window.webkit?.messageHandlers?.lumenibTopBar;
 document.documentElement.classList.toggle('native-top', nativeTop);
+document.documentElement.classList.toggle('native-icons', !!window.webkit?.messageHandlers?.lumenibTopIcons); // 노트 쓰기 · 검색까지 앱이 그리는 빌드 (47~)
 let topRaf = 0, topLast = '';
 function syncTopBar() { if (!nativeTop || topRaf) return; topRaf = setTimeout(() => { topRaf = 0; sendTopBar(); }, 16); } // 여러 번 불려도 한 번만
 function sendTopBar() {
@@ -74,6 +75,8 @@ function sendTopBar() {
     const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
     m = {
       show: true, box: R(tabs), gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
+      // 오른쪽 아이콘 버튼 전부 (노트 쓰기 · 검색 · 설정): 앱이 같은 유리 버튼으로 그려요 (11/26)
+      icons: [...nav.querySelectorAll('.gear[data-act]')].map((b) => ({ act: b.dataset.act, label: b.getAttribute('aria-label') || '', icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', rect: R(b) })),
       colors: { primary: v('--text-primary'), secondary: v('--text-secondary'), icon: v('--icon-primary'), pill: v('--bg-tab-active') },
       tabs: [...tabs.querySelectorAll('.home-tab')].map((b) => ({ act: b.dataset.act, label: b.textContent.trim(), icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', on: b.classList.contains('on'), rect: R(b) })),
     };

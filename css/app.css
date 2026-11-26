@@ -1099,6 +1099,7 @@ button.st-row:active { background: var(--bg-hover); }
 
 /* 위 탭 바·설정 버튼을 앱이 그릴 때(.native-top): 웹 것은 자리만 지키고 안 보여요 (11/26) */
 .native-top .home-nav .home-tabs, .native-top .home-nav [data-act="settings"] { visibility: hidden; }
+.native-icons .home-nav .gear { visibility: hidden; } /* 47~ 빌드: 노트 쓰기 · 검색 · 설정 모두 앱이 그려요 (46까지는 설정만) */
 
 /* 세그먼트 컨트롤 = 피그마 Segmented Control: 바탕 bg/segmented, 고른 칸 bg/default + border/card (11/26) */
 .nl-seg { background: var(--bg-segmented); }
