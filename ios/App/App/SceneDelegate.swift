@@ -1140,7 +1140,11 @@ final class NativeTopBar: UIView {
             }, for: .touchDown)
             mb.onShown = { [weak self, weak mb] open in
                 self?.onMenuShown?(act, open)
-                if !open { mb?.setBackgroundImage(nil, for: .normal) }
+                if !open {
+                    mb?.setBackgroundImage(nil, for: .normal)
+                    // 고른 항목은 메뉴가 단추로 다 접힌 뒤에 알려요. 먼저 바꾸면 접히는 동안 단추 글자가 바뀌어 어긋나 보였어요 (11/27 영상)
+                    if let id = mb?.pending { mb?.pending = nil; self?.onMenu?(id) }
+                }
             }
             btn = mb
             addSubview(btn)
@@ -1153,7 +1157,9 @@ final class NativeTopBar: UIView {
         btn.menu = UIMenu(children: items.map { m in
             let id = m["id"] as? String ?? ""
             let img = (m["sf"] as? String).flatMap { UIImage(systemName: $0) }
-            let a = UIAction(title: m["title"] as? String ?? "", image: img) { [weak self] _ in self?.onMenu?(id) }
+            let a = UIAction(title: m["title"] as? String ?? "", image: img) { [weak self, weak btn] _ in
+                if let mb = btn as? MenuButton { mb.pending = id } else { self?.onMenu?(id) }
+            }
             if (m["on"] as? Bool) == true { a.state = .on } // 지금 고른 항목 체크 (51~)
             return a
         })
@@ -1273,6 +1279,7 @@ extension PencilBridgeViewController: PHPickerViewControllerDelegate, UIImagePic
 // 웹 단추 위에 얹는 iPad 기본 메뉴 단추: 메뉴가 열리고 닫히는 때를 알려요 (11/27)
 final class MenuButton: UIButton {
     var onShown: ((Bool) -> Void)?
+    var pending: String? // 메뉴에서 고른 항목 (다 접힌 뒤에 알려요)
     override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
         super.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: animator)
         onShown?(true)
