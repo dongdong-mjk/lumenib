@@ -10,6 +10,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
+        // iPadOS 26부터는 '전체 화면 전용'(UIRequiresFullScreen)을 무시하고 창 크기를 줄일 수 있어요.
+        // 막을 수는 없어서, 레이아웃이 깨지지 않는 최소 크기를 정해 그보다 작게는 못 줄이게 해요 (가장 작은 iPad mini 가로 1133×744 안쪽, 58~)
+        windowScene.sizeRestrictions?.minimumSize = CGSize(width: 1024, height: 700)
 
         window = InkWindow(windowScene: windowScene)
         window?.rootViewController = PencilBridgeViewController()
