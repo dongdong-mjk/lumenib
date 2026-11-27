@@ -1083,7 +1083,7 @@ final class NativeTopBar: UIView {
                 cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 18)
                 cfg.titleLineBreakMode = .byClipping
                 cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
-                    var a = a; a.font = UIFont.systemFont(ofSize: 17, weight: .semibold); return a // 피그마 iPad 내비 글자 17 (11/27)
+                    var a = a; a.font = UIFont.systemFont(ofSize: 16, weight: .semibold); return a // 피그마 iPad 내비 글자 16 (11/27 다시)
                 }
                 btn.configuration = cfg
                 btn.accessibilityLabel = t["label"] as? String

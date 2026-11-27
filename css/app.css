@@ -1163,3 +1163,15 @@ button.st-row:active { background: var(--bg-hover); }
 .home-nav .gear.nav-search, .notes .home-nav .gear.nav-search, .bookmarks .home-nav .gear.nav-search { right: 68px; }
 .home-nav .gear.nav-write.with-search, .notes .home-nav .gear.nav-write.with-search { right: 112px; }
 .native-top .home-nav, .native-top .notes .home-nav { --gx: 10px; }
+
+/* ===== 버튼 상태 = 피그마 Button · Icon Button (11/27): hover = 글자색 8%, 누름 = 16% 겹 (바탕색은 그대로, 위에 반투명 한 겹)
+   검은 바탕(primary) 버튼은 text/on-primary로. 마우스가 있는 기기에서만 hover ===== */
+.btn, .icon-btn, .pill-back, .nl-btn, .nl-dd, .bt-btn, .st-btn, .ns-cancel, .ns-clearall { --sl: var(--text-primary); }
+.btn-primary, .nl-btn.primary, .bt-btn.primary, .st-btn.primary, .ob-lg.apple { --sl: var(--text-on-primary); }
+.ob-lg.kakao { --sl: #000; }
+.btn:active { opacity: 1; } /* 예전 눌림(흐려짐) 대신 상태 겹 */
+.icon-btn:active, .pill-back:active { background: none; }
+@media (hover: hover) {
+  :is(.btn, .icon-btn, .pill-back, .nl-btn, .nl-dd, .bt-btn, .st-btn, .ns-cancel, .ns-clearall):hover:not(:disabled):not(.busy) { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--sl) 8%, transparent); }
+}
+:is(.btn, .icon-btn, .pill-back, .nl-btn, .nl-dd, .bt-btn, .st-btn, .ns-cancel, .ns-clearall):active:not(:disabled):not(.busy) { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--sl) 16%, transparent); }
