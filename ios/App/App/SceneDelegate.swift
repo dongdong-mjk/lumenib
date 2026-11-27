@@ -3,6 +3,7 @@ import WebKit
 import Capacitor
 import AuthenticationServices
 import CryptoKit
+import PhotosUI
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -70,10 +71,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibTopIcons") // 노트 쓰기 · 검색 버튼도 앱이 그려요 (47~)
         webView?.configuration.userContentController.add(self, name: "lumenibGlass") // 노트 쓰기 · 본문 고르기 위 버튼(뒤로 · 사이드바 · 완료 · 〈 홈)도 유리로 (48~)
         webView?.configuration.userContentController.add(self, name: "lumenibSearchField") // 검색 줄 글자 칸도 앱이 (49~)
+        webView?.configuration.userContentController.add(self, name: "lumenibMenu") // 웹 단추에 iPad 기본 메뉴 · 사진 고르기도 iPad 기본 창 (50~)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             topBar.onTap = { [weak self] act in self?.js("window.lumenibTopBar && window.lumenibTopBar('\(act)')") }
+            topBar.onMenu = { [weak self] id in self?.menuPicked(id) }
             topBar.onSearch = { [weak self] text, submit in
                 guard let data = try? JSONSerialization.data(withJSONObject: [text]), let arr = String(data: data, encoding: .utf8) else { return }
                 self?.js("window.lumenibSearchInput && window.lumenibSearchInput(\(arr)[0], \(submit))")
@@ -957,6 +960,7 @@ extension PencilBridgeViewController: ASWebAuthenticationPresentationContextProv
 final class NativeTopBar: UIView {
     var onTap: ((String) -> Void)?
     var onSearch: ((String, Bool) -> Void)? // 검색창 글자 (입력 중 / 검색 누름)
+    var onMenu: ((String) -> Void)? // iPad 기본 메뉴에서 고른 항목
     private var searchBox: UIView?
     private var searchField: UITextField?
     private let tabsBox = UIView()
@@ -1075,6 +1079,7 @@ final class NativeTopBar: UIView {
             guard let act = it["act"] as? String, let r = Self.rect(it["rect"]) else { continue }
             if (it["kind"] as? String) == "field" { hasField = true; showSearchField(it, r); continue }
             seen.insert(act)
+            if (it["kind"] as? String) == "menu" { showMenuButton(act, it, r); continue }
             let btn: UIButton
             if let e = iconBtns[act] { btn = e } else {
                 btn = UIButton(type: .system)
@@ -1109,6 +1114,27 @@ final class NativeTopBar: UIView {
         isHidden = false
         if box.width <= 0 { pill.isHidden = true; active = ""; return }
         select((list.first { ($0["on"] as? Bool) == true }?["act"] as? String) ?? "", animated: !was && !active.isEmpty)
+    }
+
+    // 웹 단추 자리에 투명한 단추를 얹고, 누르면 iPad 기본 메뉴(UIMenu)가 떠요. 웹 단추 모양은 그대로 보여요 (11/27)
+    private func showMenuButton(_ act: String, _ it: [String: Any], _ r: CGRect) {
+        let btn: UIButton
+        if let e = iconBtns[act] { btn = e } else {
+            btn = UIButton(type: .custom)
+            btn.backgroundColor = .clear
+            btn.showsMenuAsPrimaryAction = true
+            addSubview(btn)
+            iconBtns[act] = btn
+        }
+        btn.isHidden = false
+        btn.frame = r
+        btn.accessibilityLabel = it["label"] as? String
+        let items = (it["items"] as? [[String: Any]]) ?? []
+        btn.menu = UIMenu(children: items.map { m in
+            let id = m["id"] as? String ?? ""
+            let img = (m["sf"] as? String).flatMap { UIImage(systemName: $0) }
+            return UIAction(title: m["title"] as? String ?? "", image: img) { [weak self] _ in self?.onMenu?(id) }
+        })
     }
 
     // 검색 줄 (피그마 Top Bar · 검색 iOS, 11/26): 유리 캡슐 안에 iPad 기본 글자 칸. 글자는 웹에 넘겨 결과를 그려요
@@ -1165,5 +1191,58 @@ final class NativeTopBar: UIView {
         let place = { self.pill.frame = f; if #unavailable(iOS 26.0) { self.pill.layer.cornerRadius = f.height / 2 } }
         if pill.isHidden || !animated || !changed { pill.isHidden = false; UIView.performWithoutAnimation(place); return }
         UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.78, initialSpringVelocity: 0.4, options: [.allowUserInteraction, .beginFromCurrentState], animations: place)
+    }
+}
+
+
+// MARK: - iPad 기본 메뉴에서 고른 것 · 사진 고르기 (11/27)
+// 사진 바꾸기: 보관함은 iPad 기본 사진 고르기 창(PHPicker), 사진 찍기는 기본 카메라. 고른 사진은 정사각형 512 JPEG로 웹에 넘겨요
+extension PencilBridgeViewController: PHPickerViewControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func menuPicked(_ id: String) {
+        switch id {
+        case "photo-lib":
+            var cfg = PHPickerConfiguration(photoLibrary: .shared())
+            cfg.filter = .images; cfg.selectionLimit = 1
+            let vc = PHPickerViewController(configuration: cfg)
+            vc.delegate = self
+            present(vc, animated: true)
+        case "photo-cam":
+            guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
+            let vc = UIImagePickerController()
+            vc.sourceType = .camera; vc.cameraDevice = .front; vc.delegate = self
+            vc.modalPresentationStyle = .fullScreen
+            present(vc, animated: true)
+        default:
+            js("window.lumenibMenuPick && window.lumenibMenuPick('\(id)')")
+        }
+    }
+
+    public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let p = results.first?.itemProvider, p.canLoadObject(ofClass: UIImage.self) else { return }
+        js("window.lumenibPhotoBusy && window.lumenibPhotoBusy()")
+        p.loadObject(ofClass: UIImage.self) { [weak self] obj, _ in
+            guard let img = obj as? UIImage else { return }
+            DispatchQueue.main.async { self?.sendPhoto(img) }
+        }
+    }
+
+    public func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+        if let img = info[.originalImage] as? UIImage { sendPhoto(img) }
+    }
+    public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { picker.dismiss(animated: true) }
+
+    private func sendPhoto(_ img: UIImage) {
+        let n: CGFloat = 512
+        let w = img.size.width, h = img.size.height, side = min(w, h)
+        guard side > 0 else { return }
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        let out = UIGraphicsImageRenderer(size: CGSize(width: n, height: n), format: fmt).image { _ in
+            let k = n / side
+            img.draw(in: CGRect(x: -(w - side) / 2 * k, y: -(h - side) / 2 * k, width: w * k, height: h * k))
+        }
+        guard let data = out.jpegData(compressionQuality: 0.85) else { return }
+        js("window.lumenibPhoto && window.lumenibPhoto('data:image/jpeg;base64,\(data.base64EncodedString())')")
     }
 }

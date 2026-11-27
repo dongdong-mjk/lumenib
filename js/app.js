@@ -73,7 +73,7 @@ function sendTopBar() {
   // 바텀시트·확인 창이 떠 있으면 앱 탭 바도 숨겨요 (어두운 막 위에 버튼이 뜨지 않게)
   const splash = document.getElementById('splash');
   const splashOn = splash && !splash.classList.contains('hide');
-  const glass = nativeGlass ? [...app.querySelectorAll('[data-glass]')].filter((b) => b.getClientRects().length) : [];
+  const glass = nativeGlass ? [...app.querySelectorAll('[data-glass], [data-native-menu]')].filter((b) => b.getClientRects().length) : [];
   if (!splashOn && !overlay.firstElementChild && ((nav && tabs && R(tabs)[2] > 0) || glass.length)) {
     const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
     m = {
@@ -81,6 +81,10 @@ function sendTopBar() {
       // 오른쪽 아이콘 버튼 전부 (노트 쓰기 · 검색 · 설정): 앱이 같은 유리 버튼으로 그려요 (11/26)
       icons: nativeGlass ? glass.map((b) => {
         const text = b.dataset.glassText ?? (b.querySelector('.nav-ico, svg') && !b.dataset.glassIcon?.startsWith('cl') ? '' : b.textContent.trim());
+        if (b.dataset.nativeMenu) { // 웹 단추 위 iPad 기본 메뉴 (50~)
+          let items = []; try { items = JSON.parse(b.dataset.nativeMenu); } catch {}
+          return { act: b.dataset.menuId || 'menu', kind: 'menu', label: b.textContent.trim(), items, rect: R(b) };
+        }
         if (b.dataset.glassKind === 'field') { // 검색 줄 글자 칸: 앱이 유리 캡슐 + 기본 글자 칸으로 (49~)
           const inp = b.querySelector('input'), cs2 = getComputedStyle(document.documentElement);
           return { act: b.dataset.glass, kind: 'field', placeholder: inp.placeholder, value: inp.value, focus: !inp.value, phColor: cs2.getPropertyValue('--text-tertiary').trim(), iconColor: cs2.getPropertyValue('--icon-secondary').trim(), rect: R(b) };
@@ -840,8 +844,9 @@ function SettingsScreen(arg = {}) {
       const u = C.currentUser();
       if (!u) { st.page = 'account'; return pages.account(); }
       const cam = !C.isNativeApp() || !!window.webkit?.messageHandlers?.lumenibCamera; // 앱은 카메라 권한이 들어간 빌드(43~)부터
+      const nativeMenu = nativeGlass && !!window.webkit?.messageHandlers?.lumenibMenu; // 앱이 iPad 기본 메뉴 · 사진 고르기 창을 띄워요 (50~)
       return `<section class="st-group"><div class="st-card st-profile">${avatarHTML('lg')}<span class="st-rt"><span class="st-pname">${esc(C.displayName())}</span><span class="st-rts">${esc(C.providerName() || '')} 계정으로 로그인했어요</span></span>
-          <div class="st-photo"><button class="st-btn primary" data-act="photo">사진 바꾸기</button>
+          <div class="st-photo"><button class="st-btn primary" data-act="photo"${nativeMenu ? ` data-menu-id="photo" data-native-menu="${esc(JSON.stringify([{ id: 'photo-lib', title: '사진 보관함에서 고르기', sf: 'photo.on.rectangle' }, ...(cam ? [{ id: 'photo-cam', title: '사진 찍기', sf: 'camera' }] : []), ...(C.hasCustomAvatar() ? [{ id: 'photo-reset', title: '기본 이미지로 되돌리기', sf: 'arrow.uturn.backward' }] : [])]))}"` : ''}>사진 바꾸기</button>
           ${st.photoMenu ? `<div class="nl-menu st-photo-menu force-light"><button class="nl-mi" data-act="photo-lib">사진 보관함에서 고르기</button>${cam ? '<button class="nl-mi" data-act="photo-cam">사진 찍기</button>' : ''}${C.hasCustomAvatar() ? '<button class="nl-mi" data-act="photo-reset">기본 이미지로 되돌리기</button>' : ''}</div>` : ''}</div></div>
         <input type="file" accept="image/*" data-f="lib" hidden><input type="file" accept="image/*" capture="user" data-f="cam" hidden>
 </section>
@@ -970,6 +975,15 @@ function SettingsScreen(arg = {}) {
     app.querySelectorAll('input[data-f]').forEach((inp) => inp.addEventListener('change', () => pick(inp)));
     on('photo-lib', () => app.querySelector('input[data-f="lib"]').click());
     on('photo-cam', () => app.querySelector('input[data-f="cam"]').click());
+    // 앱(50~): iPad 기본 메뉴에서 고른 항목 · 기본 사진 창에서 고른 사진
+    window.lumenibMenuPick = (id) => { if (id === 'photo-reset') app.querySelector('[data-act="photo"]') && resetPhoto(); };
+    window.lumenibPhotoBusy = () => toast('사진을 올리는 중이에요');
+    window.lumenibPhoto = async (dataUrl) => {
+      try { const blob = await (await fetch(dataUrl)).blob(); await C.setAvatar(blob); track('avatar_set'); toast('사진을 바꿨어요'); }
+      catch (e) { console.warn(e); toast('사진을 바꾸지 못했어요. 인터넷 연결을 확인해 주세요', 3000); }
+      render();
+    };
+    const resetPhoto = async () => { st.photoMenu = false; try { await C.clearAvatar(); toast('기본 이미지로 되돌렸어요'); } catch (e) { console.warn(e); toast('되돌리지 못했어요', 2600); } render(); };
     on('photo-reset', async () => { st.photoMenu = false; try { await C.clearAvatar(); toast('기본 이미지로 되돌렸어요'); } catch (e) { console.warn(e); toast('되돌리지 못했어요', 2600); } render(); });
     if (st.page === 'help') ['ob2', 'ob3', 'ob4'].forEach(loadObArt); // 처음 안내 다시 보기 전에 미리
   }
