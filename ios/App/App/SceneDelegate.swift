@@ -99,11 +99,15 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibMenuButton") // 메뉴 단추 자체를 앱이 그려요 (55~)
         // 설정 화면에 보이는 버전: 앱이 실제 버전·빌드 번호를 알려줘요 (예전엔 웹에 1.0 (40)으로 고정, 56~)
         let ver = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") + " (" + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") + ")"
-        webView?.configuration.userContentController.addUserScript(WKUserScript(source: "window.__lumenibVersion = '\(ver)'; window.__lumenibDim = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        webView?.evaluateJavaScript("window.__lumenibVersion = '\(ver)'; window.__lumenibDim = true;", completionHandler: nil)
+        webView?.configuration.userContentController.addUserScript(WKUserScript(source: "window.__lumenibVersion = '\(ver)'; window.__lumenibDim = true; window.__lumenibCtl = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        webView?.evaluateJavaScript("window.__lumenibVersion = '\(ver)'; window.__lumenibDim = true; window.__lumenibCtl = true;", completionHandler: nil)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            topBar.onCtl = { [weak self] act, val in
+                let id = act.hasPrefix("ctl:") ? String(act.dropFirst(4)) : act
+                self?.js("window.lumenibCtl && window.lumenibCtl('\(id)', \(val))")
+            }
             topBar.onDimTap = { [weak self] in self?.js("window.lumenibDimTap && window.lumenibDimTap()") }
             topBar.onTap = { [weak self] act in self?.js("window.lumenibTopBar && window.lumenibTopBar('\(act)')") }
             topBar.onMenu = { [weak self] id in self?.menuPicked(id) }
@@ -1010,6 +1014,10 @@ final class NativeTopBar: UIView {
     private var primary = UIColor.label, secondary = UIColor.secondaryLabel, iconColor = UIColor.label
     private var lastKey = ""
     var onDimTap: (() -> Void)?
+    var onCtl: ((String, Int) -> Void)? // 토글·세그먼트를 바꿨을 때 (68~)
+    // 설정 토글 · 노트/북마크 세그먼트: iPad 기본 컨트롤 (box = 스크롤 칸 크기로 자르는 틀, cap = 어두운 막이 뜰 때 컨트롤 위 같은 막)
+    private var ctls: [String: (box: UIView, ctl: UIControl, cap: UIView)] = [:]
+    private var dimColor: UIColor?
     // 바텀시트·확인 창이 떠 있을 때 헤더 위에 덮는 어두운 막 (웹 막과 같은 색, 누르면 웹 막을 누른 것처럼 닫혀요, 66~)
     private let dimView = UIView()
 
@@ -1037,20 +1045,23 @@ final class NativeTopBar: UIView {
         bringSubviewToFront(dimView)
         guard let c = Self.cssColor(css), h > 0 else {
             guard !dimView.isHidden else { return }
+            dimColor = nil
             if fade { // 웹 막이 흐려지며 닫히는 것과 같이 (CSS ease 0.15초)
-                let a = UIViewPropertyAnimator(duration: 0.15, controlPoint1: CGPoint(x: 0.25, y: 0.1), controlPoint2: CGPoint(x: 0.25, y: 1)) { self.dimView.alpha = 0 }
-                a.addCompletion { _ in if self.dimView.alpha == 0 { self.dimView.isHidden = true } }
+                let a = UIViewPropertyAnimator(duration: 0.15, controlPoint1: CGPoint(x: 0.25, y: 0.1), controlPoint2: CGPoint(x: 0.25, y: 1)) { self.dimView.alpha = 0; self.ctls.values.forEach { $0.cap.alpha = 0 } }
+                a.addCompletion { _ in if self.dimView.alpha == 0 { self.dimView.isHidden = true; self.ctls.values.forEach { $0.cap.isHidden = true } } }
                 a.startAnimation()
-            } else { dimView.isHidden = true; dimView.alpha = 0 }
+            } else { dimView.isHidden = true; dimView.alpha = 0; ctls.values.forEach { $0.cap.isHidden = true; $0.cap.alpha = 0 } }
             return
         }
         dimView.backgroundColor = c
+        dimColor = c
+        for e in ctls.values { e.cap.backgroundColor = c; if e.cap.isHidden { e.cap.alpha = dimView.isHidden ? 0 : dimView.alpha; e.cap.isHidden = false } }
         dimView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: h)
         dimView.autoresizingMask = [.flexibleWidth]
         if dimView.isHidden || dimView.alpha < 1 { // 닫히며 흐려지는 중에 다시 열려도 다시 진해지게
             if dimView.isHidden { dimView.alpha = 0; dimView.isHidden = false }
             // 웹 막과 같은 곡선·시간 (CSS fade .15s ease)
-            UIViewPropertyAnimator(duration: 0.15, controlPoint1: CGPoint(x: 0.25, y: 0.1), controlPoint2: CGPoint(x: 0.25, y: 1)) { self.dimView.alpha = 1 }.startAnimation()
+            UIViewPropertyAnimator(duration: 0.15, controlPoint1: CGPoint(x: 0.25, y: 0.1), controlPoint2: CGPoint(x: 0.25, y: 1)) { self.dimView.alpha = 1; self.ctls.values.forEach { $0.cap.alpha = 1 } }.startAnimation()
         }
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -1058,7 +1069,9 @@ final class NativeTopBar: UIView {
     // 버튼이 없는 곳은 웹이 그대로 받아요
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let v = super.hitTest(point, with: event)
-        return (v === self || v === tabsBox) ? nil : v
+        if v === self || v === tabsBox { return nil }
+        if let v, ctls.values.contains(where: { $0.box === v }) { return nil } // 컨트롤 밖 빈 곳은 웹이 받아요
+        return v
     }
 
     static func icon(_ name: String, _ size: CGFloat) -> UIImage? { icon(name, CGSize(width: size, height: size)) }
@@ -1148,6 +1161,7 @@ final class NativeTopBar: UIView {
             guard let act = it["act"] as? String, let r = Self.rect(it["rect"]) else { continue }
             if (it["kind"] as? String) == "field" { hasField = true; showSearchField(it, r); continue }
             seen.insert(act)
+            if let k = it["kind"] as? String, k == "switch" || k == "segment" { showCtl(act, k, it, r); continue }
             if (it["kind"] as? String) == "menu" { if it["style"] != nil { seen.insert("styled:" + act) }; showMenuButton(act, it, r); continue }
             let btn: UIButton
             if let e = iconBtns[act] { btn = e } else {
@@ -1179,11 +1193,70 @@ final class NativeTopBar: UIView {
             btn.configuration = cfg
         }
         for (act, btn) in iconBtns where !seen.contains(act) { btn.isHidden = true }
+        for (act, e) in ctls where !seen.contains(act) { e.box.removeFromSuperview(); ctls[act] = nil }
         if !hasField { searchField?.resignFirstResponder(); searchBox?.removeFromSuperview(); searchBox = nil; searchField = nil }
         let was = isHidden
         isHidden = false
         if box.width <= 0 { pill.isHidden = true; active = ""; return }
         select((list.first { ($0["on"] as? Bool) == true }?["act"] as? String) ?? "", animated: !was && !active.isEmpty)
+    }
+
+    // 웹 토글·세그먼트 자리에 iPad 기본 UISwitch · UISegmentedControl (68~, 11/28 민정님)
+    private func showCtl(_ act: String, _ kind: String, _ it: [String: Any], _ r: CGRect) {
+        if let e = ctls[act], (kind == "switch") != (e.ctl is UISwitch) { e.box.removeFromSuperview(); ctls[act] = nil }
+        if ctls[act] == nil {
+            let box = UIView(); box.clipsToBounds = true
+            let ctl: UIControl
+            if kind == "switch" {
+                let sw = UISwitch()
+                sw.addAction(UIAction { [weak self, weak sw] _ in self?.onCtl?(act, (sw?.isOn ?? false) ? 1 : 0) }, for: .valueChanged)
+                ctl = sw
+            } else {
+                let sg = UISegmentedControl()
+                sg.addAction(UIAction { [weak self, weak sg] _ in self?.onCtl?(act, sg?.selectedSegmentIndex ?? 0) }, for: .valueChanged)
+                ctl = sg
+            }
+            let cap = UIView(); cap.isUserInteractionEnabled = false; cap.isHidden = true; cap.alpha = 0
+            box.addSubview(ctl); box.addSubview(cap)
+            insertSubview(box, belowSubview: dimView)
+            ctls[act] = (box, ctl, cap)
+        }
+        guard let e = ctls[act] else { return }
+        let clip = Self.rect(it["clip"]) ?? bounds
+        e.box.frame = clip
+        let f = r.offsetBy(dx: -clip.minX, dy: -clip.minY)
+        if let sw = e.ctl as? UISwitch {
+            sw.onTintColor = Self.cssColor(it["onColor"] as? String)
+            sw.thumbTintColor = Self.cssColor(it["thumb"] as? String)
+            let on = (it["on"] as? Bool) ?? false
+            if sw.isOn != on { sw.setOn(on, animated: true) }
+            sw.sizeToFit()
+            sw.center = CGPoint(x: f.midX, y: f.midY)
+        } else if let sg = e.ctl as? UISegmentedControl {
+            let items = it["items"] as? [String] ?? []
+            if (0..<sg.numberOfSegments).map({ sg.titleForSegment(at: $0) ?? "" }) != items {
+                sg.removeAllSegments()
+                for (i, t) in items.enumerated() { sg.insertSegment(withTitle: t, at: i, animated: false) }
+            }
+            let sel = (it["sel"] as? NSNumber)?.intValue ?? -1
+            if sg.selectedSegmentIndex != sel { sg.selectedSegmentIndex = sel < 0 ? UISegmentedControl.noSegment : sel }
+            let enabled = (it["enabled"] as? Bool) ?? true
+            sg.isEnabled = enabled
+            sg.alpha = enabled ? 1 : 0.4
+            let fs = CGFloat((it["fs"] as? NSNumber)?.doubleValue ?? 15)
+            var normal: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: fs, weight: .regular)]
+            var selected: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: fs, weight: .semibold)]
+            if let c = Self.cssColor(it["fg"] as? String) { normal[.foregroundColor] = c }
+            if let c = Self.cssColor(it["selFg"] as? String) { selected[.foregroundColor] = c }
+            sg.setTitleTextAttributes(normal, for: .normal)
+            sg.setTitleTextAttributes(selected, for: .selected)
+            sg.frame = f
+        }
+        // 어두운 막이 떠 있으면 컨트롤 위에도 같은 막 (컨트롤 모양대로 둥글게)
+        let cf = e.ctl.frame
+        e.cap.frame = cf
+        e.cap.layer.cornerRadius = cf.height / 2
+        if let c = dimColor { e.cap.backgroundColor = c; e.cap.isHidden = false; e.cap.alpha = dimView.alpha }
     }
 
     // 웹 단추 자리에 투명한 단추를 얹고, 누르면 iPad 기본 메뉴(UIMenu)가 떠요. 웹 단추 모양은 그대로 보여요 (11/27)

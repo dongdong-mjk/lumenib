@@ -69,8 +69,35 @@ document.documentElement.classList.toggle('native-top', nativeTop);
 document.documentElement.classList.toggle('native-icons', !!window.webkit?.messageHandlers?.lumenibTopIcons); // 노트 쓰기 · 검색까지 앱이 그리는 빌드 (47~)
 const nativeGlass = !!window.webkit?.messageHandlers?.lumenibGlass; // 노트 쓰기 · 본문 고르기 위 버튼도 앱 유리 버튼 (48~)
 document.documentElement.classList.toggle('native-glass', nativeGlass);
+// 68~: 토글·세그먼트 컨트롤도 앱이 iPad 기본 컨트롤로 그려요 (웹 것은 자리만 지키고 숨김, 11/28 민정님)
+const nativeCtl = nativeGlass && !!window.__lumenibCtl;
+document.documentElement.classList.toggle('native-ctl', nativeCtl);
+if (nativeCtl) document.addEventListener('scroll', () => syncTopBar(), true); // 설정 목록이 스크롤되면 자리 다시 보내요
 let topRaf = 0, topLast = '';
 function syncTopBar() { if (!nativeTop || topRaf) return; topRaf = setTimeout(() => { topRaf = 0; sendTopBar(); }, 16); } // 여러 번 불려도 한 번만
+// 앱이 그릴 토글·세그먼트: 자리 + 상태 + 색. 스크롤 칸 밖으로 나간 부분은 앱도 잘라요(clip)
+function nativeCtlList(R) {
+  if (!nativeCtl) return [];
+  const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
+  return [...app.querySelectorAll('[data-ctl]')].filter((el) => el.getClientRects().length).map((el) => {
+    const sc = el.closest('.st-scroll');
+    const clip = sc ? R(sc) : null;
+    const base = { act: 'ctl:' + el.dataset.ctl, rect: R(el), clip };
+    if (el.classList.contains('st-toggle')) {
+      return { ...base, kind: 'switch', on: el.classList.contains('on'), onColor: v('--action-primary'), offColor: v('--border-default'), thumb: document.documentElement.dataset.theme === 'dark' ? v('--bg-panel') : '#ffffff' };
+    }
+    const btns = [...el.querySelectorAll('button')];
+    const on = btns.find((b) => b.classList.contains('on')), c = on ? getComputedStyle(on) : null, c2 = btns[0] ? getComputedStyle(btns.find((b) => b !== on) || btns[0]) : null;
+    return { ...base, kind: 'segment', items: btns.map((b) => b.textContent.trim()), sel: btns.indexOf(on), enabled: !el.classList.contains('off'),
+      bg: getComputedStyle(el).backgroundColor, selBg: c?.backgroundColor || '', selBorder: c?.borderTopColor || '', fg: c2?.color || '', selFg: c?.color || '', fs: parseFloat(c?.fontSize || 15) };
+  });
+}
+window.lumenibCtl = (act, val) => { // 앱 컨트롤을 바꾸면 같은 웹 단추를 눌러요
+  const el = app.querySelector(`[data-ctl="${act}"]`);
+  if (!el) return;
+  if (el.classList.contains('st-toggle')) { if (el.classList.contains('on') !== !!val) el.closest('.st-row')?.click(); return; }
+  el.querySelectorAll('button')[val]?.click();
+};
 function sendTopBar() {
   const nav = app.querySelector('.home-nav'), tabs = nav?.querySelector('.home-tabs');
   const gear = nav?.querySelector('[data-act="settings"]');
@@ -113,7 +140,7 @@ function sendTopBar() {
           return { act: b.dataset.glass, kind: 'field', placeholder: inp.placeholder, value: inp.value, focus: !inp.value, phColor: cs2.getPropertyValue('--text-tertiary').trim(), iconColor: cs2.getPropertyValue('--icon-secondary').trim(), rect: R(b) };
         }
         return { act: b.dataset.glass, label: b.getAttribute('aria-label') || text, icon: b.dataset.glassIcon || (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', text, iw: +b.dataset.glassIw || undefined, ih: +b.dataset.glassIh || undefined, rect: R(b) };
-      }) : [...(nav?.querySelectorAll('.gear[data-act]') || [])].map((b) => ({ act: b.dataset.act, label: b.getAttribute('aria-label') || '', icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', rect: R(b) })),
+      }).concat(nativeCtlList(R)) : [...(nav?.querySelectorAll('.gear[data-act]') || [])].map((b) => ({ act: b.dataset.act, label: b.getAttribute('aria-label') || '', icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', rect: R(b) })),
       colors: { primary: v('--text-primary'), secondary: v('--text-secondary'), icon: v('--icon-primary'), pill: v('--bg-tab-active') },
       tabs: [...(tabs?.querySelectorAll('.home-tab') || [])].map((b) => ({ act: b.dataset.act, label: b.textContent.trim(), icon: (b.querySelector('.nav-ico')?.className.match(/ni-([a-z]+)/) || [])[1] || '', on: b.classList.contains('on'), rect: R(b) })),
     };
@@ -509,7 +536,7 @@ function NotesScreen() {
         ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>`}
       </div>
       <div class="nl-controls">
-        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist">
+        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist" data-ctl="view">
           <button class="${st.view === 'date' ? 'on' : ''}" data-view="date">날짜별</button>
           <button class="${st.view === 'passage' ? 'on' : ''}" data-view="passage">본문별</button>
         </div>
@@ -697,7 +724,7 @@ function BookmarksScreen() {
         ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">북마크<span class="nl-count">${list.length}</span></h1>`}
       </div>
       <div class="nl-controls">
-        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist">
+        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist" data-ctl="view">
           <button class="${st.view === 'date' ? 'on' : ''}" data-view="date">날짜별</button>
           <button class="${st.view === 'passage' ? 'on' : ''}" data-view="passage">본문별</button>
         </div>
@@ -829,7 +856,7 @@ function syncLine() {
 const stRow = ({ act = '', title, sub = '', value = '', chev = false, toggle = null, btn = '', btnAct = '', primary = false, cls = '' }) => `
   <${act || toggle !== null ? 'button' : 'div'} class="st-row ${cls}"${act ? ` data-act="${act}"` : ''}${toggle !== null ? ` role="switch" aria-checked="${toggle}"` : ''}>
     <span class="st-rt"><span class="st-rtt">${title}</span>${sub ? `<span class="st-rts">${sub}</span>` : ''}</span>
-    <span class="st-tr">${btn ? `<span class="st-btn${primary ? ' primary' : ''}" data-act="${btnAct}">${btn}</span>` : ''}${value ? `<span class="st-val">${value}</span>` : ''}${chev ? ST_CHEV : ''}${toggle !== null ? `<span class="st-toggle${toggle ? ' on' : ''}"><i></i></span>` : ''}</span>
+    <span class="st-tr">${btn ? `<span class="st-btn${primary ? ' primary' : ''}" data-act="${btnAct}">${btn}</span>` : ''}${value ? `<span class="st-val">${value}</span>` : ''}${chev ? ST_CHEV : ''}${toggle !== null ? `<span class="st-toggle${toggle ? ' on' : ''}"${act ? ` data-ctl="${act}"` : ''}><i></i></span>` : ''}</span>
   </${act || toggle !== null ? 'button' : 'div'}>`;
 const stGroup = (title, rows) => `<section class="st-group">${title ? `<h4>${title}</h4>` : ''}<div class="st-card">${rows.join('<i class="st-div"></i>')}</div></section>`;
 // 확인 창 (피그마 확인 창: 제목 · 설명 · [취소][빨간 아닌 검정 버튼])
