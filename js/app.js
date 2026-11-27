@@ -77,6 +77,7 @@ function sendTopBar() {
   if (!splashOn && !overlay.firstElementChild && ((nav && tabs && R(tabs)[2] > 0) || glass.length)) {
     const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
     m = {
+      winLeft: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--win-left')) || 0,
       show: true, box: tabs ? R(tabs) : null, gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
       // 오른쪽 아이콘 버튼 전부 (노트 쓰기 · 검색 · 설정): 앱이 같은 유리 버튼으로 그려요 (11/26)
       icons: nativeGlass ? glass.map((b) => {
@@ -118,6 +119,8 @@ function sortMenuAttr(sorts, curKey) {
   if (!nativeMenuOn()) return '';
   return ` data-menu-id="sort" data-native-menu="${esc(JSON.stringify(sorts.map(([k, l]) => ({ id: 'sort:' + k, title: l, on: k === curKey }))))}"`;
 }
+// 창 모드 단추 자리가 바뀌면 앱 유리 단추 자리도 다시 보내요
+window.lumenibWinInset = () => { try { syncTopBar(); } catch {} };
 window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });

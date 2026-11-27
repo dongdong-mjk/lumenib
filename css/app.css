@@ -1144,3 +1144,7 @@ button.st-row:active { background: var(--bg-hover); }
 
 /* 55~: 메뉴 단추(정렬 · 사진 바꾸기)는 앱이 같은 모양으로 그려요. 웹 단추는 자리만 지켜요 */
 .native-menubtn [data-native-menu] { visibility: hidden; }
+
+/* 창 모드(iPadOS 26): 왼쪽 위 창 단추 자리(--win-left, 앱이 알려줘요)만큼 위 줄 왼쪽 것들을 밀어요 (59~) */
+.native-top .topbar { padding-left: calc(10px + var(--win-left, 0px)); }
+.native-top .ns-bar { margin-left: calc(-8px + var(--win-left, 0px)); }

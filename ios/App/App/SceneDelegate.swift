@@ -45,6 +45,25 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
     }
 
+    // 창 모드(iPadOS 26)에선 왼쪽 위에 창 단추(빨강·노랑·초록)가 생겨요. 그 자리만큼 웹 위 줄의 왼쪽 단추를 밀도록
+    // 폭을 웹에 --win-left 로 알려요 (59~)
+    private var winLeft: CGFloat = -1
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateWindowControlsInset()
+    }
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        updateWindowControlsInset()
+    }
+    private func updateWindowControlsInset() {
+        guard #available(iOS 26.0, *) else { return }
+        let left = max(0, view.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal)).left - view.safeAreaInsets.left)
+        guard abs(left - winLeft) > 0.5 else { return }
+        winLeft = left
+        js("document.documentElement.style.setProperty('--win-left', '\(Int(left.rounded()))px'); window.lumenibWinInset && window.lumenibWinInset()")
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         let pencil = UIPencilInteraction()
@@ -736,7 +755,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         if message.name == "lumenibCanvas" { noteCanvasMessage(body); return }
         if action == "appleSignIn" { startAppleSignIn(); return }
         if action == "oauth", let s = body["url"] as? String, let u = URL(string: s) { startWebAuth(u, scheme: (body["scheme"] as? String) ?? "lumenib"); return }
-        if action == "topBar" { topBar.update(body); if let web = webView { web.bringSubviewToFront(topBar) }; return }
+        if action == "topBar" {
+            topBar.update(body); if let web = webView { web.bringSubviewToFront(topBar) }
+            // 페이지를 새로 불러오면 --win-left가 지워져서, 위 줄 소식이 올 때 다시 넣어 줘요 (59~)
+            if winLeft > 0, (body["winLeft"] as? NSNumber)?.doubleValue != Double(Int(winLeft.rounded())) { js("document.documentElement.style.setProperty('--win-left', '\(Int(winLeft.rounded()))px'); window.lumenibWinInset && window.lumenibWinInset()") }
+            return
+        }
         if action == "keepAwake" { UIApplication.shared.isIdleTimerDisabled = (body["value"] as? Bool) ?? false; return } // 노트 쓰는 동안 화면 켜 두기 (설정, 11/26)
         if action == "penSettings" { presentPenSettings(body); return }
         if action == "sizeSlider" { presentSizeSlider(body); return }
