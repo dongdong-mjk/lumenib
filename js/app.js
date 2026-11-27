@@ -120,7 +120,7 @@ function sortMenuAttr(sorts, curKey) {
   return ` data-menu-id="sort" data-native-menu="${esc(JSON.stringify(sorts.map(([k, l]) => ({ id: 'sort:' + k, title: l, on: k === curKey }))))}"`;
 }
 // 창 모드 단추 자리가 바뀌면 앱 유리 단추 자리도 다시 보내요
-window.lumenibWinInset = () => { document.documentElement.classList.toggle('win-mode', (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--win-left')) || 0) > 0); try { syncTopBar(); } catch {} };
+window.lumenibWinInset = () => { document.documentElement.classList.toggle('win-mode', (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--win-left')) || 0) > 0); try { syncTopBar(); } catch {} requestAnimationFrame(() => window.__fitToolbar?.()); setTimeout(() => window.__fitToolbar?.(), 50); };
 window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
@@ -1841,11 +1841,16 @@ async function NoteScreen({ noteId, start, openOld, from, back }) {
   function fitToolbar() {
     if (!toolbarEl) return;
     const bar = app.querySelector('.topbar');
+    const cs = getComputedStyle(bar);
     const side = Math.max(bar.querySelector('.left').offsetWidth, bar.querySelector('.right').offsetWidth);
-    const room = bar.clientWidth - 32 - side * 2 - 24;
-    const z = Math.min(1, room / toolbarEl.offsetWidth);
+    // 창 모드면 왼쪽 창 단추 자리(padding-left)만큼 가운데 칸이 좁아져요. 양쪽 여백을 실제 값으로 빼요 (11/27)
+    const room = bar.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) - side * 2 - 24;
+    // 창 모드에선 툴바를 모양 그대로 높이 44가 되게 줄여요 (버튼 간격을 좁히면 어색했어요, 11/27). 그래도 모자라면 더 줄여요
+    const winMax = document.documentElement.classList.contains('win-mode') ? 44 / 48 : 1;
+    const z = Math.min(winMax, room / toolbarEl.offsetWidth);
     app.querySelector('.screen').style.setProperty('--tb-z', z.toFixed(3));
   }
+  window.__fitToolbar = fitToolbar; // 창 모드가 바뀌면 바로 다시 맞춰요 (lumenibWinInset)
   const tbRO = new ResizeObserver(() => fitToolbar());
   tbRO.observe(right);
   tbRO.observe(app.querySelector('.topbar'));

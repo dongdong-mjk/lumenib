@@ -1149,16 +1149,3 @@ button.st-row:active { background: var(--bg-hover); }
 .native-top .topbar { padding-left: calc(10px + var(--win-left, 0px)); }
 .native-top .ns-bar { margin-left: calc(-8px + var(--win-left, 0px)); }
 
-/* 창 모드이거나 화면이 좁을 때: 노트 쓰기 툴바를 조금 작게 (왼쪽 창 단추 자리만큼 밀린 버튼과 겹치지 않게, 11/27) */
-.win-mode .toolbar .tb-btn { width: 38px; }
-.win-mode .toolbar .tb-btn.has-panel.on { width: 54px; }
-.win-mode .toolbar .swatch { width: 30px; }
-.win-mode .toolbar .size-dot { width: 34px; }
-.win-mode .toolbar .tb-sep { margin: 0 3px; }
-@media (max-width: 1119px) {
-  .toolbar .tb-btn { width: 38px; }
-  .toolbar .tb-btn.has-panel.on { width: 54px; }
-  .toolbar .swatch { width: 30px; }
-  .toolbar .size-dot { width: 34px; }
-  .toolbar .tb-sep { margin: 0 3px; }
-}
