@@ -1083,7 +1083,7 @@ final class NativeTopBar: UIView {
                 cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 18)
                 cfg.titleLineBreakMode = .byClipping
                 cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
-                    var a = a; a.font = UIFont.systemFont(ofSize: 15, weight: .semibold); return a
+                    var a = a; a.font = UIFont.systemFont(ofSize: 17, weight: .semibold); return a // 피그마 iPad 내비 글자 17 (11/27)
                 }
                 btn.configuration = cfg
                 btn.accessibilityLabel = t["label"] as? String
@@ -1097,12 +1097,13 @@ final class NativeTopBar: UIView {
         for t in tabs where box.width > 0 {
             var cfg = t.btn.configuration ?? .plain()
             if cfg.image == nil { cfg.image = Self.icon("\(t.icon)-fill", 20); t.btn.configuration = cfg }
-            let w = ceil(t.btn.sizeThatFits(CGSize(width: 400, height: box.height)).width)
-            t.btn.frame = CGRect(x: x, y: 0, width: w, height: box.height)
+            // 피그마 iPad 내비(11/27): 탭 칸 높이 44 (웹 탭 칸 38의 가운데에 맞춰 위아래로 3씩)
+            let w = ceil(t.btn.sizeThatFits(CGSize(width: 400, height: 44)).width)
+            t.btn.frame = CGRect(x: x, y: 0, width: w, height: 44)
             x += w + 2
         }
         let total = max(0, x - 2)
-        tabsBox.frame = CGRect(x: round(box.midX - total / 2), y: box.minY, width: total, height: box.height)
+        tabsBox.frame = CGRect(x: round(box.midX - total / 2), y: round(box.midY - 22), width: total, height: 44)
         if #available(iOS 26.0, *), let v = pill as? UIVisualEffectView {
             v.cornerConfiguration = .capsule() // 설정 버튼과 같은 맑은 유리 (색을 입히면 흰 알약처럼 보여서 안 입혀요, 45 피드백)
         } else {
