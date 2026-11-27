@@ -1154,3 +1154,12 @@ button.st-row:active { background: var(--bg-hover); }
 .native-top .topbar .pill-back { height: 44px; padding: 0 16px; font-size: 17px; line-height: 26px; }
 .native-top .topbar [data-act="done"] { height: 44px; min-width: 0; padding: 0 16px; font-size: 17px; line-height: 26px; }
 .native-top .topbar .saved-label { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--text-tertiary); }
+
+/* ===== 헤더 = 화면 전체 폭 (11/27 민정님): 헤더는 위, 콘텐츠는 아래로 나누고 헤더 좌우 바깥 여백은 없어요.
+   안쪽 배치는 피그마 Top Bar 그대로 — 웹: 설정 끝에서 24, 검색 68, 노트 쓰기 112 (40칸 사이 4) / iPad: 10 · 66 · 122 (44칸 사이 12) ===== */
+.home > .home-nav, .bible-tab .home-nav, .settings > .home-nav { margin-left: 0; margin-right: 0; }
+.notes .home-nav { margin-left: -20px; margin-right: -20px; } /* 노트·북마크는 목록 칸(좌우 20) 안에 있어서 그만큼 밖으로 */
+.home-nav .gear, .notes .home-nav .gear { right: 24px; }
+.home-nav .gear.nav-search, .notes .home-nav .gear.nav-search, .bookmarks .home-nav .gear.nav-search { right: 68px; }
+.home-nav .gear.nav-write.with-search, .notes .home-nav .gear.nav-write.with-search { right: 112px; }
+.native-top .home-nav, .native-top .notes .home-nav { --gx: 10px; }
