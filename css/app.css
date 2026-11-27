@@ -1149,3 +1149,8 @@ button.st-row:active { background: var(--bg-hover); }
 .native-top .topbar { padding-left: calc(10px + var(--win-left, 0px)); }
 .native-top .ns-bar { margin-left: calc(-8px + var(--win-left, 0px)); }
 
+
+/* 피그마 iPad 헤더 정리본(11/27): 글자 유리 버튼(〈 홈 · 완료) 높이 44 · 좌우 16 · 글자 17 SemiBold, '자동 저장됨' 13 Regular tertiary */
+.native-top .topbar .pill-back { height: 44px; padding: 0 16px; font-size: 17px; line-height: 26px; }
+.native-top .topbar [data-act="done"] { height: 44px; min-width: 0; padding: 0 16px; font-size: 17px; line-height: 26px; }
+.native-top .topbar .saved-label { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--text-tertiary); }

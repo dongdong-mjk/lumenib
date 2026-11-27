@@ -1138,10 +1138,11 @@ final class NativeTopBar: UIView {
             if !text.isEmpty { // 글자 유리 버튼 (완료 · 〈 홈)
                 cfg.title = text
                 cfg.imagePadding = 6
-                cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
+                // 피그마 iPad 헤더(11/27): 글자 유리 버튼 높이 44, 좌우 16, 글자 17 SemiBold
+                cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
                 cfg.titleLineBreakMode = .byClipping
                 cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in
-                    var a = a; a.font = UIFont.systemFont(ofSize: 15, weight: .semibold); return a
+                    var a = a; a.font = UIFont.systemFont(ofSize: 17, weight: .semibold); return a
                 }
             }
             btn.configuration = cfg
@@ -1301,7 +1302,8 @@ final class NativeTopBar: UIView {
             t.btn.configuration = cfg
         }
         guard let target = tabs.first(where: { $0.act == act })?.btn else { pill.isHidden = true; return }
-        let f = target.frame
+        // 고른 탭 유리 알약은 높이 44 (탭 칸 38보다 위아래 3씩 큼, 피그마 iPad 헤더 11/27)
+        let f = target.frame.insetBy(dx: 0, dy: -max(0, (44 - target.frame.height) / 2))
         let place = { self.pill.frame = f; if #unavailable(iOS 26.0) { self.pill.layer.cornerRadius = f.height / 2 } }
         if pill.isHidden || !animated || !changed { pill.isHidden = false; UIView.performWithoutAnimation(place); return }
         UIView.animate(withDuration: 0.45, delay: 0, usingSpringWithDamping: 0.78, initialSpringVelocity: 0.4, options: [.allowUserInteraction, .beginFromCurrentState], animations: place)
