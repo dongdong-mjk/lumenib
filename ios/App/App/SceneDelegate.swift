@@ -1176,7 +1176,7 @@ final class NativeTopBar: UIView {
         let key = "styled:" + act
         let btn: UIButton
         if let e = iconBtns[key] { btn = e } else {
-            btn = UIButton(type: .system)
+            btn = StyledMenuButton(type: .system)
             btn.showsMenuAsPrimaryAction = true
             addSubview(btn)
             iconBtns[key] = btn
@@ -1193,6 +1193,7 @@ final class NativeTopBar: UIView {
         var bgc = UIBackgroundConfiguration.clear()
         if let bg, bg.cgColor.alpha > 0.01 { bgc.backgroundColor = bg }
         bgc.cornerRadius = min(num("radius", 0), r.height / 2)
+        (btn as? StyledMenuButton)?.radius = bgc.cornerRadius
         cfg.background = bgc
         cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: num("pl", 8), bottom: 0, trailing: num("pr", 8))
         let fs = num("fs", 15), fw = num("fw", 600)
@@ -1340,4 +1341,19 @@ final class MenuButton: UIButton {
         super.contextMenuInteraction(interaction, willEndFor: configuration, animator: animator)
         if let animator { animator.addCompletion { [weak self] in self?.onShown?(false) } } else { onShown?(false) }
     }
+}
+
+
+// 앱이 그리는 메뉴 단추 (56~): 메뉴가 열릴 때 단추 전체(바탕 포함)가 메뉴로 떠오르고, 닫히면 다시 단추로 돌아와요.
+// 기본은 글자만 떠올라서, 검은 바탕 단추(사진 바꾸기)는 바탕만 남고 글자가 사라져 보였어요 (11/27)
+final class StyledMenuButton: UIButton {
+    var radius: CGFloat = 0
+    private func whole() -> UITargetedPreview {
+        let p = UIPreviewParameters()
+        p.visiblePath = UIBezierPath(roundedRect: bounds, cornerRadius: radius)
+        p.backgroundColor = .clear
+        return UITargetedPreview(view: self, parameters: p)
+    }
+    override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration) -> UITargetedPreview? { whole() }
+    override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, previewForDismissingMenuWithConfiguration configuration: UIContextMenuConfiguration) -> UITargetedPreview? { whole() }
 }
