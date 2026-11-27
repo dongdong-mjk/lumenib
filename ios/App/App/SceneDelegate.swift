@@ -73,6 +73,10 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibSearchField") // 검색 줄 글자 칸도 앱이 (49~)
         webView?.configuration.userContentController.add(self, name: "lumenibMenu") // 웹 단추에 iPad 기본 메뉴 · 사진 고르기도 iPad 기본 창 (50~)
         webView?.configuration.userContentController.add(self, name: "lumenibMenuButton") // 메뉴 단추 자체를 앱이 그려요 (55~)
+        // 설정 화면에 보이는 버전: 앱이 실제 버전·빌드 번호를 알려줘요 (예전엔 웹에 1.0 (40)으로 고정, 56~)
+        let ver = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") + " (" + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") + ")"
+        webView?.configuration.userContentController.addUserScript(WKUserScript(source: "window.__lumenibVersion = '\(ver)';", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        webView?.evaluateJavaScript("window.__lumenibVersion = '\(ver)';", completionHandler: nil)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]

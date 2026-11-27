@@ -762,7 +762,7 @@ document.addEventListener('click', (e) => { if (e.target.closest?.('.home-nav [d
 // 왼쪽 = 계정 카드 + 메뉴(읽기 기록 · 화면과 입력 · 도움말 · 앱 정보), 오른쪽 = 고른 페이지(가운데 560)
 // 2차로 미룬 것: 문의하기, 사진·이름 바꾸기, 사용한 용량, 모든 노트 PDF, (앱) 화면 켜 두기 네이티브
 // =========================================================
-const APP_VERSION = '1.0 (40)';
+const APP_VERSION = window.__lumenibVersion || (C.isNativeApp() ? '1.0' : '1.0 (웹)'); // 앱이 실제 버전·빌드를 알려줘요 (56~). 예전엔 1.0 (40)으로 고정돼 있었어요
 const PENCIL_TAP = [
   ['system', 'iPad 설정 따르기'],
   ['undo', '실행 취소'],
