@@ -1192,3 +1192,7 @@ button.st-row:active { background: var(--bg-hover); }
 .st-toggle i { transition: transform .22s cubic-bezier(.3, .7, .2, 1); }
 .st-toggle { transition: background .22s ease; }
 @media (prefers-reduced-motion: reduce) { .seg-ind, .st-toggle, .st-toggle i { transition: none; } }
+/* 바텀시트 닫힘 = 나타날 때(bs-up)를 거꾸로: 아래로 내려가며 흐려져요 (11/28). 끌어내려 닫을 때는 이미 내려가 있어서 빼요 */
+.dim.out .bsheet:not(.settle) { animation: bs-down .15s ease-in forwards; }
+@keyframes bs-down { to { transform: translateY(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .dim.out .bsheet { animation: none; } }
