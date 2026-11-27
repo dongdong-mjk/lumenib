@@ -120,7 +120,11 @@ function sortMenuAttr(sorts, curKey) {
   return ` data-menu-id="sort" data-native-menu="${esc(JSON.stringify(sorts.map(([k, l]) => ({ id: 'sort:' + k, title: l, on: k === curKey }))))}"`;
 }
 // 창 모드 단추 자리가 바뀌면 앱 유리 단추 자리도 다시 보내요
-window.lumenibWinInset = () => { document.documentElement.classList.toggle('win-mode', (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--win-left')) || 0) > 0); try { syncTopBar(); } catch {} requestAnimationFrame(() => window.__fitToolbar?.()); setTimeout(() => window.__fitToolbar?.(), 50); };
+window.lumenibWinInset = () => {
+  // 전체 화면에서도 iPad가 모서리 둥근 자리만큼 작은 값(몇 px)을 줄 때가 있어요. 그건 창 단추가 아니라서 무시해요 (59 피드백: 전체 화면인데 툴바가 줄었음)
+  const de = document.documentElement, v = parseFloat(getComputedStyle(de).getPropertyValue('--win-left')) || 0;
+  if (v > 0 && v < 30) de.style.removeProperty('--win-left');
+  de.classList.toggle('win-mode', v >= 30); try { syncTopBar(); } catch {} requestAnimationFrame(() => window.__fitToolbar?.()); setTimeout(() => window.__fitToolbar?.(), 50); };
 window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });

@@ -58,7 +58,9 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
     }
     private func updateWindowControlsInset() {
         guard #available(iOS 26.0, *) else { return }
-        let left = max(0, view.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal)).left - view.safeAreaInsets.left)
+        // 전체 화면이면 창 단추가 없어요: 0으로 (모서리 자리만큼 작은 값이 와서 전체 화면인데도 밀렸어요, 60~)
+        let full = view.window.map { w in w.windowScene.map { abs(w.bounds.width - $0.screen.bounds.width) < 1 && abs(w.bounds.height - $0.screen.bounds.height) < 1 } ?? true } ?? true
+        let left = full ? 0 : max(0, view.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal)).left - view.safeAreaInsets.left)
         guard abs(left - winLeft) > 0.5 else { return }
         winLeft = left
         js("document.documentElement.style.setProperty('--win-left', '\(Int(left.rounded()))px'); window.lumenibWinInset && window.lumenibWinInset()")
