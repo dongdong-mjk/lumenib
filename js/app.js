@@ -856,7 +856,7 @@ function SettingsScreen(arg = {}) {
     'account-info'() {
       const u = C.currentUser();
       if (!u) { st.page = 'account'; return pages.account(); }
-      const cam = !C.isNativeApp() || !!window.webkit?.messageHandlers?.lumenibCamera; // 앱은 카메라 권한이 들어간 빌드(43~)부터
+      const cam = C.isNativeApp() ? !!window.webkit?.messageHandlers?.lumenibCamera : matchMedia('(pointer: coarse)').matches; // 앱은 카메라 권한이 들어간 빌드(43~)부터. 웹은 폰·태블릿에서만 (컴퓨터 브라우저는 '사진 찍기'를 눌러도 파일 고르기만 떠서 뺐어요, 11/27)
       const nativeMenu = nativeGlass && !!window.webkit?.messageHandlers?.lumenibMenu; // 앱이 iPad 기본 메뉴 · 사진 고르기 창을 띄워요 (50~)
       return `<section class="st-group"><div class="st-card st-profile">${avatarHTML('lg')}<span class="st-rt"><span class="st-pname">${esc(C.displayName())}</span><span class="st-rts">${esc(C.providerName() || '')} 계정으로 로그인했어요</span></span>
           <div class="st-photo"><button class="st-btn primary" data-act="photo"${nativeMenu ? ` data-menu-id="photo" data-native-menu="${esc(JSON.stringify([{ id: 'photo-lib', title: '사진 보관함에서 고르기', sf: 'photo.on.rectangle' }, ...(cam ? [{ id: 'photo-cam', title: '사진 찍기', sf: 'camera' }] : []), ...(C.hasCustomAvatar() ? [{ id: 'photo-reset', title: '기본 이미지로 되돌리기', sf: 'arrow.uturn.backward' }] : [])]))}"` : ''}>사진 바꾸기</button>
