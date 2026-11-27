@@ -1212,7 +1212,11 @@ final class NativeTopBar: UIView {
         btn.menu = UIMenu(children: items.map { m in
             let id = m["id"] as? String ?? ""
             let img = (m["sf"] as? String).flatMap { UIImage(systemName: $0) }
-            let a = UIAction(title: m["title"] as? String ?? "", image: img) { [weak self] _ in self?.onMenu?(id) }
+            let a = UIAction(title: m["title"] as? String ?? "", image: img) { [weak self, weak btn] _ in
+                // 사진 창은 메뉴가 단추로 다 돌아온 뒤에 띄워요. 바로 띄우면 단추가 메뉴로 떠오른 상태(글자 숨김)로 멈춰 있었어요 (57)
+                if id.hasPrefix("photo-"), let sb = btn as? StyledMenuButton { sb.afterClose { self?.onMenu?(id) } }
+                else { self?.onMenu?(id) }
+            }
             if (m["on"] as? Bool) == true { a.state = .on }
             return a
         })
@@ -1348,6 +1352,17 @@ final class MenuButton: UIButton {
 // 기본은 글자만 떠올라서, 검은 바탕 단추(사진 바꾸기)는 바탕만 남고 글자가 사라져 보였어요 (11/27)
 final class StyledMenuButton: UIButton {
     var radius: CGFloat = 0
+    private var pendingClose: (() -> Void)?
+    /// 메뉴가 단추로 다 돌아온 뒤에 할 일 (0.6초 안에 안 끝나면 그냥 해요)
+    func afterClose(_ f: @escaping () -> Void) {
+        pendingClose = f
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.flushClose() }
+    }
+    private func flushClose() { let f = pendingClose; pendingClose = nil; f?() }
+    override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
+        super.contextMenuInteraction(interaction, willEndFor: configuration, animator: animator)
+        if let animator { animator.addCompletion { [weak self] in self?.flushClose() } } else { flushClose() }
+    }
     private func whole() -> UITargetedPreview {
         let p = UIPreviewParameters()
         p.visiblePath = UIBezierPath(roundedRect: bounds, cornerRadius: radius)
