@@ -887,7 +887,7 @@ input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
 .bt-booklink { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; line-height: 18px; color: var(--text-tertiary); padding: 4px 8px; }
 
 /* Aa 바텀시트 (피그마 Bottom Sheet · Stepper) */
-.dim.bs-dim { place-items: end center; padding-bottom: 12px; } /* 화면 아래에서 12 (11/26 피그마) */
+.dim.bs-dim { place-items: end center; padding-bottom: calc(12px + var(--safe-bottom, 0px)); } /* 화면 아래에서 12 (11/26 피그마) + iPad 아래 안전 영역: 패널 아랫선과 맞게 (11/28) */
 .bsheet.dragging { transition: none; }
 .bsheet.settle { transition: transform .22s cubic-bezier(.2, 0, 0, 1); }
 .bsheet { width: 600px; max-width: calc(100vw - 32px); background: var(--bg-panel); border-radius: 28px; padding-bottom: 32px; display: flex; flex-direction: column; align-items: center; animation: bs-up .2s ease; }
