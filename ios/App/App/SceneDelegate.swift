@@ -72,6 +72,7 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibGlass") // 노트 쓰기 · 본문 고르기 위 버튼(뒤로 · 사이드바 · 완료 · 〈 홈)도 유리로 (48~)
         webView?.configuration.userContentController.add(self, name: "lumenibSearchField") // 검색 줄 글자 칸도 앱이 (49~)
         webView?.configuration.userContentController.add(self, name: "lumenibMenu") // 웹 단추에 iPad 기본 메뉴 · 사진 고르기도 iPad 기본 창 (50~)
+        webView?.configuration.userContentController.add(self, name: "lumenibMenuButton") // 메뉴 단추 자체를 앱이 그려요 (55~)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -1083,7 +1084,7 @@ final class NativeTopBar: UIView {
             guard let act = it["act"] as? String, let r = Self.rect(it["rect"]) else { continue }
             if (it["kind"] as? String) == "field" { hasField = true; showSearchField(it, r); continue }
             seen.insert(act)
-            if (it["kind"] as? String) == "menu" { showMenuButton(act, it, r); continue }
+            if (it["kind"] as? String) == "menu" { if it["style"] != nil { seen.insert("styled:" + act) }; showMenuButton(act, it, r); continue }
             let btn: UIButton
             if let e = iconBtns[act] { btn = e } else {
                 btn = UIButton(type: .system)
@@ -1122,6 +1123,7 @@ final class NativeTopBar: UIView {
 
     // 웹 단추 자리에 투명한 단추를 얹고, 누르면 iPad 기본 메뉴(UIMenu)가 떠요. 웹 단추 모양은 그대로 보여요 (11/27)
     private func showMenuButton(_ act: String, _ it: [String: Any], _ r: CGRect) {
+        if let st = it["style"] as? [String: Any] { showStyledMenuButton(act, it, st, r); return }
         let btn: UIButton
         if let e = iconBtns[act] { btn = e } else {
             let mb = MenuButton(type: .custom)
@@ -1160,6 +1162,53 @@ final class NativeTopBar: UIView {
                 _ = btn
             }
             if (m["on"] as? Bool) == true { a.state = .on } // 지금 고른 항목 체크 (51~)
+            return a
+        })
+    }
+
+    // 메뉴 단추를 앱이 직접 그려요 (55~): 웹 단추와 같은 글자·색·모양으로. 웹 단추는 숨겨 두고(늘), 덮어씌우거나 찍지 않아요.
+    // 그래서 iPad가 이 진짜 단추에서 메뉴를 펼치고 접고, 깜빡이거나 겹쳐 보이지 않아요 (54 피드백: 사진 창 닫을 때 깜빡임, 정렬 화살표 두 개)
+    private func showStyledMenuButton(_ act: String, _ it: [String: Any], _ st: [String: Any], _ r: CGRect) {
+        let key = "styled:" + act
+        let btn: UIButton
+        if let e = iconBtns[key] { btn = e } else {
+            btn = UIButton(type: .system)
+            btn.showsMenuAsPrimaryAction = true
+            addSubview(btn)
+            iconBtns[key] = btn
+        }
+        btn.isHidden = false
+        btn.frame = r
+        btn.accessibilityLabel = it["label"] as? String
+        let num = { (k: String, d: Double) -> CGFloat in CGFloat((st[k] as? NSNumber)?.doubleValue ?? d) }
+        let fg = Self.cssColor(st["fg"] as? String) ?? primary
+        var cfg = UIButton.Configuration.plain()
+        cfg.title = st["text"] as? String
+        cfg.baseForegroundColor = fg
+        let bg = Self.cssColor(st["bg"] as? String)
+        var bgc = UIBackgroundConfiguration.clear()
+        if let bg, bg.cgColor.alpha > 0.01 { bgc.backgroundColor = bg }
+        bgc.cornerRadius = min(num("radius", 0), r.height / 2)
+        cfg.background = bgc
+        cfg.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: num("pl", 8), bottom: 0, trailing: num("pr", 8))
+        let fs = num("fs", 15), fw = num("fw", 600)
+        let weight: UIFont.Weight = fw >= 700 ? .bold : fw >= 600 ? .semibold : fw >= 500 ? .medium : .regular
+        cfg.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { a in var a = a; a.font = .systemFont(ofSize: fs, weight: weight); return a }
+        cfg.titleLineBreakMode = .byClipping
+        if (st["chevron"] as? Bool) == true {
+            cfg.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: fs * 0.62, weight: .semibold))
+            cfg.imagePlacement = .trailing; cfg.imagePadding = 4
+        }
+        btn.configuration = cfg
+        // 글꼴 폭이 웹과 조금 달라서, 글자가 잘리지 않게 앱이 잰 폭을 쓰고 웹 단추 가운데에 맞춰요
+        let w = max(r.width, ceil(btn.sizeThatFits(CGSize(width: 600, height: r.height)).width))
+        btn.frame = CGRect(x: round(r.midX - w / 2), y: r.minY, width: w, height: r.height)
+        let items = (it["items"] as? [[String: Any]]) ?? []
+        btn.menu = UIMenu(children: items.map { m in
+            let id = m["id"] as? String ?? ""
+            let img = (m["sf"] as? String).flatMap { UIImage(systemName: $0) }
+            let a = UIAction(title: m["title"] as? String ?? "", image: img) { [weak self] _ in self?.onMenu?(id) }
+            if (m["on"] as? Bool) == true { a.state = .on }
             return a
         })
     }

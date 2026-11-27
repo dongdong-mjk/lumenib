@@ -83,7 +83,12 @@ function sendTopBar() {
         const text = b.dataset.glassText ?? (b.querySelector('.nav-ico, svg') && !b.dataset.glassIcon?.startsWith('cl') ? '' : b.textContent.trim());
         if (b.dataset.nativeMenu) { // 웹 단추 위 iPad 기본 메뉴 (50~)
           let items = []; try { items = JSON.parse(b.dataset.nativeMenu); } catch {}
-          return { act: b.dataset.menuId || 'menu', kind: 'menu', label: b.textContent.trim(), items, rect: R(b) };
+          const m = { act: b.dataset.menuId || 'menu', kind: 'menu', label: b.textContent.trim(), items, rect: R(b) };
+          if (nativeMenuButton) { // 55~: 단추 자체를 앱이 같은 모양으로 그려요 (웹 단추는 숨김)
+            const c = getComputedStyle(b);
+            m.style = { text: b.textContent.trim(), fg: c.color, bg: c.backgroundColor, fs: parseFloat(c.fontSize), fw: parseFloat(c.fontWeight) || 400, radius: parseFloat(c.borderTopLeftRadius) || 0, pl: parseFloat(c.paddingLeft) || 0, pr: parseFloat(c.paddingRight) || 0, chevron: !!b.querySelector('.nl-ico') };
+          }
+          return m;
         }
         if (b.dataset.glassKind === 'field') { // 검색 줄 글자 칸: 앱이 유리 캡슐 + 기본 글자 칸으로 (49~)
           const inp = b.querySelector('input'), cs2 = getComputedStyle(document.documentElement);
@@ -106,6 +111,8 @@ window.lumenibMenuPick = (id) => { const f = menuPick[id] || menuPick[id.split('
 // 메뉴가 열려 있는 동안엔 웹 단추를 숨겨요: 앱이 단추 모습을 찍어 메뉴로 펼치고, 닫으면 다시 그 자리로 접어 넣어요 (52~)
 window.lumenibMenuShown = (id, open) => { const b = app.querySelector(`[data-menu-id="${id}"]`); if (b) b.style.visibility = open ? 'hidden' : ''; };
 const nativeMenuOn = () => nativeGlass && !!window.webkit?.messageHandlers?.lumenibMenu;
+const nativeMenuButton = !!window.webkit?.messageHandlers?.lumenibMenuButton; // 메뉴 단추를 앱이 그리는 빌드 (55~)
+document.documentElement.classList.toggle('native-menubtn', nativeMenuButton);
 // 정렬 버튼: 앱이면 같은 항목을 iPad 기본 메뉴로 (지금 고른 것엔 체크, 51~)
 function sortMenuAttr(sorts, curKey) {
   if (!nativeMenuOn()) return '';
