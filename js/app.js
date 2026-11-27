@@ -103,6 +103,8 @@ function sendTopBar() {
 // iPad 기본 메뉴(50~)에서 고른 항목: 'sort:new'처럼 앞 이름으로 화면이 등록한 처리로 보내요
 const menuPick = {};
 window.lumenibMenuPick = (id) => { const f = menuPick[id] || menuPick[id.split(':')[0]]; f?.(id); };
+// 메뉴가 열려 있는 동안엔 웹 단추를 숨겨요: 앱이 단추 모습을 찍어 메뉴로 펼치고, 닫으면 다시 그 자리로 접어 넣어요 (52~)
+window.lumenibMenuShown = (id, open) => { const b = app.querySelector(`[data-menu-id="${id}"]`); if (b) b.style.visibility = open ? 'hidden' : ''; };
 const nativeMenuOn = () => nativeGlass && !!window.webkit?.messageHandlers?.lumenibMenu;
 // 정렬 버튼: 앱이면 같은 항목을 iPad 기본 메뉴로 (지금 고른 것엔 체크, 51~)
 function sortMenuAttr(sorts, curKey) {

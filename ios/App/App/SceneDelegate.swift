@@ -77,6 +77,8 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             topBar.onTap = { [weak self] act in self?.js("window.lumenibTopBar && window.lumenibTopBar('\(act)')") }
             topBar.onMenu = { [weak self] id in self?.menuPicked(id) }
+            topBar.snapSource = web
+            topBar.onMenuShown = { [weak self] act, open in self?.js("window.lumenibMenuShown && window.lumenibMenuShown('\(act)', \(open))") }
             topBar.onSearch = { [weak self] text, submit in
                 guard let data = try? JSONSerialization.data(withJSONObject: [text]), let arr = String(data: data, encoding: .utf8) else { return }
                 self?.js("window.lumenibSearchInput && window.lumenibSearchInput(\(arr)[0], \(submit))")
@@ -961,6 +963,8 @@ final class NativeTopBar: UIView {
     var onTap: ((String) -> Void)?
     var onSearch: ((String, Bool) -> Void)? // 검색창 글자 (입력 중 / 검색 누름)
     var onMenu: ((String) -> Void)? // iPad 기본 메뉴에서 고른 항목
+    var onMenuShown: ((String, Bool) -> Void)? // 메뉴가 열릴 때 웹 단추를 숨기고, 닫히면 다시 보여요
+    weak var snapSource: UIView? // 웹 화면 (메뉴 단추 모습을 찍어 와요)
     private var searchBox: UIView?
     private var searchField: UITextField?
     private let tabsBox = UIView()
@@ -1120,9 +1124,25 @@ final class NativeTopBar: UIView {
     private func showMenuButton(_ act: String, _ it: [String: Any], _ r: CGRect) {
         let btn: UIButton
         if let e = iconBtns[act] { btn = e } else {
-            btn = UIButton(type: .custom)
-            btn.backgroundColor = .clear
-            btn.showsMenuAsPrimaryAction = true
+            let mb = MenuButton(type: .custom)
+            mb.backgroundColor = .clear
+            mb.showsMenuAsPrimaryAction = true
+            mb.adjustsImageWhenHighlighted = false
+            // 누르는 순간 웹 단추 모습을 찍어 이 단추에 입혀요: iPad가 이 단추에서 메뉴를 펼치고(단추는 사라지고) 닫으면 다시 접어 넣어요 (11/27)
+            mb.addAction(UIAction { [weak self, weak mb] _ in
+                guard let self, let mb, let src = self.snapSource else { return }
+                let rr = mb.convert(mb.bounds, to: src)
+                let fmt = UIGraphicsImageRendererFormat(); fmt.scale = src.window?.screen.scale ?? 2
+                let img = UIGraphicsImageRenderer(size: rr.size, format: fmt).image { _ in
+                    src.drawHierarchy(in: CGRect(x: -rr.minX, y: -rr.minY, width: src.bounds.width, height: src.bounds.height), afterScreenUpdates: false)
+                }
+                mb.setBackgroundImage(img, for: .normal)
+            }, for: .touchDown)
+            mb.onShown = { [weak self, weak mb] open in
+                self?.onMenuShown?(act, open)
+                if !open { mb?.setBackgroundImage(nil, for: .normal) }
+            }
+            btn = mb
             addSubview(btn)
             iconBtns[act] = btn
         }
@@ -1246,5 +1266,19 @@ extension PencilBridgeViewController: PHPickerViewControllerDelegate, UIImagePic
         }
         guard let data = out.jpegData(compressionQuality: 0.85) else { return }
         js("window.lumenibPhoto && window.lumenibPhoto('data:image/jpeg;base64,\(data.base64EncodedString())')")
+    }
+}
+
+
+// 웹 단추 위에 얹는 iPad 기본 메뉴 단추: 메뉴가 열리고 닫히는 때를 알려요 (11/27)
+final class MenuButton: UIButton {
+    var onShown: ((Bool) -> Void)?
+    override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
+        super.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: animator)
+        onShown?(true)
+    }
+    override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
+        super.contextMenuInteraction(interaction, willEndFor: configuration, animator: animator)
+        if let animator { animator.addCompletion { [weak self] in self?.onShown?(false) } } else { onShown?(false) }
     }
 }
