@@ -1130,21 +1130,18 @@ final class NativeTopBar: UIView {
             mb.adjustsImageWhenHighlighted = false
             // 누르는 순간 웹 단추 모습을 찍어 이 단추에 입혀요: iPad가 이 단추에서 메뉴를 펼치고(단추는 사라지고) 닫으면 다시 접어 넣어요 (11/27)
             mb.addAction(UIAction { [weak self, weak mb] _ in
+                // 화면 전체를 그림으로 그리면 느려서(53), 그 자리만 화면에서 바로 떠 온 가벼운 복사 뷰를 얹어요 (54)
                 guard let self, let mb, let src = self.snapSource else { return }
+                mb.snap?.removeFromSuperview()
                 let rr = mb.convert(mb.bounds, to: src)
-                let fmt = UIGraphicsImageRendererFormat(); fmt.scale = src.window?.screen.scale ?? 2
-                let img = UIGraphicsImageRenderer(size: rr.size, format: fmt).image { _ in
-                    src.drawHierarchy(in: CGRect(x: -rr.minX, y: -rr.minY, width: src.bounds.width, height: src.bounds.height), afterScreenUpdates: false)
+                if let v = src.resizableSnapshotView(from: rr, afterScreenUpdates: false, withCapInsets: .zero) {
+                    v.frame = mb.bounds; v.isUserInteractionEnabled = false
+                    mb.addSubview(v); mb.snap = v
                 }
-                mb.setBackgroundImage(img, for: .normal)
             }, for: .touchDown)
             mb.onShown = { [weak self, weak mb] open in
                 self?.onMenuShown?(act, open)
-                if !open {
-                    mb?.setBackgroundImage(nil, for: .normal)
-                    // 고른 항목은 메뉴가 단추로 다 접힌 뒤에 알려요. 먼저 바꾸면 접히는 동안 단추 글자가 바뀌어 어긋나 보였어요 (11/27 영상)
-                    if let id = mb?.pending { mb?.pending = nil; self?.onMenu?(id) }
-                }
+                if !open { mb?.snap?.removeFromSuperview(); mb?.snap = nil }
             }
             btn = mb
             addSubview(btn)
@@ -1158,7 +1155,9 @@ final class NativeTopBar: UIView {
             let id = m["id"] as? String ?? ""
             let img = (m["sf"] as? String).flatMap { UIImage(systemName: $0) }
             let a = UIAction(title: m["title"] as? String ?? "", image: img) { [weak self, weak btn] _ in
-                if let mb = btn as? MenuButton { mb.pending = id } else { self?.onMenu?(id) }
+                if id.hasPrefix("sort:") { DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self?.onMenu?(id) } } // 메뉴가 단추로 접히는 동안 글자가 바뀌지 않게 (54)
+                else { self?.onMenu?(id) } // 사진 고르기 등은 바로 (53에선 메뉴가 완전히 끝날 때까지 기다려 느렸어요)
+                _ = btn
             }
             if (m["on"] as? Bool) == true { a.state = .on } // 지금 고른 항목 체크 (51~)
             return a
@@ -1279,7 +1278,7 @@ extension PencilBridgeViewController: PHPickerViewControllerDelegate, UIImagePic
 // 웹 단추 위에 얹는 iPad 기본 메뉴 단추: 메뉴가 열리고 닫히는 때를 알려요 (11/27)
 final class MenuButton: UIButton {
     var onShown: ((Bool) -> Void)?
-    var pending: String? // 메뉴에서 고른 항목 (다 접힌 뒤에 알려요)
+    var snap: UIView? // 누르는 순간 떠 온 웹 단추 모습
     override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
         super.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: animator)
         onShown?(true)
