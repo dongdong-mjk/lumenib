@@ -100,6 +100,15 @@ function sendTopBar() {
   topLast = k;
   window.webkit.messageHandlers.lumenibNative.postMessage({ action: 'topBar', ...m });
 }
+// iPad 기본 메뉴(50~)에서 고른 항목: 'sort:new'처럼 앞 이름으로 화면이 등록한 처리로 보내요
+const menuPick = {};
+window.lumenibMenuPick = (id) => { const f = menuPick[id] || menuPick[id.split(':')[0]]; f?.(id); };
+const nativeMenuOn = () => nativeGlass && !!window.webkit?.messageHandlers?.lumenibMenu;
+// 정렬 버튼: 앱이면 같은 항목을 iPad 기본 메뉴로 (지금 고른 것엔 체크, 51~)
+function sortMenuAttr(sorts, curKey) {
+  if (!nativeMenuOn()) return '';
+  return ` data-menu-id="sort" data-native-menu="${esc(JSON.stringify(sorts.map(([k, l]) => ({ id: 'sort:' + k, title: l, on: k === curKey }))))}"`;
+}
 window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
@@ -475,7 +484,7 @@ function NotesScreen() {
           <button class="nl-btn outline" data-act="cancel">취소</button>
           <button class="nl-btn primary" data-act="del" ${n ? '' : 'disabled'}>삭제</button>
         </div>` : `<div class="nl-right">
-          <div class="nl-sort"><button class="nl-dd" data-act="sort">${cur[1]}${NOTE_ICON(st.menu ? 'up' : 'down')}</button>
+          <div class="nl-sort"><button class="nl-dd" data-act="sort"${sortMenuAttr(sorts, cur[0])}>${cur[1]}${NOTE_ICON(st.menu ? 'up' : 'down')}</button>
           ${st.menu ? `<div class="nl-menu">${sorts.map(([k, l]) => `<button class="nl-mi${k === cur[0] ? ' on' : ''}" data-sort="${k}">${l}${k === cur[0] ? NOTE_ICON('tick') : ''}</button>`).join('')}</div>` : ''}</div>
           <button class="nl-btn outline" data-act="select" ${all.length ? '' : 'disabled'}>선택</button>
         </div>`}
@@ -514,6 +523,7 @@ function NotesScreen() {
     app.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation(); st.sort[st.view] = b.dataset.sort; st.menu = false; remember(); track('notes_sort_' + b.dataset.sort); render();
     }));
+    menuPick.sort = (id) => { if (curScreen !== 'notes') return; st.sort[st.view] = id.slice(5); st.menu = false; remember(); track('notes_sort_' + id.slice(5)); render(); };
     app.querySelector('[data-act="select"]')?.addEventListener('click', () => { st.selecting = true; st.menu = false; st.sel.clear(); render(); });
     app.querySelector('[data-act="cancel"]')?.addEventListener('click', () => { st.selecting = false; st.sel.clear(); render(); });
     app.querySelector('[data-act="all"]')?.addEventListener('click', () => {
@@ -662,7 +672,7 @@ function BookmarksScreen() {
           <button class="nl-btn outline" data-act="cancel">취소</button>
           <button class="nl-btn primary" data-act="del" ${n ? '' : 'disabled'}>삭제</button>
         </div>` : `<div class="nl-right">
-          <div class="nl-sort"><button class="nl-dd" data-act="sort">${cur[1]}${NOTE_ICON(st.menu ? 'up' : 'down')}</button>
+          <div class="nl-sort"><button class="nl-dd" data-act="sort"${sortMenuAttr(sorts, cur[0])}>${cur[1]}${NOTE_ICON(st.menu ? 'up' : 'down')}</button>
           ${st.menu ? `<div class="nl-menu">${sorts.map(([k, l]) => `<button class="nl-mi${k === cur[0] ? ' on' : ''}" data-sort="${k}">${l}${k === cur[0] ? NOTE_ICON('tick') : ''}</button>`).join('')}</div>` : ''}</div>
           <button class="nl-btn outline" data-act="select" ${list.length ? '' : 'disabled'}>선택</button>
         </div>`}
@@ -700,6 +710,7 @@ function BookmarksScreen() {
     app.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', (e) => {
       e.stopPropagation(); st.sort[st.view] = b.dataset.sort; st.menu = false; remember(); render();
     }));
+    menuPick.sort = (id) => { if (curScreen !== 'bookmarks') return; st.sort[st.view] = id.slice(5); st.menu = false; remember(); render(); };
     app.querySelector('[data-act="select"]')?.addEventListener('click', () => { st.selecting = true; st.menu = false; st.sel.clear(); render(); });
     app.querySelector('[data-act="cancel"]')?.addEventListener('click', () => { st.selecting = false; st.sel.clear(); render(); });
     app.querySelector('[data-act="all"]')?.addEventListener('click', () => {
@@ -976,7 +987,7 @@ function SettingsScreen(arg = {}) {
     on('photo-lib', () => app.querySelector('input[data-f="lib"]').click());
     on('photo-cam', () => app.querySelector('input[data-f="cam"]').click());
     // 앱(50~): iPad 기본 메뉴에서 고른 항목 · 기본 사진 창에서 고른 사진
-    window.lumenibMenuPick = (id) => { if (id === 'photo-reset') app.querySelector('[data-act="photo"]') && resetPhoto(); };
+    menuPick['photo-reset'] = () => { if (app.querySelector('[data-act="photo"]')) resetPhoto(); };
     window.lumenibPhotoBusy = () => toast('사진을 올리는 중이에요');
     window.lumenibPhoto = async (dataUrl) => {
       try { const blob = await (await fetch(dataUrl)).blob(); await C.setAvatar(blob); track('avatar_set'); toast('사진을 바꿨어요'); }

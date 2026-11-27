@@ -1133,7 +1133,9 @@ final class NativeTopBar: UIView {
         btn.menu = UIMenu(children: items.map { m in
             let id = m["id"] as? String ?? ""
             let img = (m["sf"] as? String).flatMap { UIImage(systemName: $0) }
-            return UIAction(title: m["title"] as? String ?? "", image: img) { [weak self] _ in self?.onMenu?(id) }
+            let a = UIAction(title: m["title"] as? String ?? "", image: img) { [weak self] _ in self?.onMenu?(id) }
+            if (m["on"] as? Bool) == true { a.state = .on } // 지금 고른 항목 체크 (51~)
+            return a
         })
     }
 
