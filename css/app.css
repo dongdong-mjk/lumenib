@@ -1175,3 +1175,6 @@ button.st-row:active { background: var(--bg-hover); }
   :is(.btn, .icon-btn, .pill-back, .nl-btn, .nl-dd, .bt-btn, .st-btn, .ns-cancel, .ns-clearall):hover:not(:disabled):not(.busy) { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--sl) 8%, transparent); }
 }
 :is(.btn, .icon-btn, .pill-back, .nl-btn, .nl-dd, .bt-btn, .st-btn, .ns-cancel, .ns-clearall):active:not(:disabled):not(.busy) { box-shadow: inset 0 0 0 999px color-mix(in srgb, var(--sl) 16%, transparent); }
+/* 홈 기록 카드 안 '본문 고르기' 알약: 카드 전체가 눌리는 버튼이라 카드에 올리거나 누를 때 알약에 상태 겹 (검정 버튼 = 흰 겹) */
+@media (hover: hover) { .record-card:hover .rc-btn { box-shadow: inset 0 0 0 999px color-mix(in srgb, #fff 8%, transparent); } }
+.record-card:active .rc-btn { box-shadow: inset 0 0 0 999px color-mix(in srgb, #fff 16%, transparent); }
