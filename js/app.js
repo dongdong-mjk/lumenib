@@ -11,6 +11,35 @@ import * as C from './cloud.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay-root');
+// 세그먼트 고른 칸 · 토글 손잡이가 옮겨가는 게 보이게 (11/28 민정님)
+// 누르면 화면을 통째로 다시 그려서 그냥 두면 새 자리에 바로 나타나요. 그래서 지난 자리를 기억해 두고 거기서 새 자리로 미끄러지게 해요
+const motionMem = new Map();
+function animateControls() {
+  document.querySelectorAll('.nl-seg[data-seg]').forEach((seg) => {
+    const btns = [...seg.querySelectorAll(':scope > button')], idx = btns.findIndex((b) => b.classList.contains('on'));
+    if (idx < 0) return;
+    let ind = seg.querySelector(':scope > .seg-ind');
+    if (!ind) { ind = document.createElement('i'); ind.className = 'seg-ind'; ind.setAttribute('aria-hidden', 'true'); seg.prepend(ind); }
+    const place = (b) => { ind.style.width = b.offsetWidth + 'px'; ind.style.transform = `translateX(${b.offsetLeft}px)`; };
+    const key = seg.dataset.seg, prev = motionMem.get(key);
+    motionMem.set(key, idx);
+    if (ind.dataset.at === String(idx)) return;
+    if (prev != null && prev !== idx && btns[prev] && !ind.dataset.at) {
+      ind.style.transition = 'none'; place(btns[prev]); void ind.offsetWidth; ind.style.transition = '';
+    }
+    ind.dataset.at = String(idx);
+    place(btns[idx]);
+  });
+  document.querySelectorAll('.st-toggle[data-tg]').forEach((t) => {
+    if (t.dataset.done) return;
+    t.dataset.done = '1';
+    const key = 'tg:' + t.dataset.tg, now = t.classList.contains('on'), prev = motionMem.get(key);
+    motionMem.set(key, now);
+    if (prev == null || prev === now) return;
+    t.classList.toggle('on', prev); void t.offsetWidth; t.classList.toggle('on', now);
+  });
+}
+new MutationObserver(animateControls).observe(document.body, { childList: true, subtree: true });
 let cleanup = () => {};
 let lastLocation = null; // 본문 고르기에서 마지막으로 본 곳
 let curScreen = null;
@@ -536,7 +565,7 @@ function NotesScreen() {
         ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">노트<span class="nl-count">${all.length}</span></h1>`}
       </div>
       <div class="nl-controls">
-        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist" data-ctl="view">
+        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist" data-seg="notes">
           <button class="${st.view === 'date' ? 'on' : ''}" data-view="date">날짜별</button>
           <button class="${st.view === 'passage' ? 'on' : ''}" data-view="passage">본문별</button>
         </div>
@@ -724,7 +753,7 @@ function BookmarksScreen() {
         ${st.selecting ? `<h1 class="nl-title">${n}개 선택됨</h1>` : `<h1 class="nl-title">북마크<span class="nl-count">${list.length}</span></h1>`}
       </div>
       <div class="nl-controls">
-        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist" data-ctl="view">
+        <div class="nl-seg${st.selecting ? ' off' : ''}" role="tablist" data-seg="bm">
           <button class="${st.view === 'date' ? 'on' : ''}" data-view="date">날짜별</button>
           <button class="${st.view === 'passage' ? 'on' : ''}" data-view="passage">본문별</button>
         </div>
@@ -856,7 +885,7 @@ function syncLine() {
 const stRow = ({ act = '', title, sub = '', value = '', chev = false, toggle = null, btn = '', btnAct = '', primary = false, cls = '' }) => `
   <${act || toggle !== null ? 'button' : 'div'} class="st-row ${cls}"${act ? ` data-act="${act}"` : ''}${toggle !== null ? ` role="switch" aria-checked="${toggle}"` : ''}>
     <span class="st-rt"><span class="st-rtt">${title}</span>${sub ? `<span class="st-rts">${sub}</span>` : ''}</span>
-    <span class="st-tr">${btn ? `<span class="st-btn${primary ? ' primary' : ''}" data-act="${btnAct}">${btn}</span>` : ''}${value ? `<span class="st-val">${value}</span>` : ''}${chev ? ST_CHEV : ''}${toggle !== null ? `<span class="st-toggle${toggle ? ' on' : ''}"${act ? ` data-ctl="${act}"` : ''}><i></i></span>` : ''}</span>
+    <span class="st-tr">${btn ? `<span class="st-btn${primary ? ' primary' : ''}" data-act="${btnAct}">${btn}</span>` : ''}${value ? `<span class="st-val">${value}</span>` : ''}${chev ? ST_CHEV : ''}${toggle !== null ? `<span class="st-toggle${toggle ? ' on' : ''}"${act ? ` data-tg="${act}"` : ''}><i></i></span>` : ''}</span>
   </${act || toggle !== null ? 'button' : 'div'}>`;
 const stGroup = (title, rows) => `<section class="st-group">${title ? `<h4>${title}</h4>` : ''}<div class="st-card">${rows.join('<i class="st-div"></i>')}</div></section>`;
 // 확인 창 (피그마 확인 창: 제목 · 설명 · [취소][빨간 아닌 검정 버튼])
@@ -1181,7 +1210,7 @@ function openViewSheet(onSave) {
       const v = bibleView();
       const stepper = (key, label, val, atMin, atMax) => `<div class="bs-row"><span>${label}</span><div class="stepper"><button data-k="${key}" data-d="-1" ${atMin ? 'disabled' : ''} aria-label="${label} 줄이기"><i class="minus"></i></button><b>${val}</b><button data-k="${key}" data-d="1" ${atMax ? 'disabled' : ''} aria-label="${label} 키우기">${bIco('plus')}</button></div></div>`;
       const lvl = (x) => (x === 0 ? '기본' : (x > 0 ? '+' : '') + x);
-      body.innerHTML = `<div class="bs-row"><span>글꼴</span><div class="nl-seg bs-seg"><button class="${v.font === 'serif' ? 'on' : ''} serif" data-font="serif">명조체</button><button class="${v.font === 'sans' ? 'on' : ''}" data-font="sans">고딕체</button></div></div>
+      body.innerHTML = `<div class="bs-row"><span>글꼴</span><div class="nl-seg bs-seg" data-seg="font"><button class="${v.font === 'serif' ? 'on' : ''} serif" data-font="serif">명조체</button><button class="${v.font === 'sans' ? 'on' : ''}" data-font="sans">고딕체</button></div></div>
         <div class="bs-div"></div>
         ${stepper('size', '글자 크기', v.size + '%', v.size <= BV_SIZE[0], v.size >= BV_SIZE.at(-1))}
         ${stepper('ls', '글자 간격', lvl(v.ls), v.ls <= -2, v.ls >= 2)}

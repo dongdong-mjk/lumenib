@@ -788,7 +788,10 @@ export async function run() {
     const cs = getComputedStyle(document.documentElement);
     const rgb = (v) => { const d = document.createElement('i'); d.style.color = v; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; };
     if (getComputedStyle($('.nl-seg')).backgroundColor !== rgb(cs.getPropertyValue('--bg-segmented'))) return '세그먼트 바탕이 bg/segmented가 아니에요';
-    if (getComputedStyle($('.nl-seg button.on')).backgroundColor !== rgb(cs.getPropertyValue('--bg-default'))) return '고른 칸이 bg/default가 아니에요';
+    // 고른 칸 배경은 미끄러지는 한 장(.seg-ind)이 그려요 (11/28): 색 = bg/default, 자리 = 고른 단추
+    const ind = $('.nl-seg .seg-ind'), onB = $('.nl-seg button.on');
+    if (!ind || getComputedStyle(ind).backgroundColor !== rgb(cs.getPropertyValue('--bg-default'))) return '고른 칸이 bg/default가 아니에요';
+    if (ind.style.transform !== `translateX(${onB.offsetLeft}px)`) return '고른 칸 배경이 고른 단추 자리에 있지 않아요';
     $('[data-act="select"]').click(); await wait(150);
     $$('.nl-card')[0].click(); await wait(100);
     if ($('.nl-title').textContent !== '1개 선택됨') return '선택 모드 제목이 달라요';
