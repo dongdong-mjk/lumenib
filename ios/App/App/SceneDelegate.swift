@@ -1033,18 +1033,24 @@ final class NativeTopBar: UIView {
     }
     @objc private func dimTapped() { onDimTap?() }
 
-    private func setDim(_ css: String?, _ h: CGFloat) {
+    private func setDim(_ css: String?, _ h: CGFloat, fade: Bool = false) {
         bringSubviewToFront(dimView)
         guard let c = Self.cssColor(css), h > 0 else {
-            if !dimView.isHidden { dimView.isHidden = true; dimView.alpha = 0 }
+            guard !dimView.isHidden else { return }
+            if fade { // 웹 막이 흐려지며 닫히는 것과 같이 (CSS ease 0.15초)
+                let a = UIViewPropertyAnimator(duration: 0.15, controlPoint1: CGPoint(x: 0.25, y: 0.1), controlPoint2: CGPoint(x: 0.25, y: 1)) { self.dimView.alpha = 0 }
+                a.addCompletion { _ in if self.dimView.alpha == 0 { self.dimView.isHidden = true } }
+                a.startAnimation()
+            } else { dimView.isHidden = true; dimView.alpha = 0 }
             return
         }
         dimView.backgroundColor = c
         dimView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: h)
         dimView.autoresizingMask = [.flexibleWidth]
-        if dimView.isHidden {
-            dimView.alpha = 0; dimView.isHidden = false
-            UIView.animate(withDuration: 0.15) { self.dimView.alpha = 1 } // 웹 막과 같이 0.15초
+        if dimView.isHidden || dimView.alpha < 1 { // 닫히며 흐려지는 중에 다시 열려도 다시 진해지게
+            if dimView.isHidden { dimView.alpha = 0; dimView.isHidden = false }
+            // 웹 막과 같은 곡선·시간 (CSS fade .15s ease)
+            UIViewPropertyAnimator(duration: 0.15, controlPoint1: CGPoint(x: 0.25, y: 0.1), controlPoint2: CGPoint(x: 0.25, y: 1)) { self.dimView.alpha = 1 }.startAnimation()
         }
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -1085,7 +1091,7 @@ final class NativeTopBar: UIView {
 
     func update(_ b: [String: Any]) {
         guard (b["show"] as? Bool) == true else { isHidden = true; lastKey = ""; setDim(nil, 0); return }
-        defer { setDim(b["dim"] as? String, CGFloat((b["dimH"] as? NSNumber)?.doubleValue ?? 0)) }
+        defer { setDim(b["dim"] as? String, CGFloat((b["dimH"] as? NSNumber)?.doubleValue ?? 0), fade: (b["dimFade"] as? Bool) ?? false) }
         let box = Self.rect(b["box"]) ?? .zero // 탭 묶음이 없는 화면(노트 쓰기 · 본문 고르기)은 유리 버튼만 (48~)
         tabsBox.isHidden = box.width <= 0
         let dark = (b["dark"] as? Bool) ?? false

@@ -50,7 +50,13 @@ function modal(html, bind) {
   d.className = 'dim';
   d.innerHTML = html;
   overlay.appendChild(d);
-  const close = () => d.remove();
+  // 닫을 때 0.15초 흐려지며 사라져요: 앱이 덮는 헤더 줄 막도 같은 시간에 같이 흐려져서 경계가 안 보이게 (66~)
+  const close = () => {
+    if (d.classList.contains('out')) return;
+    d.classList.add('out');
+    if (window.__lumenibDim) { try { sendTopBar(); } catch {} }
+    setTimeout(() => d.remove(), 150);
+  };
   d.addEventListener('click', (e) => { if (e.target === d) close(); });
   bind(d, close);
   return close;
@@ -71,7 +77,8 @@ function sendTopBar() {
   const R = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map((x) => Math.round(x * 2) / 2); };
   let m = { show: false };
   // 바텀시트·확인 창이 떠 있으면: 66~ 앱은 헤더를 그대로 두고 같은 어두운 막을 위에 덮어요 (11/27 민정님). 그 전 앱은 예전처럼 숨겨요
-  const dimEl = overlay.querySelector('.dim:last-child');
+  const dimEl = [...overlay.querySelectorAll('.dim:not(.out)')].pop();
+  const dimOut = !!overlay.querySelector('.dim.out.ndim');
   const dimOn = !!dimEl && !!window.__lumenibDim;
   const splash = document.getElementById('splash');
   const splashOn = splash && !splash.classList.contains('hide');
@@ -83,11 +90,11 @@ function sendTopBar() {
     const els = [...(tb ? [tb] : []), ...glass];
     if (els.length && !splashOn) { dimH = Math.ceil(Math.max(...els.map((e) => e.getBoundingClientRect().bottom)) + 12); dimEl.classList.add('ndim'); dimEl.style.setProperty('--ndim-h', dimH + 'px'); }
   }
-  if (!splashOn && (dimOn || !overlay.firstElementChild) && ((nav && tabs && R(tabs)[2] > 0) || glass.length)) {
+  if (!splashOn && (dimOn || !overlay.querySelector(':scope > :not(.out)')) && ((nav && tabs && R(tabs)[2] > 0) || glass.length)) {
     const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
     m = {
       winLeft: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--win-left')) || 0,
-      dim: dimH ? v('--bg-dim') : '', dimH,
+      dim: dimH ? v('--bg-dim') : '', dimH, dimFade: dimOut,
       show: true, box: tabs ? R(tabs) : null, gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
       // 오른쪽 아이콘 버튼 전부 (노트 쓰기 · 검색 · 설정): 앱이 같은 유리 버튼으로 그려요 (11/26)
       icons: nativeGlass ? glass.map((b) => {
@@ -135,11 +142,11 @@ window.lumenibWinInset = () => {
   const de = document.documentElement, v = parseFloat(getComputedStyle(de).getPropertyValue('--win-left')) || 0;
   if (v > 0 && v < 30) de.style.removeProperty('--win-left');
   de.classList.toggle('win-mode', v >= 30); try { syncTopBar(); } catch {} requestAnimationFrame(() => window.__fitToolbar?.()); setTimeout(() => window.__fitToolbar?.(), 50); };
-window.lumenibDimTap = () => overlay.querySelector('.dim:last-child')?.click(); // 앱 헤더 위 어두운 막을 누르면 웹 막을 누른 것처럼 (66~)
+window.lumenibDimTap = () => [...overlay.querySelectorAll('.dim:not(.out)')].pop()?.click(); // 앱 헤더 위 어두운 막을 누르면 웹 막을 누른 것처럼 (66~)
 window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
-  new MutationObserver(syncTopBar).observe(overlay, { childList: true });
+  new MutationObserver(() => { try { sendTopBar(); } catch {} }).observe(overlay, { childList: true }); // 막은 바로 보내요 (웹 막과 앱 막이 같은 순간에 시작하게)
   // 스플래시가 사라질 때(흐려지는 0.35초 동안 같이) 앱 탭 바를 보여요 (46 피드백: 스플래시 위에 탭 바가 떠 있었음)
   const sp = document.getElementById('splash');
   if (sp) new MutationObserver(() => setTimeout(syncTopBar, 120)).observe(sp, { attributes: true, attributeFilter: ['class'] });

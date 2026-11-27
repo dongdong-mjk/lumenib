@@ -1179,3 +1179,4 @@ button.st-row:active { background: var(--bg-hover); }
 @media (hover: hover) { .record-card:hover .rc-btn { box-shadow: inset 0 0 0 999px color-mix(in srgb, #fff 8%, transparent); } }
 .record-card:active .rc-btn { box-shadow: inset 0 0 0 999px color-mix(in srgb, #fff 16%, transparent); }
 .dim.ndim { background: linear-gradient(to bottom, transparent var(--ndim-h), var(--bg-dim) var(--ndim-h)); } /* 헤더 줄은 앱이 같은 막으로 덮어요 (66~) */
+.dim.out { opacity: 0; transition: opacity .15s ease; pointer-events: none; } /* 닫힐 때 흐려지며 (앱 헤더 막과 같이) */
