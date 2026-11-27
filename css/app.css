@@ -1178,3 +1178,4 @@ button.st-row:active { background: var(--bg-hover); }
 /* 홈 기록 카드 안 '본문 고르기' 알약: 카드 전체가 눌리는 버튼이라 카드에 올리거나 누를 때 알약에 상태 겹 (검정 버튼 = 흰 겹) */
 @media (hover: hover) { .record-card:hover .rc-btn { box-shadow: inset 0 0 0 999px color-mix(in srgb, #fff 8%, transparent); } }
 .record-card:active .rc-btn { box-shadow: inset 0 0 0 999px color-mix(in srgb, #fff 16%, transparent); }
+.dim.ndim { background: linear-gradient(to bottom, transparent var(--ndim-h), var(--bg-dim) var(--ndim-h)); } /* 헤더 줄은 앱이 같은 막으로 덮어요 (66~) */

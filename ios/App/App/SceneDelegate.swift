@@ -99,11 +99,12 @@ class PencilBridgeViewController: CAPBridgeViewController, UIPencilInteractionDe
         webView?.configuration.userContentController.add(self, name: "lumenibMenuButton") // 메뉴 단추 자체를 앱이 그려요 (55~)
         // 설정 화면에 보이는 버전: 앱이 실제 버전·빌드 번호를 알려줘요 (예전엔 웹에 1.0 (40)으로 고정, 56~)
         let ver = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") + " (" + (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") + ")"
-        webView?.configuration.userContentController.addUserScript(WKUserScript(source: "window.__lumenibVersion = '\(ver)';", injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        webView?.evaluateJavaScript("window.__lumenibVersion = '\(ver)';", completionHandler: nil)
+        webView?.configuration.userContentController.addUserScript(WKUserScript(source: "window.__lumenibVersion = '\(ver)'; window.__lumenibDim = true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        webView?.evaluateJavaScript("window.__lumenibVersion = '\(ver)'; window.__lumenibDim = true;", completionHandler: nil)
         if let web = webView {
             topBar.frame = web.bounds
             topBar.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            topBar.onDimTap = { [weak self] in self?.js("window.lumenibDimTap && window.lumenibDimTap()") }
             topBar.onTap = { [weak self] act in self?.js("window.lumenibTopBar && window.lumenibTopBar('\(act)')") }
             topBar.onMenu = { [weak self] id in self?.menuPicked(id) }
             topBar.snapSource = web
@@ -1008,6 +1009,9 @@ final class NativeTopBar: UIView {
     private var active = ""
     private var primary = UIColor.label, secondary = UIColor.secondaryLabel, iconColor = UIColor.label
     private var lastKey = ""
+    var onDimTap: (() -> Void)?
+    // 바텀시트·확인 창이 떠 있을 때 헤더 위에 덮는 어두운 막 (웹 막과 같은 색, 누르면 웹 막을 누른 것처럼 닫혀요, 66~)
+    private let dimView = UIView()
 
     override init(frame: CGRect) {
         if #available(iOS 26.0, *) {
@@ -1023,6 +1027,25 @@ final class NativeTopBar: UIView {
         pill.isUserInteractionEnabled = false
         tabsBox.addSubview(pill)
         addSubview(tabsBox)
+        dimView.isHidden = true
+        dimView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(dimTapped)))
+        addSubview(dimView)
+    }
+    @objc private func dimTapped() { onDimTap?() }
+
+    private func setDim(_ css: String?, _ h: CGFloat) {
+        bringSubviewToFront(dimView)
+        guard let c = Self.cssColor(css), h > 0 else {
+            if !dimView.isHidden { dimView.isHidden = true; dimView.alpha = 0 }
+            return
+        }
+        dimView.backgroundColor = c
+        dimView.frame = CGRect(x: 0, y: 0, width: bounds.width, height: h)
+        dimView.autoresizingMask = [.flexibleWidth]
+        if dimView.isHidden {
+            dimView.alpha = 0; dimView.isHidden = false
+            UIView.animate(withDuration: 0.15) { self.dimView.alpha = 1 } // 웹 막과 같이 0.15초
+        }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -1061,7 +1084,8 @@ final class NativeTopBar: UIView {
     }
 
     func update(_ b: [String: Any]) {
-        guard (b["show"] as? Bool) == true else { isHidden = true; lastKey = ""; return }
+        guard (b["show"] as? Bool) == true else { isHidden = true; lastKey = ""; setDim(nil, 0); return }
+        defer { setDim(b["dim"] as? String, CGFloat((b["dimH"] as? NSNumber)?.doubleValue ?? 0)) }
         let box = Self.rect(b["box"]) ?? .zero // 탭 묶음이 없는 화면(노트 쓰기 · 본문 고르기)은 유리 버튼만 (48~)
         tabsBox.isHidden = box.width <= 0
         let dark = (b["dark"] as? Bool) ?? false

@@ -70,14 +70,24 @@ function sendTopBar() {
   const gear = nav?.querySelector('[data-act="settings"]');
   const R = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map((x) => Math.round(x * 2) / 2); };
   let m = { show: false };
-  // 바텀시트·확인 창이 떠 있으면 앱 탭 바도 숨겨요 (어두운 막 위에 버튼이 뜨지 않게)
+  // 바텀시트·확인 창이 떠 있으면: 66~ 앱은 헤더를 그대로 두고 같은 어두운 막을 위에 덮어요 (11/27 민정님). 그 전 앱은 예전처럼 숨겨요
+  const dimEl = overlay.querySelector('.dim:last-child');
+  const dimOn = !!dimEl && !!window.__lumenibDim;
   const splash = document.getElementById('splash');
   const splashOn = splash && !splash.classList.contains('hide');
   const glass = nativeGlass ? [...app.querySelectorAll('[data-glass], [data-native-menu]')].filter((b) => b.getClientRects().length) : [];
-  if (!splashOn && !overlay.firstElementChild && ((nav && tabs && R(tabs)[2] > 0) || glass.length)) {
+  // 헤더 줄(위 버튼들 아래 12까지)은 앱이 어둡게 하고, 웹 막은 그 아래만 (두 번 겹쳐 더 어두워지지 않게)
+  let dimH = 0;
+  if (dimOn) {
+    const tb = nav?.querySelector('.home-tabs');
+    const els = [...(tb ? [tb] : []), ...glass];
+    if (els.length && !splashOn) { dimH = Math.ceil(Math.max(...els.map((e) => e.getBoundingClientRect().bottom)) + 12); dimEl.classList.add('ndim'); dimEl.style.setProperty('--ndim-h', dimH + 'px'); }
+  }
+  if (!splashOn && (dimOn || !overlay.firstElementChild) && ((nav && tabs && R(tabs)[2] > 0) || glass.length)) {
     const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
     m = {
       winLeft: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--win-left')) || 0,
+      dim: dimH ? v('--bg-dim') : '', dimH,
       show: true, box: tabs ? R(tabs) : null, gear: gear ? R(gear) : null, dark: document.documentElement.dataset.theme === 'dark',
       // 오른쪽 아이콘 버튼 전부 (노트 쓰기 · 검색 · 설정): 앱이 같은 유리 버튼으로 그려요 (11/26)
       icons: nativeGlass ? glass.map((b) => {
@@ -125,6 +135,7 @@ window.lumenibWinInset = () => {
   const de = document.documentElement, v = parseFloat(getComputedStyle(de).getPropertyValue('--win-left')) || 0;
   if (v > 0 && v < 30) de.style.removeProperty('--win-left');
   de.classList.toggle('win-mode', v >= 30); try { syncTopBar(); } catch {} requestAnimationFrame(() => window.__fitToolbar?.()); setTimeout(() => window.__fitToolbar?.(), 50); };
+window.lumenibDimTap = () => overlay.querySelector('.dim:last-child')?.click(); // 앱 헤더 위 어두운 막을 누르면 웹 막을 누른 것처럼 (66~)
 window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
