@@ -120,7 +120,7 @@ function sortMenuAttr(sorts, curKey) {
   return ` data-menu-id="sort" data-native-menu="${esc(JSON.stringify(sorts.map(([k, l]) => ({ id: 'sort:' + k, title: l, on: k === curKey }))))}"`;
 }
 // 창 모드 단추 자리가 바뀌면 앱 유리 단추 자리도 다시 보내요
-window.lumenibWinInset = () => { try { syncTopBar(); } catch {} };
+window.lumenibWinInset = () => { document.documentElement.classList.toggle('win-mode', (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--win-left')) || 0) > 0); try { syncTopBar(); } catch {} };
 window.lumenibTopBar = (act) => { (app.querySelector(`[data-glass="${act}"]`) || app.querySelector(`.home-nav [data-act="${act}"]`))?.click(); };
 if (nativeTop) {
   new MutationObserver(syncTopBar).observe(app, { childList: true, subtree: true });
